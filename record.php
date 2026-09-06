@@ -33,7 +33,12 @@ class Record
                 $user = $stmt->fetch();
 
                 $storedPassword = (string) ($user['password'] ?? '');
-                $validPassword = password_verify($password, $storedPassword) || hash_equals($storedPassword, $password);
+                // bcrypt only. This used to fall back to hash_equals($storedPassword,
+                // $password) so legacy un-hashed rows could still sign in — verified
+                // 2026-09-06 that all 221 user rows are bcrypt ($2y$), so the fallback
+                // was accepting plaintext for no one. Do not reinstate it: hash any
+                // legacy row in place instead.
+                $validPassword = password_verify($password, $storedPassword);
 
                 if ($validPassword) {
                     if (!empty($user['status']) && $user['status'] === 'Inactive') {

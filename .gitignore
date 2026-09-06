@@ -9,3 +9,25 @@
 
 # Local UI capture run (large PNGs, not useful in history)
 screenshots/
+
+# ------------------------------------------------------------------
+# User-uploaded content — REAL PEOPLE'S PERSONAL DATA. Never commit.
+# Merchant applicants upload business permits, sanitary permits and
+# barangay clearances; finance uploads fee-waiver evidence; students,
+# parents and merchants upload photos and logos. All of it is written
+# at runtime and every one of these directories is recreated by the
+# app with mkdir(..., recursive), so nothing here needs to be in git.
+#
+# uploads/.htaccess is the exception and stays tracked — it is the
+# "Deny from all" rule that keeps these files from being served
+# directly, and the app will not recreate it.
+# ------------------------------------------------------------------
+/uploads/*
+!/uploads/.htaccess
+/assets/profile_photos/
+/assets/merchant_logos/
+
+# Database dumps. Migration scripts in /database/ are tracked; a dump
+# of live data is not — it contains every user row.
+/database/ewallet_*.sql
+*.dump.sql

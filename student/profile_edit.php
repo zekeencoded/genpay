@@ -4,7 +4,7 @@ require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['student']);
-gjc_enforce_graduate_lock($db);
+gjc_enforce_student_lock($db);
 gjc_ensure_user_profile_schema($db);
 
 $currentUser = gjc_current_user($db);

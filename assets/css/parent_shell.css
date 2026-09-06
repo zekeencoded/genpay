@@ -4,7 +4,7 @@
    Replaces the legacy .student-layout shell, which was deleted with
    assets/css/student.css once nothing referenced it. */
 @import url("gjc-clear.css?v=21");
-@import url("theme.css?v=11");
+@import url("theme.css?v=12");
 
 :root {
   --emerald-950: var(--gp-green-950);

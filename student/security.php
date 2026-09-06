@@ -5,7 +5,7 @@ require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['student']);
-gjc_enforce_graduate_lock($db);
+gjc_enforce_student_lock($db);
 
 $currentUser = gjc_current_user($db);
 $error = '';
@@ -19,8 +19,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
     $storedPassword = (string) ($currentUser['raw']['password'] ?? '');
 
+    // bcrypt only — the plaintext fallback that used to sit here was removed
+    // 2026-09-06 (no un-hashed rows exist; see record.php).
     $validCurrentPassword = $storedPassword !== ''
-        && (password_verify($currentPassword, $storedPassword) || hash_equals($storedPassword, $currentPassword));
+        && password_verify($currentPassword, $storedPassword);
 
     if (!gjc_csrf_verify()) {
         $error = 'Security check failed. Please reload the page and try again.';

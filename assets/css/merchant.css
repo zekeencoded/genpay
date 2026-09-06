@@ -1,5 +1,5 @@
 @import url("gjc-clear.css?v=21");
-@import url("theme.css?v=11");
+@import url("theme.css?v=12");
 
 :root {
   /* Alias layer — pure aliases of the shared gp-* theme
@@ -1080,11 +1080,10 @@ html {
 }
 
 /* ── Table row action group ───────────────────────────────────────────────
-   The View / Issue Return pair in merchant/history.php. theme.css states
-   buttons keep --gp-radius-pill so shape alone reads as "pressable", but
-   Bootstrap's .btn-outline-danger is one of the few button classes theme.css
-   never restyles, so Issue Return arrived square and a size off from its
-   neighbour. One geometry lives here; colour is the only thing that differs
+   The View / Issue Return pair in merchant/history.php. theme.css now gives
+   .btn-outline-danger the pill and the palette red, but not this pair's fixed
+   32px line height, and Issue Return still needs to match its neighbour to the
+   pixel. One geometry lives here; colour is the only thing that differs
    between the two, and the pair sits flush on a single 32px line.
    Deliberately NOT named .merchant-view-btn — gjc-clear.css force-skins that
    whole family with !important, which would fight the danger variant. */

@@ -93,8 +93,14 @@ try {
 
         $total = round((float) $order['amount'], 2);
 
-        if (gjc_student_graduated($db, $studentUserId)) {
-            throw new \RuntimeException('Account locked: graduated.');
+        // Three-state gate: a graduate/transfer-out is terminal, an unenrolled
+        // student keeps their balance and can be re-enrolled by the registrar.
+        $walletState = gjc_student_wallet_state($db, $studentUserId);
+        if ($walletState === 'frozen_exit') {
+            throw new \RuntimeException('Account locked: this account has graduated or transferred out.');
+        }
+        if ($walletState === 'frozen_unenrolled') {
+            throw new \RuntimeException('You are not enrolled for the current school year. Your balance is safe and stays in your wallet — contact the registrar to be re-enrolled.');
         }
 
         // ── Parent wallet controls ──────────────────────────────────────────

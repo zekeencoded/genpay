@@ -4,7 +4,7 @@ require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['student']);
-gjc_enforce_graduate_lock($db);
+gjc_enforce_student_lock($db);
 
 /**
  * CRUD "Read": one row from the student's own history, in the same shape as

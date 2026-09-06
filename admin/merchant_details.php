@@ -242,7 +242,7 @@ if ($summary) {
     <title><?= $summary ? md_e($summary['stall_name']) . ' — Stall' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -336,13 +336,13 @@ if ($summary) {
                 </div>
             </section>
 
-            <div class="gp-notice is-info mb-4">
+            <div class="gp-notice is-note mb-4">
                 <i class="fa-solid fa-shield-halved"></i>
                 <div>
                     <strong>Revenue privacy enforced.</strong>
-                    This view deliberately excludes the stall's sales figures, POS transaction
-                    history and merchant wallet. Rent collection is finance business and appears
-                    under Lease &amp; rent; what the stall earns is not.
+                    Sales figures, POS history and the merchant wallet are deliberately excluded
+                    from this view &mdash; rent collection appears under Lease &amp; rent, what the
+                    stall earns does not.
                 </div>
             </div>
 

@@ -1,6 +1,6 @@
 /* GenPay Clear UI Theme
    Shared override for admin, student, merchant, login, and public pages. */
-@import url("theme.css?v=11");
+@import url("theme.css?v=12");
 
 :root {
   /* Primary green scale — aliases of the shared gp-* theme

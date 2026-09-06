@@ -24,7 +24,7 @@ if ($wallet['id'] > 0) {
 // Graduation freezes the wallet too (mark_graduate sets is_frozen = 1), but
 // withdraw is the one action a graduate is still allowed — it's how they get
 // their remaining balance out. So graduation overrides the frozen block here;
-// every other student page redirects graduates away via gjc_enforce_graduate_lock().
+// every other student page redirects graduates away via gjc_enforce_student_lock().
 $isGraduated = gjc_student_graduated($db, (int) $currentUser['id']);
 if ($isGraduated) {
     $isFrozen = false;

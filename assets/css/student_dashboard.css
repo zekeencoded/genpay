@@ -3,7 +3,7 @@
    apply here. Pages using the shared student sidebar / bottom-nav partials
    must link this file. */
 @import url("gjc-clear.css?v=21");
-@import url("theme.css?v=11");
+@import url("theme.css?v=12");
 
 /* sd-* tokens are aliases of the shared gp-* theme (assets/css/theme.css)
    — theme.css is the single source of truth for the palette. */

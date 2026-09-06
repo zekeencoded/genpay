@@ -4,7 +4,7 @@ require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['student']);
-gjc_enforce_graduate_lock($db);
+gjc_enforce_student_lock($db);
 
 if (isset($_SESSION['force_change'])) {
     header('Location: ' . BASE_URL . '/change_password.php');
@@ -15,6 +15,12 @@ $currentUser = gjc_current_user($db);
 $wallet      = gjc_student_wallet($db, (int) $currentUser['id']);
 $studentName = $currentUser['name'];
 $balance     = (float) $wallet['balance'];
+
+// Not enrolled for the active school year. gjc_enforce_student_lock() has
+// already turned away the money-moving pages and sent them here; the balance
+// stays on screen because it is still theirs and is not going anywhere.
+$isUnenrolled = gjc_student_wallet_state($db, (int) $currentUser['id']) === 'frozen_unenrolled';
+$activeYearName = gjc_active_school_year_name($db);
 
 // Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
 // for accounts that never got a student_info row.
@@ -98,6 +104,14 @@ $currentPage = 'dashboard';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <style>
+        /* Not-enrolled notice. Reversible state, so it reads as information,
+           not alarm — warning tokens, never the danger scale. */
+        .sd-enroll-notice { display: flex; gap: 14px; align-items: flex-start; background: var(--gp-warning-bg); border: 1px solid var(--gp-warning); border-radius: 16px; padding: 16px 18px; margin-bottom: 20px; }
+        .sd-enroll-notice i { color: var(--gp-warning); font-size: 18px; line-height: 1.4; }
+        .sd-enroll-notice h3 { font-size: 15px; font-weight: 700; color: var(--gp-warning); margin: 0 0 4px; }
+        .sd-enroll-notice p { font-size: 13px; color: var(--gp-ink, #111); margin: 0; line-height: 1.55; }
+    </style>
 </head>
 
 <body class="sd-body">
@@ -120,6 +134,21 @@ $currentPage = 'dashboard';
             ?>
 
             <div class="sd-content">
+
+                <?php if ($isUnenrolled): ?>
+                <!-- Not enrolled for the active school year -->
+                <div class="sd-enroll-notice">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <div>
+                        <h3>You are not enrolled for <?= $activeYearName ? $e($activeYearName) : 'the current school year' ?></h3>
+                        <p>
+                            Your balance below is intact and stays preserved &mdash; nothing has been taken from your
+                            wallet. Paying at the canteen, sending GenCoin, and requesting a top-up are paused until
+                            your enrollment is recorded. Please contact the registrar to sort this out.
+                        </p>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- Balance card -->
                 <section class="sd-balance">

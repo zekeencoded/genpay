@@ -57,8 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $idCol) {
         $confirm  = (string) ($_POST['confirm_password']  ?? '');
         $stored   = (string) ($rawUser['password']         ?? '');
 
-        $valid = $stored !== '' &&
-                 (password_verify($current, $stored) || hash_equals($stored, $current));
+        // bcrypt only — the plaintext fallback that used to sit here was removed
+        // 2026-09-06 (no un-hashed rows exist; see record.php).
+        $valid = $stored !== '' && password_verify($current, $stored);
 
         if (!in_array('password', $columns, true)) {
             $error = 'Password column not found.';

@@ -71,8 +71,12 @@ class MintingGuard
         $stmt->execute([$superAdminId]);
         $hash = $stmt->fetchColumn();
 
-        
-        $passwordValid = ($currentPassword === $hash) || password_verify($currentPassword, $hash);
+                // bcrypt only. The removed `$currentPassword === $hash` comparison meant a
+        // plaintext password row could authorise changing the mint PIN — the control
+        // that gates creating GenCoin. fetchColumn() returns false when the row is
+        // missing, so the hash is type-checked before it reaches password_verify().
+        $passwordValid = is_string($hash) && $hash !== ''
+            && password_verify($currentPassword, $hash);
         if (!$passwordValid) {
             throw new RuntimeException('INVALID_PASSWORD: Current account password is incorrect.');
         }

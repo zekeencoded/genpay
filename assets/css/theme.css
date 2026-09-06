@@ -692,6 +692,58 @@ body.gp-theme .btn-secondary:hover {
   color: var(--gp-ink);
 }
 
+/* The two status-coloured outline buttons. Without these they fall through to
+   Bootstrap's own red/green and square corners, sitting beside pill-shaped
+   .btn-outline-secondary neighbours — and any sheet that flattens .btn-sm (as
+   admin.css does) strips their border too, leaving bare coloured text where a
+   button should be. Three places had already patched this one at a time
+   (lease_details' void button, merchant/history's Issue Return, the stall
+   inventory toggle); one rule here retires the first of those. */
+body.gp-theme .btn-outline-danger,
+body.gp-theme .btn-outline-success {
+  background: #fff;
+  border-radius: var(--gp-radius-pill);
+  font-weight: 700;
+}
+
+body.gp-theme .btn-outline-danger {
+  border: 1px solid var(--gp-danger);
+  color: var(--gp-danger);
+}
+
+body.gp-theme .btn-outline-success {
+  border: 1px solid var(--gp-success);
+  color: var(--gp-success);
+}
+
+body.gp-theme .btn-outline-danger:hover:not(:disabled) {
+  background: var(--gp-danger-bg);
+  color: var(--gp-danger);
+}
+
+body.gp-theme .btn-outline-success:hover:not(:disabled) {
+  background: var(--gp-success-bg);
+  color: var(--gp-success);
+}
+
+body.gp-theme .btn-outline-danger:disabled,
+body.gp-theme .btn-outline-success:disabled { opacity: 0.5; }
+
+/* Tertiary "Clear" / "Show fewer" actions in filter bars. Bootstrap paints
+   .btn-link link-blue, the one stock colour this palette never uses.
+   Matched on .btn.btn-link so parent_dashboard.css keeps its bare .btn-link,
+   which is a green pill CTA and not a text link at all. */
+body.gp-theme .btn.btn-link {
+  color: var(--gp-green-700);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+body.gp-theme .btn.btn-link:hover {
+  color: var(--gp-green-900);
+  text-decoration: underline;
+}
+
 body.gp-theme .btn-danger {
   background: var(--gp-red);
   border: none;

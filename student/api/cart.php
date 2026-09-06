@@ -136,8 +136,13 @@ try {
         case 'submit_order': {
             $studentUserId = gjc_user_id();
 
-            if (gjc_student_graduated($db, $studentUserId)) {
-                echo json_encode(['success' => false, 'message' => 'Account locked: graduated.']);
+            $walletState = gjc_student_wallet_state($db, $studentUserId);
+            if ($walletState === 'frozen_exit') {
+                echo json_encode(['success' => false, 'message' => 'Account locked: this account has graduated or transferred out.']);
+                exit;
+            }
+            if ($walletState === 'frozen_unenrolled') {
+                echo json_encode(['success' => false, 'message' => 'You are not enrolled for the current school year. Your balance is safe and stays in your wallet — contact the registrar to be re-enrolled.']);
                 exit;
             }
 

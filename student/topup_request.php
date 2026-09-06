@@ -5,7 +5,7 @@ require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/CirculationEngine.php';
 
 gjc_require_role(['student']);
-gjc_enforce_graduate_lock($db);
+gjc_enforce_student_lock($db);
 gjc_ensure_operational_tables($db);
 
 $currentUser = gjc_current_user($db);
