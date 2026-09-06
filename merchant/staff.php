@@ -42,10 +42,10 @@ $currentPage = "staff";
     <title>Staff Management | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=51">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=28">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=53">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -247,7 +247,7 @@ $currentPage = "staff";
 .staff-modal-dialog { max-width: 760px; }
 .staff-modal { overflow: hidden; }
 .staff-modal-header { align-items: flex-start; border-bottom: 1px solid var(--ad-line); padding: 20px 24px 16px; }
-.staff-modal-subtitle { margin: 3px 0 0; font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
+.staff-modal-subtitle { margin: 3px 0 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
 .staff-form-grid { display: flex; align-items: stretch; }
 
@@ -270,20 +270,20 @@ $currentPage = "staff";
     font-size: 22px; font-weight: 800; color: var(--gp-gold-light);
     letter-spacing: 0.02em;
 }
-.staff-id-name { font-size: 14.5px; font-weight: 800; line-height: 1.3; word-break: break-word; }
+.staff-id-name { font-size: 15px; font-weight: 800; line-height: 1.3; word-break: break-word; }
 .staff-id-position {
     font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--gp-gold-light); opacity: 0.9;
 }
 .staff-id-perks { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; text-align: left; width: 100%; }
-.staff-id-perks li { font-size: 11.5px; line-height: 1.4; color: rgba(255,255,255,0.78); display: flex; gap: 8px; align-items: flex-start; }
+.staff-id-perks li { font-size: 12px; line-height: 1.4; color: rgba(255,255,255,0.78); display: flex; gap: 8px; align-items: flex-start; }
 .staff-id-perks li i { color: var(--gp-gold-light); width: 14px; margin-top: 2px; }
 
 .staff-fields { flex: 1; min-width: 0; padding: 22px 26px 24px; max-height: 72vh; overflow-y: auto; }
 .staff-section + .staff-section { margin-top: 20px; }
 .staff-section-title {
     display: flex; align-items: center; gap: 8px;
-    font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--emerald-800); margin-bottom: 12px; padding-bottom: 8px;
     border-bottom: 1px dashed var(--ad-line);
 }
@@ -297,8 +297,8 @@ $currentPage = "staff";
     border: none; background: none; color: var(--text-muted); padding: 6px;
 }
 .staff-pw-toggle:hover { color: var(--emerald-900); }
-.staff-pw-generate { white-space: nowrap; font-size: 12.5px; font-weight: 700; }
-.staff-pw-hint { margin-top: 7px; font-size: 11.5px; color: var(--text-muted); }
+.staff-pw-generate { white-space: nowrap; font-size: 13px; font-weight: 700; }
+.staff-pw-hint { margin-top: 7px; font-size: 12px; color: var(--text-muted); }
 
 .staff-form-actions { display: flex; gap: 8px; margin-top: 22px; }
 .staff-form-actions .login-btn { flex: 1; }

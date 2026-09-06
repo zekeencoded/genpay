@@ -26,7 +26,7 @@
 }
 .uv-back {
     display: inline-flex; align-items: center; gap: 9px;
-    font-size: 13.5px; font-weight: 700; color: var(--gp-muted); text-decoration: none;
+    font-size: 14px; font-weight: 700; color: var(--gp-muted); text-decoration: none;
 }
 .uv-back:hover { color: var(--gp-green-850); }
 /* --- Identity hero: a flat record header, not a floating balance card.
@@ -86,7 +86,7 @@
     display: inline-flex; align-items: center;
     border-left: 3px solid currentColor; border-radius: 0 var(--gp-radius-tag) var(--gp-radius-tag) 0;
     padding: 4px 12px 4px 10px;
-    font-family: var(--gp-mono); font-size: 12.5px; font-weight: 700;
+    font-family: var(--gp-mono); font-size: 13px; font-weight: 700;
     letter-spacing: .09em !important; text-transform: uppercase;
 }
 .uv-status.is-active   { background: rgba(74,222,128,.13);  color: #8ef0b3; }
@@ -122,7 +122,7 @@
     list-style: none; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 15px 20px; background: #fff; border: 1px solid var(--gp-line);
-    border-radius: var(--gp-radius); font-size: 13.5px; font-weight: 800; color: var(--gp-ink);
+    border-radius: var(--gp-radius); font-size: 14px; font-weight: 800; color: var(--gp-ink);
 }
 .uv-raw summary::-webkit-details-marker { display: none; }
 .uv-raw summary:hover { background: var(--gp-row-hover); }
@@ -142,7 +142,7 @@
 
 /* --- Two-column card row + key/value table (audit before/after) --- */
 .uv-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-.uv-muted { color: var(--gp-muted); font-size: 13.5px; margin: 0; }
+.uv-muted { color: var(--gp-muted); font-size: 14px; margin: 0; }
 .uv-kv th { width: 42%; color: var(--gp-muted); font-weight: 700; }
 .uv-kv td { font-family: var(--gp-mono); word-break: break-word; }
 @media (max-width: 640px) { .uv-two { grid-template-columns: 1fr; } }
@@ -155,7 +155,7 @@
     background: #fff; border: 1px solid var(--gp-line); box-shadow: var(--gp-shadow-card);
 }
 .uv-notfound h1 { font-size: 24px; font-weight: 800; color: var(--gp-ink); margin: 0 0 8px; }
-.uv-notfound p { color: var(--gp-muted); font-size: 14.5px; line-height: 1.55; margin: 0 0 26px; }
+.uv-notfound p { color: var(--gp-muted); font-size: 15px; line-height: 1.55; margin: 0 0 26px; }
 
 /* --- Restrained load motion --- */
 @keyframes uv-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -192,7 +192,7 @@
     color: var(--gp-green-700);
 }
 .uv-item-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 700; color: var(--gp-ink); }
-.uv-item-name small { display: block; margin-top: 3px; font-size: 12.5px; font-weight: 600; color: var(--gp-muted); }
+.uv-item-name small { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--gp-muted); }
 .uv-item-total {
     flex: 0 0 auto; font-family: var(--gp-mono); font-size: 15px; font-weight: 700; color: var(--gp-ink);
 }
@@ -235,7 +235,7 @@
 }
 .uv-tile-value.is-warn { color: var(--gp-warning); }
 .uv-tile-value.is-bad  { color: var(--gp-danger); }
-.uv-tile-sub { font-size: 12.5px; color: var(--gp-muted); margin-top: 3px; }
+.uv-tile-sub { font-size: 13px; color: var(--gp-muted); margin-top: 3px; }
 
 @media (max-width: 560px) {
     .uv-item { flex-wrap: wrap; row-gap: 6px; }

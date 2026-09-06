@@ -189,10 +189,10 @@ $currentPage = 'activity';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=19">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=21">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=6">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=8">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
 </head>
 <body class="gp-theme">
 <div class="parent-layout">
@@ -222,7 +222,7 @@ $currentPage = 'activity';
                 <form method="GET" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
                     <div style="min-width:180px;">
                         <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">Wallet</label>
-                        <select name="student" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:13.5px;">
+                        <select name="student" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                             <option value="0" <?= $walletFilter === '0' ? 'selected' : '' ?>>All Wallets</option>
                             <?php if ($parentWalletId > 0): ?>
                             <option value="me" <?= $showOwnOnly ? 'selected' : '' ?>>My Purchases (Parent)</option>
@@ -236,7 +236,7 @@ $currentPage = 'activity';
                     </div>
                     <div style="min-width:160px;">
                         <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">Type</label>
-                        <select name="type" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:13.5px;">
+                        <select name="type" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                             <?php foreach (gjc_transaction_type_options() as $val => $label): ?>
                             <option value="<?= $e($val) ?>" <?= $filterType === $val ? 'selected' : '' ?>><?= $e($label) ?></option>
                             <?php endforeach; ?>
@@ -244,11 +244,11 @@ $currentPage = 'activity';
                     </div>
                     <div style="min-width:150px;">
                         <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">From</label>
-                        <input type="date" name="from" value="<?= $e($dateFrom) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:13.5px;">
+                        <input type="date" name="from" value="<?= $e($dateFrom) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                     </div>
                     <div style="min-width:150px;">
                         <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">To</label>
-                        <input type="date" name="to" value="<?= $e($dateTo) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:13.5px;">
+                        <input type="date" name="to" value="<?= $e($dateTo) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                     </div>
                     <button type="submit" class="parent-btn parent-btn--forest" style="height:42px;">Filter</button>
                 </form>
@@ -297,7 +297,7 @@ $currentPage = 'activity';
                                 </td>
                                 <td><?= $e($r['label']) ?></td>
                                 <td><?= $e($r['counterparty']) ?></td>
-                                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--gp-muted);" title="<?= $e($r['items_summary']) ?>">
+                                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--gp-muted);" title="<?= $e($r['items_summary']) ?>">
                                     <?= $r['items_summary'] !== '' ? $e($r['items_summary']) : '—' ?>
                                 </td>
                                 <td style="color:<?= $r['incoming'] ? 'var(--gp-success)' : 'var(--gp-ink)' ?>;font-weight:700;">

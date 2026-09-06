@@ -152,10 +152,10 @@ function sa_meeting_label(?string $dt): string
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=26">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=9">
     <style>
     /* KPI cards — thin large numbers, left-aligned flex row */
     .sa-kpi { border:1px solid #dddfd8; border-radius:12px; padding:16px 20px; background:#fff; display:flex; flex-direction:column; gap:8px; min-width:200px; }
@@ -176,7 +176,7 @@ function sa_meeting_label(?string $dt): string
     .sa-sched-right { display:flex; align-items:center; gap:12px; }
 
     /* "New" pill — newly submitted, not yet opened; cleared on first open */
-    .sa-new-badge { display:inline-block; margin-left:8px; padding:2px 9px; border-radius:999px; background:#fff5cc; border:1px solid #f0a500; color:#7a5a00; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; vertical-align:middle; }
+    .sa-new-badge { display:inline-block; margin-left:8px; padding:2px 9px; border-radius:999px; background:#fff5cc; border:1px solid #f0a500; color:#7a5a00; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; vertical-align:middle; }
 
     /* Inline "Open" affordance */
     .sa-open { font-size:13px; font-weight:600; color:#27764b; cursor:pointer; white-space:nowrap; }
@@ -194,29 +194,29 @@ function sa_meeting_label(?string $dt): string
 
     /* Applications table */
     /* .sa-table base styling now comes from the canonical table system in theme.css. */
-    .sa-table .biz { font-size:13.5px; font-weight:600; color:#1a1a1a; }
+    .sa-table .biz { font-size:14px; font-weight:600; color:#1a1a1a; }
     .sa-table .prop { font-size:13px; color:var(--gjc-slate); }
-    .sa-table .phone { font-size:12.5px; color:#555; }
+    .sa-table .phone { font-size:13px; color:#555; }
     .sa-table .email { font-size:11px; color:var(--gp-subtle); margin-top:3px; }
-    .sa-table .submitted { font-size:12.5px; color:#777; }
+    .sa-table .submitted { font-size:13px; color:var(--gp-muted); }
 
     /* DataTables footer (info + pagination) */
-    .sa-dt-foot { font-size:12.5px; }
+    .sa-dt-foot { font-size:13px; }
     .sa-dt-foot .dataTables_info { color:var(--gp-muted); padding:0; }
     .sa-dt-foot .dataTables_paginate { margin:0; }
     .sa-dt-foot .pagination { margin:0; }
-    .sa-dt-foot .page-link { color:#1e5c3a; font-size:12.5px; }
+    .sa-dt-foot .page-link { color:#1e5c3a; font-size:13px; }
     .sa-dt-foot .page-item.active .page-link { background:#1e5c3a; border-color:#1e5c3a; color:#fff; }
     .sa-dt-foot .page-item.disabled .page-link { color:#c0c4bd; }
 
     .sa-doc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
     .sa-doc { position:relative; border:1px solid var(--gp-line); border-radius:8px; overflow:hidden; background:#fff; cursor:pointer; transition:border-color .12s, box-shadow .12s; }
     .sa-doc:hover { border-color:#27764b; box-shadow:0 2px 10px rgba(14, 99, 50,.14); }
-    .sa-doc .cap { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:5px 8px; font-size:10.5px; font-weight:700; border-bottom:1px solid var(--gjc-soft-2); }
+    .sa-doc .cap { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:5px 8px; font-size:11px; font-weight:700; border-bottom:1px solid var(--gjc-soft-2); }
     .sa-doc .cap span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .sa-doc .cap .sa-doc-pop { color:inherit; }
     .sa-doc .sa-doc-thumb { width:100%; height:110px; border:0; display:block; background:#1e1e1e; pointer-events:none; }
-    .sa-doc .sa-doc-hint { position:absolute; right:6px; bottom:6px; background:rgba(14, 99, 50,.82); color:#fff; font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .12s; pointer-events:none; }
+    .sa-doc .sa-doc-hint { position:absolute; right:6px; bottom:6px; background:rgba(14, 99, 50,.82); color:#fff; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .12s; pointer-events:none; }
     .sa-doc:hover .sa-doc-hint { opacity:1; }
 
     /* Full-size embedded document viewer (opens on click — no new tab) */
@@ -233,7 +233,7 @@ function sa_meeting_label(?string $dt): string
     .filter-btn.active { background:#1e5c3a; color:#fff; border-color:#1e5c3a; }
 
     /* Inline accordion (replaces the old workspace modal) */
-    .sa-open .sa-caret { transition:transform .18s ease; margin-left:5px; font-size:10px; }
+    .sa-open .sa-caret { transition:transform .18s ease; margin-left:5px; font-size:11px; }
     .sa-table tbody tr.app-expanded .sa-caret { transform:rotate(180deg); }
     .sa-table tbody tr.app-expanded > td { background:#eef4ea !important; }
     .sa-table tbody tr.app-detail-row > td,

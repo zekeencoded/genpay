@@ -70,7 +70,7 @@ $blankLine = '_________________________';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fee Waiver Credit Agreement | GenPay</title>
-    <link rel="stylesheet" href="<?= CSS_URL ?>/print_fee_waiver.css?v=3">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/print_fee_waiver.css?v=5">
 </head>
 <body>
     <div class="print-actions">

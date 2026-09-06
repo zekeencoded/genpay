@@ -6,7 +6,6 @@
    Named for parent/wallet.php, which no longer links it — the parent top-up
    feature was removed on 2026-08-27 and wallet.php is now balance-only. */
 
-
 /* A plain <select> inside the shared .pf-field wrapper — the student pages
    only ever needed styled <input>s, so this fills the missing rule. */
 .pf-field select.tu-select {
@@ -27,7 +26,6 @@
     box-shadow: var(--gp-focus-ring);
 }
 
-
 /* ===== ACTIVITY: whose wallet a row belongs to =====
    Parents shop from their own wallet now, so the trail mixes their purchases
    with their children's. The rows stay in one table — a single chronology is
@@ -44,9 +42,9 @@
     border-radius: var(--gp-radius-pill);
     padding: 1px 8px;
     margin-right: 5px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 800;
-    letter-spacing: .04em;
+    letter-spacing: .04em !important;
     text-transform: uppercase;
 }
 

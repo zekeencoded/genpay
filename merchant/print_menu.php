@@ -69,10 +69,10 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&ec
     <title>Print Menu | <?= gjc_e($merchantName) ?></title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=51">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=28">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=53">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/print_menu.css?v=5">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/print_menu.css?v=7">
 </head>
 <body>
 <div class="merchant-layout">

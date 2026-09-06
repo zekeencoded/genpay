@@ -30,9 +30,7 @@ video {
    CARD FIXES (SAFE)
 ========================================= */
 
-.card,
-.carDbg,
-.carDbg2 {
+.card {
   width: 100% !important;
   max-width: 100% !important;
 }
@@ -77,8 +75,6 @@ video {
   .sidebar.active {
     left: 0;
   }
-
-  .main-content,
   .content,
   .wrapper {
     margin-left: 0 !important;
@@ -183,7 +179,7 @@ html {
   }
 
   .badge-top {
-    font-size: 10px;
+    font-size: 11px;
     padding: 4px 10px;
   }
 

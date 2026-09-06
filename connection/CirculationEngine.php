@@ -70,68 +70,6 @@ class CirculationEngine
         ];
     }
 
-    public function cashIn(
-        int $studentWalletId,
-        float $amount,
-        int $initiatedBy,
-    ): array {
-        $this->assertPositive($amount);
-
-        $this->db->beginTransaction();
-        try {
-            $settings = $this->lockSettings();
-
-            if ($settings["cashier_vault_points"] < $amount) {
-                throw new RuntimeException(
-                    "VAULT_INSUFFICIENT: Vault only has Php " .
-                        number_format($settings["cashier_vault_points"], 2) .
-                        " - cannot load Php " .
-                        number_format($amount, 2) .
-                        ". Request a vault replenishment from the Super-Admin.",
-                );
-            }
-
-            $this->db
-                ->prepare(
-                    "UPDATE system_settings
-                    SET cashier_vault_points = cashier_vault_points - ?
-                  WHERE id = 1",
-                )
-                ->execute([$amount]);
-
-            $this->db
-                ->prepare(
-                    "UPDATE student_wallets
-                    SET balance = balance + ?
-                  WHERE id = ?",
-                )
-                ->execute([$amount, $studentWalletId]);
-
-            $vaultAfter = $settings["cashier_vault_points"] - $amount;
-
-            $this->validateCirculation($settings["total_circulation_cap"]);
-
-            $ref = $this->logTransaction(
-                self::TXN_CASH_IN,
-                $initiatedBy,
-                $amount,
-                $settings["cashier_vault_points"],
-                $vaultAfter,
-                studentWalletId: $studentWalletId,
-            );
-
-            $this->db->commit();
-            return [
-                "success" => true,
-                "reference" => $ref,
-                "vault_after" => $vaultAfter,
-            ];
-        } catch (\Throwable $e) {
-            $this->db->rollBack();
-            throw $e;
-        }
-    }
-
     /**
      * Top-up with tiered service fee.
      *
@@ -1030,15 +968,6 @@ class CirculationEngine
             );
         }
         return $row;
-    }
-
-    private function getVaultBalance(): float
-    {
-        return (float) $this->db
-            ->query(
-                "SELECT cashier_vault_points FROM system_settings WHERE id = 1",
-            )
-            ->fetchColumn();
     }
 
     private function buildCirculationSnapshot(): array

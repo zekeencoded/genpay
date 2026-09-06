@@ -1,4 +1,4 @@
-@import url("theme.css?v=9");
+@import url("theme.css?v=11");
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,17 +24,13 @@
     --gold-light:var(--gp-gold-light);
     --cream:     var(--gp-cream);
     --red-500:   #ef4444;
-    --red-100:   #fee2e2;
     --amber-500: #f59e0b;
     --amber-100: #fef3c7;
-    --gray-100:  #f3f4f6;
     --gray-200:  #e5e7eb;
     --gray-600:  #4b5563;
     --gray-800:  #1f2937;
     --white:     #ffffff;
     --radius:    16px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
-    --shadow-md: 0 4px 20px rgba(0,0,0,.12);
     --shadow-lg: 0 20px 60px rgba(0,0,0,.18);
 }
 
@@ -142,7 +138,7 @@ body {
 
 .section-title {
     font-size: 13px; font-weight: 700; color: var(--green-700);
-    text-transform: uppercase; letter-spacing: .08em;
+    text-transform: uppercase; letter-spacing: .08em !important;
     margin-bottom: 16px;
 }
 
@@ -155,7 +151,7 @@ body {
 }
 .stall-row-label {
     font-size: 11px; font-weight: 800; color: var(--gray-600);
-    text-transform: uppercase; letter-spacing: .1em;
+    text-transform: uppercase; letter-spacing: .1em !important;
     margin-bottom: 8px; padding-left: 2px;
 }
 
@@ -234,8 +230,8 @@ body {
 }
 
 .stall-status-badge {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .08em; padding: 3px 10px; border-radius: 50px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em !important; padding: 3px 10px; border-radius: 50px;
 }
 .stall--vacant  .stall-status-badge { background: var(--green-500); color: #fff; }
 .stall--pending  .stall-status-badge { background: var(--amber-500); color: #fff; }
@@ -258,7 +254,7 @@ body {
 }
 
 .stall-apply-hint {
-    font-size: 10px; font-weight: 600; color: var(--green-700);
+    font-size: 11px; font-weight: 600; color: var(--green-700);
     opacity: .7;
 }
 
@@ -295,7 +291,7 @@ body {
 .modal-status-chip {
     display: inline-block; padding: 5px 14px; border-radius: 50px;
     font-size: 12px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em;
+    letter-spacing: .07em !important;
 }
 .chip--vacant   { background: var(--green-100); color: var(--green-700); }
 .chip--pending  { background: var(--amber-100); color: #92400e; }
@@ -306,13 +302,11 @@ body {
     display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
     margin-bottom: 24px;
 }
-.spec-item { }
 .spec-label {
     font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: var(--gray-600); margin-bottom: 4px;
+    letter-spacing: .07em !important; color: var(--gray-600); margin-bottom: 4px;
 }
 .spec-value { font-size: 16px; font-weight: 700; color: var(--gray-800); }
-.spec-value--green { color: var(--green-700); }
 
 .modal-merchant-block {
     background: var(--green-100); border-radius: 12px;

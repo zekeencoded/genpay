@@ -97,10 +97,10 @@ $currentPage = 'dashboard';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=51">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=28">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=53">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
@@ -754,7 +754,7 @@ $currentPage = 'dashboard';
                     <span>Total</span>
                     ${gcPriceHtml(Number(data.amount || 0), true)}
                 </div>
-                <div style="font-size:12.5px;color:var(--gp-muted);">
+                <div style="font-size:13px;color:var(--gp-muted);">
                     <div>Submitted: ${submittedTime}</div>
                     ${paidTime ? `<div>Paid: ${paidTime}</div>` : ''}
                 </div>

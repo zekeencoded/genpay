@@ -61,7 +61,15 @@ RewriteRule ^uploads(/.*)?$ - [F,L]
 # ----------------------------------------------------------
 # 4. PROTECT SENSITIVE FILES
 # ----------------------------------------------------------
-<FilesMatch "^(\.htaccess|\.htpasswd|\.env|ewallet\.sql|genhash\.php|libraries\.php)$">
+<FilesMatch "^(\.htaccess|\.htpasswd|\.env|genhash\.php|libraries\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Block by EXTENSION, not by name. The rule above used to name "ewallet.sql"
+# exactly, but the dump on disk was ewallet_0722.sql — one character of drift
+# and a 473KB database dump was serving with a 200. Never list dumps by name.
+<FilesMatch "\.(sql|bak|old|orig|log|dist|ini|docx)$">
     Order Allow,Deny
     Deny from all
 </FilesMatch>

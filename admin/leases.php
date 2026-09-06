@@ -190,18 +190,22 @@ function gjc_lease_qs_raw(array $overrides = []): string
 }
 
 /**
- * Link to one lease's own page. `ret` carries the roll's current filter so the
- * Back link lands the user exactly where they left off.
+ * Link to one lease's own page, on the section the button means. `ret` carries
+ * the roll's current filter so the Back link lands the user exactly where they
+ * left off.
  */
-function gjc_lease_link(int $leaseId, string $fragment = ''): string
+function gjc_lease_link(int $leaseId, string $tab = ''): string
 {
     $url = ADMIN_URL . '/lease_details.php?token=' . rawurlencode(gjc_make_view_token($leaseId, 'lease'));
+    if ($tab !== '') {
+        $url .= '&tab=' . rawurlencode($tab);
+    }
     $ret = gjc_lease_qs_raw();
     if ($ret !== '') {
         $url .= '&ret=' . rawurlencode($ret);
     }
 
-    return htmlspecialchars($url . $fragment, ENT_QUOTES);
+    return htmlspecialchars($url, ENT_QUOTES);
 }
 
 $stateBadge = [
@@ -223,8 +227,8 @@ $stateBadge = [
     <title>Leases &amp; Rent | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=31">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -412,11 +416,11 @@ $stateBadge = [
                             <td class="text-end">
                                 <div class="gp-row-actions">
                                     <?php if ($l['status'] === 'active'): ?>
-                                        <a class="btn btn-sm btn-success" href="<?= gjc_lease_link((int) $l['id'], '#record') ?>">
+                                        <a class="btn btn-sm btn-success" href="<?= gjc_lease_link((int) $l['id'], 'collect') ?>">
                                             Record payment
                                         </a>
                                     <?php endif; ?>
-                                    <a class="btn btn-sm btn-outline-secondary" href="<?= gjc_lease_link((int) $l['id']) ?>">
+                                    <a class="btn btn-sm btn-outline-secondary" href="<?= gjc_lease_link((int) $l['id'], 'receipts') ?>">
                                         Details
                                     </a>
                                 </div>

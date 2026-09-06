@@ -10,7 +10,7 @@
 .pos-product-card .product-name { font-weight:700; font-size:13px; margin:0 0 4px; }
 .pos-product-card .product-price { font-size:16px; font-weight:800; color:var(--gp-green-850); }
 .pos-product-card .product-stock { font-size:11px; color:var(--gp-muted); margin-top:3px; }
-.pos-product-card .product-cat { font-size:10px; text-transform:uppercase; letter-spacing:.05em;
+.pos-product-card .product-cat { font-size:11px; text-transform:uppercase; letter-spacing:.05em !important;
     color:var(--gp-muted); background:var(--gp-cream); padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:6px; }
 
 .pos-cart-panel { background:#fff; border-radius:var(--gp-radius); padding:20px; border:1px solid var(--gp-line);
@@ -39,7 +39,7 @@
 .pos-qr-box span { display:block; color:var(--gp-muted); font-size:12px; }
 
 .pos-qr-status { display:inline-flex; align-items:center; gap:6px; margin-bottom:8px;
-    padding:4px 14px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    padding:4px 14px; border-radius:999px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em !important; }
 .pos-qr-status.is-pending { background:var(--gp-warning-bg); color:var(--gp-warning); }
 .pos-qr-status.is-paid { background:var(--gp-success-bg); color:var(--gp-success); }
 .pos-qr-status.is-expired { background:var(--gp-danger-bg); color:var(--gp-danger); }
@@ -72,7 +72,7 @@
 .pos-qr-frame:has(.pos-qr-canvas:empty) { display:none; }
 
 .pos-qr-manual { margin-top:10px; }
-.pos-qr-manual span { display:block; font-size:10.5px; color:var(--gp-muted); text-transform:uppercase; letter-spacing:.6px; }
+.pos-qr-manual span { display:block; font-size:11px; color:var(--gp-muted); text-transform:uppercase; letter-spacing:.6px !important; }
 .pos-qr-manual strong { display:block; margin-bottom:0; font-size:20px; letter-spacing:3px;
     color:var(--gp-green-850); font-family:var(--gp-mono); }
 #posQrSummary { margin-top:8px; }

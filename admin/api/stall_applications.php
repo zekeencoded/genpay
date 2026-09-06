@@ -342,7 +342,7 @@ try {
                         <p style="margin:6px 0 0"><strong>Temporary Password:</strong> ' . htmlspecialchars($tempPassword) . '</p>
                     </div>
                     <p style="color:#b91c1c;font-weight:700">You must change this password on first login before accessing your dashboard.</p>
-                    <p style="color:#374151">Login page: <a href="' . BASE_URL . '/login" style="color:#059669">' . BASE_URL . '/login</a></p>
+                    <p style="color:#374151">Login page: <a href="' . BASE_URL . '/login" style="color:#147b3a">' . BASE_URL . '/login</a></p>
                 </div>';
             $altBody = "Dear {$app['proprietor_name']},\n\nYour merchant account is approved for Stall {$stallId}.\n\nEmail: {$app['email']}\nTemporary Password: {$tempPassword}\n\nLog in at " . BASE_URL . "/login. You must change your password on first login.\n\nGenPay Team";
 

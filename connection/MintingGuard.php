@@ -1,7 +1,5 @@
 <?php
 
-
-
 require_once __DIR__ . '/CirculationEngine.php';
 
 class MintingGuard
@@ -69,7 +67,6 @@ class MintingGuard
     {
         $this->assertSuperAdmin($superAdminId);
 
-
         $stmt = $this->db->prepare("SELECT password FROM users WHERE userID = ?");
         $stmt->execute([$superAdminId]);
         $hash = $stmt->fetchColumn();
@@ -124,21 +121,6 @@ class MintingGuard
     }
 
     
-    public function getCapIncreaseLog(int $limit = 20, int $offset = 0): array
-    {
-        $stmt = $this->db->prepare("
-            SELECT
-                c.*,
-                u.email  AS admin_email,
-                CONCAT(u.first_name, ' ', u.last_name) AS admin_name
-            FROM cap_increase_log c
-            LEFT JOIN users u ON u.userID = c.super_admin_id
-            ORDER BY c.created_at DESC
-            LIMIT ? OFFSET ?
-        ");
-        $stmt->execute([$limit, $offset]);
-        return $stmt->fetchAll();
-    }
     
     private function assertSuperAdmin(int $userId): void
     {

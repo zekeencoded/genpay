@@ -61,13 +61,13 @@ $currentPage = 'allowance';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=19">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=28">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=7">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=11">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_topup.css?v=5">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_send.css?v=5">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=5">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=13">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_topup.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_send.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=8">
 </head>
 
 <body class="gp-theme">
@@ -210,7 +210,7 @@ $currentPage = 'allowance';
                         <?php else: ?>
                         <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
                             <?php foreach ($history as $h): ?>
-                            <div style="display:flex;justify-content:space-between;font-size:12.5px;border-bottom:1px solid var(--sd-line);padding-bottom:6px;">
+                            <div style="display:flex;justify-content:space-between;font-size:13px;border-bottom:1px solid var(--sd-line);padding-bottom:6px;">
                                 <span><?= $e(trim($h['first_name'] . ' ' . $h['last_name'])) ?></span>
                                 <strong>&#8369;<?= number_format((float) $h['amount'], 2) ?></strong>
                             </div>

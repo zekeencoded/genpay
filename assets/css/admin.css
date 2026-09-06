@@ -1,5 +1,5 @@
-@import url("gjc-clear.css?v=18");
-@import url("theme.css?v=9");
+@import url("gjc-clear.css?v=21");
+@import url("theme.css?v=11");
 
 :root {
   /* Alias layer — pure aliases of the shared gp-* theme
@@ -119,7 +119,7 @@ body {
 }
 
 .brand-box span {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.55);
 }
@@ -296,7 +296,7 @@ body {
 .topbar p {
   margin: 2px 0 0;
   color: rgba(255, 255, 255, 0.55);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .admin-user {
@@ -365,7 +365,7 @@ body {
 .metric-card span {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.12em !important;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
   position: relative;
@@ -462,87 +462,6 @@ a.mini-metric-card:focus-visible {
   line-height: 1.1;
 }
 
-.economy-overview {
-  display: grid;
-  grid-template-columns: 1.6fr repeat(3, 1fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.economy-balance-card,
-.economy-mini-card {
-  border-radius: var(--ad-radius);
-  padding: 22px;
-  box-shadow: 0 1px 2px rgba(16, 32, 24, 0.04);
-  border: 1px solid var(--ad-line);
-}
-
-.economy-balance-card {
-  color: white;
-  background: var(--emerald-950);
-  border-color: rgba(240, 165, 0, 0.25);
-}
-
-.economy-balance-card span,
-.economy-mini-card span {
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  margin-bottom: 8px;
-}
-
-.economy-balance-card h2 {
-  margin: 0 0 8px;
-  font-family: var(--gp-mono);
-  font-size: 36px;
-  font-weight: 700;
-  color: var(--gold-light);
-}
-
-.economy-balance-card p,
-.economy-mini-card small {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.economy-balance-card p {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.economy-mini-card {
-  background: #fff;
-}
-
-.economy-mini-card span {
-  color: var(--text-muted);
-}
-
-.economy-mini-card strong {
-  display: block;
-  color: var(--emerald-950);
-  font-size: 22px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-.economy-mini-card small {
-  color: var(--text-muted);
-}
-
-.economy-mini-card.economy-ok {
-  background: #ecfdf5;
-  border-color: rgba(34, 197, 94, 0.22);
-}
-
-.economy-mini-card.economy-alert {
-  background: #fff7ed;
-  border-color: rgba(245, 158, 11, 0.32);
-}
-
 .premium-panel {
   background: #fff;
   border: 1px solid var(--ad-line);
@@ -557,7 +476,7 @@ a.mini-metric-card:focus-visible {
 
 .panel-header h3 {
   margin: 0;
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--text-main);
 }
@@ -599,12 +518,6 @@ a.mini-metric-card:focus-visible {
   gap: 12px;
 }
 
-.quick-icon {
-  width: 25px;
-  height: 25px;
-  object-fit: contain;
-}
-
 .quick-actions a b {
   font-size: 24px;
   line-height: 1;
@@ -621,7 +534,7 @@ a.mini-metric-card:focus-visible {
 .view-btn {
   text-decoration: none;
   color: var(--gp-success);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   background: var(--gp-success-bg);
   border: none;
@@ -674,30 +587,6 @@ a.mini-metric-card:focus-visible {
 .gjc-datatable-bottom {
   margin-top: 14px;
   margin-bottom: 0;
-}
-
-@media (max-width: 992px) {
-  .admin-sidebar {
-    width: 58px;
-  }
-
-  .admin-sidebar .brand-text,
-  .admin-sidebar .nav-text,
-  .admin-sidebar .logout-btn span {
-    display: none;
-  }
-
-  .admin-main {
-    --main-pad: 18px;
-    margin-left: 58px;
-    width: calc(100% - 58px);
-    padding: var(--main-pad);
-  }
-
-  .sidebar-menu a {
-    justify-content: center;
-    padding: 0;
-  }
 }
 
 /* ============================= */
@@ -772,7 +661,7 @@ a.mini-metric-card:focus-visible {
   }
 
   .topbar p {
-    font-size: 12.5px;
+    font-size: 13px;
   }
 
   .admin-user {
@@ -797,14 +686,6 @@ a.mini-metric-card:focus-visible {
 
   .quick-actions a {
     height: 52px;
-  }
-
-  .economy-overview {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .economy-balance-card {
-    grid-column: 1 / -1;
   }
 
   .table-responsive {
@@ -913,20 +794,6 @@ a.mini-metric-card:focus-visible {
 
   .metric-card p {
     font-size: 12px;
-  }
-
-  .economy-overview {
-    grid-template-columns: 1fr;
-  }
-
-  .economy-balance-card,
-  .economy-mini-card {
-    border-radius: var(--gp-radius);
-    padding: 18px;
-  }
-
-  .economy-balance-card h2 {
-    font-size: 29px;
   }
 
   .premium-panel {
@@ -1068,7 +935,7 @@ a.mini-metric-card:focus-visible {
   font-weight: 700;
   color: var(--gjc-muted);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.6px !important;
   margin-bottom: 6px;
   display: block;
 }
@@ -1199,9 +1066,9 @@ a.mini-metric-card:focus-visible {
 }
 
 .ce-pool-info       { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ce-pool-label      { font-size: 11px; font-weight: 700; color: var(--gjc-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.ce-pool-label      { font-size: 11px; font-weight: 700; color: var(--gjc-muted); text-transform: uppercase; letter-spacing: 0.5px !important; }
 .ce-pool-amt        { font-family: var(--gp-mono); font-size: 18px; font-weight: 700; color: var(--gp-green-950); letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
-.ce-pool-share      { font-size: 11.5px; color: var(--gjc-muted); font-weight: 600; }
+.ce-pool-share      { font-size: 12px; color: var(--gjc-muted); font-weight: 600; }
 
 /* ── Bottom 2-column grid ─────────────────────────────────── */
 .ce-bottom-grid {
@@ -1277,8 +1144,8 @@ a.mini-metric-card:focus-visible {
 }
 .ce-mint-stat-item.ce-mint-stat-primary span   { color: rgba(255,255,255,0.72); }
 .ce-mint-stat-item.ce-mint-stat-primary strong { color: #fff; }
-.ce-mint-stat-item span  { display: block; font-size: 10.5px; color: var(--gjc-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 3px; }
-.ce-mint-stat-item strong{ display: block; font-size: 15px; font-weight: 800; color: var(--gp-green-950); font-variant-numeric: tabular-nums; }
+.ce-mint-stat-item span  { display: block; font-size: 11px; color: var(--gjc-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px !important; margin-bottom: 3px; }
+.ce-mint-stat-item strong { display: block; font-size: 15px; font-weight: 800; color: var(--gp-green-950); font-variant-numeric: tabular-nums; }
 
 /* ── Mint form panel ─────────────────────────────────────── */
 .ce-mint-form-panel {
@@ -1298,7 +1165,6 @@ a.mini-metric-card:focus-visible {
   gap: 18px;
 }
 
-.ce-mint-form-header  { }
 .ce-mint-badge {
   display: inline-block;
   padding: 4px 12px;
@@ -1308,13 +1174,12 @@ a.mini-metric-card:focus-visible {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.5px !important;
   margin-bottom: 8px;
 }
 .ce-mint-form-title { font-size: 16px; font-weight: 800; color: var(--gp-green-950); }
 .ce-mint-form-sub   { font-size: 13px; color: var(--gjc-muted); margin-top: 3px; }
 
-#ce-mint-alert { }
 .ce-alert {
   padding: 12px 16px;
   border-radius: var(--gjc-radius);
@@ -1335,7 +1200,7 @@ a.mini-metric-card:focus-visible {
   font-weight: 800;
   color: var(--gp-green-950);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.4px !important;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1440,7 +1305,7 @@ a.mini-metric-card:focus-visible {
   flex-shrink: 0;
 }
 .ce-flow-step-info       { flex: 1; }
-.ce-flow-step-info strong{ display: block; font-size: 14px; font-weight: 800; color: var(--gp-green-950); }
+.ce-flow-step-info strong { display: block; font-size: 14px; font-weight: 800; color: var(--gp-green-950); }
 .ce-flow-step-info span  { font-size: 12px; color: var(--gjc-muted); font-weight: 600; }
 .ce-flow-arrow { font-size: 18px; color: var(--gp-green-700); font-weight: 800; }
 .ce-invisible  { visibility: hidden; }
@@ -1470,7 +1335,6 @@ a.mini-metric-card:focus-visible {
   animation: ce-spin 0.7s linear infinite;
   vertical-align: middle;
 }
-.ce-spinner-sm { width: 14px; height: 14px; }
 @keyframes ce-spin { to { transform: rotate(360deg); } }
 
 /* ── Responsive ──────────────────────────────────────────── */
@@ -1480,7 +1344,7 @@ a.mini-metric-card:focus-visible {
 @media (max-width: 768px) {
   .ce-bottom-grid  { grid-template-columns: 1fr; }
   .ce-pool-grid    { grid-template-columns: repeat(2, 1fr); }
-  .ce-ledger-amount{ font-size: 30px; }
+  .ce-ledger-amount { font-size: 30px; }
   .ce-ledger-head  { flex-direction: column; }
   .ce-reconcile    { max-width: none; }
   .ce-field-row    { flex-direction: column; }
@@ -1492,17 +1356,6 @@ a.mini-metric-card:focus-visible {
   .ce-ledger-panel { padding: 22px 18px 18px; }
 }
 
-
-
-.circulation-health-panel {
-  margin-top: 28px;
-}
-
-/* ── Metric card colour overrides for the widget ── */
-.metric-card.metric-cap     { background: #0e6332; }
-.metric-card.metric-vault   { background: #1e3a5f; }
-.metric-card.metric-students{ background: #713f12; }
-.metric-card.metric-merchants{ background: #4c1d95; }
 .metric-card small {
   font-size: 12px;
   color: rgba(255,255,255,0.72);
@@ -1510,84 +1363,12 @@ a.mini-metric-card:focus-visible {
   margin-top: 2px;
 }
 
-/* ── Stacked circulation bar ── */
-.circulation-bar-wrapper { }
-.circulation-bar-label   { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-.circulation-bar {
-  display: flex;
-  height: 52px;
-  border-radius: var(--gp-radius);
-  overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.07);
-}
-
-.bar-segment {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 800;
-  color: rgba(255,255,255,0.92);
-  transition: width 0.6s ease;
-  text-align: center;
-  overflow: hidden;
-  min-width: 0;
-}
-.bar-segment span { line-height: 1.2; }
-.bar-vault     { background: #0e6332; }
-.bar-students  { background: #d97706; }
-.bar-merchants { background: #7c3aed; }
-
-.bar-legend    { font-size: 13px; font-weight: 700; display: flex; gap: 6px; align-items: center; }
 .legend-dot    { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
 .legend-dot.vault     { background: #0e6332; }
 .legend-dot.students  { background: #d97706; }
 .legend-dot.merchants { background: #7c3aed; }
 
 .balanced    { color: var(--gp-success); font-weight: 800; }
-.drift-alert { color: var(--gp-red); font-weight: 800; }
-
-/* ── Monthly minting budget card ── */
-.minting-budget-card {
-  padding: 18px 22px;
-  border-radius: var(--gp-radius);
-  border: 1.5px solid rgba(13, 36, 24, 0.1);
-  background: #f4faf7;
-}
-.minting-budget-card.limit-exceeded {
-  background: #fffbeb;
-  border-color: #f59e0b;
-}
-.minting-budget-card.limit-ok { border-color: #22c55e; }
-
-.mint-progress-track {
-  height: 10px;
-  background: rgba(0,0,0,0.07);
-  border-radius: var(--gp-radius-tag);
-  overflow: hidden;
-}
-.mint-progress-fill {
-  height: 100%;
-  border-radius: var(--gp-radius-tag);
-  transition: width 0.5s ease;
-}
-
-/* ── Mint form panel ── */
-.mint-panel {
-  padding: 22px;
-  border-radius: var(--gp-radius);
-  border: 1.5px solid rgba(240, 165, 0, 0.35);
-  background: #fffdf3;
-  margin-top: 4px;
-}
-.mint-panel h4 {
-  font-size: 18px;
-  font-weight: 800;
-  margin: 0 0 4px;
-  color: #7a5a00;
-}
-.mint-panel .text-muted { color: var(--text-muted) !important; font-size: 13px; }
 
 .form-label { font-size: 13px; font-weight: 700; margin-bottom: 6px; display: block; }
 .form-control {
@@ -1704,7 +1485,7 @@ a.mini-metric-card:focus-visible {
   gap: 10px;
 }
 .gp-howto-steps li {
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -1727,7 +1508,7 @@ a.mini-metric-card:focus-visible {
   gap: 12px;
   padding: 14px 18px;
   border-radius: var(--gp-radius);
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
 }
 .gp-notice > i { margin-top: 3px; font-size: 16px; }
@@ -1767,18 +1548,18 @@ a.mini-metric-card:focus-visible {
 .gp-field-label {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.06em !important;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 .gp-field-value {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-main);
   margin-top: 3px;
   word-break: break-word;
 }
-.gp-field-value.is-mono { font-family: var(--gp-mono); font-weight: 600; font-size: 13.5px; }
+.gp-field-value.is-mono { font-family: var(--gp-mono); font-weight: 600; font-size: 14px; }
 
 /* A stat tile whose figure is a badge, not a number — the mono/tabular
    treatment .detail-stat strong applies would fight the pill. */
@@ -1814,7 +1595,7 @@ a.mini-metric-card:focus-visible {
   align-items: center;
   padding: 5px 11px;
   border-radius: var(--gp-radius);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1834,7 +1615,7 @@ a.mini-metric-card:focus-visible {
 .gp-rent-table tr.is-late-row td { background: rgba(180, 35, 24, 0.035); }
 .gp-cell-note {
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .gp-cell-note.is-late { color: var(--gp-danger); font-weight: 700; }
@@ -1871,7 +1652,7 @@ a.mini-metric-card:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-muted);
   text-decoration: none;
@@ -1917,7 +1698,7 @@ a.mini-metric-card:focus-visible {
   margin: 26px 0 4px;
   font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.06em !important;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -1990,18 +1771,7 @@ a.mini-metric-card:focus-visible {
 .lease-filter-bar select {
   flex: 0 1 180px;
 }
-.lease-filter-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-main);
-  white-space: nowrap;
-}
 
-/* ── Panel footer ── */
-.panel-footer { font-size: 12px; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 12px; }
 .text-muted { color: var(--text-muted) !important; }
 .text-end   { text-align: right; }
 .text-warning { color: var(--gp-warning); }
@@ -2047,7 +1817,7 @@ a.mini-metric-card:focus-visible {
   border: 2px solid #fff;
   background: #dc2626;
   color: #fff;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   box-shadow: 0 4px 10px rgba(220, 38, 38, 0.35);
@@ -2098,7 +1868,7 @@ a.mini-metric-card:focus-visible {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.05em !important;
   margin-bottom: 4px;
 }
 
@@ -2215,17 +1985,17 @@ a.mini-metric-card:focus-visible {
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.06em !important;
   color: var(--gjc-muted);
   margin: 0;
 }
 
 /* Form fields */
 #stallDetailModal .form-label {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.04em !important;
   color: var(--gp-green-850);
   margin-bottom: 6px;
 }
@@ -2289,7 +2059,7 @@ a.mini-metric-card:focus-visible {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.05em !important;
   color: var(--gp-green-850);
 }
 
@@ -2299,7 +2069,7 @@ a.mini-metric-card:focus-visible {
 #stallDetailModal .table tbody td {
   padding: 12px 14px;
   border-bottom: 1px solid var(--gjc-soft);
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--gjc-ink);
   vertical-align: middle;
 }

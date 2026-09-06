@@ -24,7 +24,7 @@
   --gp-gold-light: #f6b81f;
   --gp-gold-soft: rgba(240, 165, 0, 0.14);
   --gp-gold-line: rgba(240, 165, 0, 0.45);
-  --gp-gold-deep: #8a6a10; /* gold as TEXT on light surfaces (contrast-safe) */
+  --gp-gold-deep: #896910; /* gold as TEXT on light surfaces (contrast-safe) */
 
   /* ---- Surfaces */
   --gp-cream: #eef4ef;      /* page background */
@@ -35,34 +35,54 @@
 
   /* ---- Text */
   --gp-ink: #14251b;
-  --gp-muted: #6b7a70;
-  /* Tertiary text: placeholders, input adornments, "(optional)" labels, empty
-     states, disabled/inactive. Added 2026-08-27 to close a real hole in the
-     neutral ramp — the steps ran 12.9 / 30.7 / 49.8 L* and then jumped 42
+  /* Secondary text. Darkened 2026-09-05 from #6b7a70: that value cleared 4.5:1
+     on white (4.52) but not on --gp-cream (4.05), and --gp-cream is the page
+     background every role shell paints, so most muted text in the app was
+     sitting below the threshold. #637168 keeps the ramp's channel shape
+     (g = r+14, b = r+5) and clears 4.5:1 on all three light surfaces —
+     white 5.13, cream 4.60, --gjc-soft-2 4.85. */
+  --gp-muted: #637168;
+  /* Lightest neutral: NON-READING marks only — inline "·" separators, inactive
+     dots, dashed guides, disabled chrome. It was introduced as a tertiary TEXT
+     tone, but no value light enough to read as "one step below --gp-muted" can
+     also clear 4.5:1, so as of 2026-09-05 the reading cases (empty states, the
+     11px price sub, icon-button glyphs) were moved to --gp-muted and this token
+     was darkened #98a79d -> #7c8f82 to clear 3:1 on every light surface
+     (white 3.44, --gp-cream 3.08, --gjc-soft-2 3.25; it was 2.52 / 2.25 / 2.38),
+     the threshold for non-text marks. Text goes to --gp-muted. It still closes the
+     hole in the neutral ramp — the steps ran 12.9 / 30.7 / 49.8 L* and then jumped 42
      points to --gp-line at 91.9, so there was no tone between "secondary
      text" and "border". Seventeen sites had been reaching for Tailwind greys
      (Tailwind gray-400 and slate-400) to fill it, which is why cool blue-greys
      kept appearing next to the warm green-greys of this palette.
 
-     The value is derived, not picked: L* 67.1 lands mid-gap, and the channel
-     shape (g = r+15, b = r+5) is --gp-muted's exactly — this is the colour
-     --gp-muted becomes when you lighten it, so it sits on the ramp as a
-     sibling rather than an import. */
-  --gp-subtle: #98a79d;
+     The value is derived, not picked: it lands mid-gap between --gp-muted and
+     --gp-line, and the channel shape (g = r+18, b = r+6) tracks --gp-muted's —
+     this is the colour --gp-muted becomes when you lighten it, so it sits on
+     the ramp as a sibling rather than an import. */
+  --gp-subtle: #7c8f82;
 
-  /* ---- Status tints (badge bg + text pairs) */
-  --gp-success: #15803d;
+  /* ---- Status tints (badge bg + text pairs)
+     Badges are 11px, the smallest reading size in the app, so each text tone
+     is held to 4.5:1 against ITS OWN tint, not just against white. Three of
+     the four missed that on 2026-09-05 (success 4.30, warning 4.48, info 4.38)
+     and were darkened by a hair — the shift is invisible side by side, the
+     compliance is not. Danger already cleared it at 5.37 and is unchanged. */
+  --gp-success: #147b3a;    /* on -bg 4.58 · on white 5.35 */
   --gp-success-bg: #dcf3e4;
-  --gp-warning: #b45309;
+  --gp-warning: #b25209;    /* on -bg 4.57 · on white 5.12 */
   --gp-warning-bg: #fdf1d8;
-  --gp-danger: #b42318;
+  --gp-danger: #b42318;     /* on -bg 5.37 · on white 6.57 */
   --gp-danger-bg: #fde2e2;
-  --gp-info: #2563eb;
+  --gp-info: #1f5fea;       /* on -bg 4.58 · on white 5.41 */
   --gp-info-bg: #e3edfd;
 
-  /* ---- Semantic accents (amount colours, alerts) */
-  --gp-green: #16a34a;      /* positive / money-in */
-  --gp-red: #dc2626;        /* negative / destructive */
+  /* ---- Semantic accents (amount colours, alerts)
+     Both are set as `color` on real figures, so both are held to 4.5:1 on
+     white AND on --gp-cream. #16a34a managed only 3.30 on white — the worst
+     text contrast in the palette, and it was carrying money-in amounts. */
+  --gp-green: #117f3a;      /* positive / money-in · white 5.10 · cream 4.57 */
+  --gp-red: #d62323;        /* negative / destructive · white 5.09 · cream 4.56 */
 
   /* ---- Shape & type
      Containers and labels square off; inline tags sit tighter still.
@@ -204,7 +224,7 @@
 
 .gp-card-head h3 {
   margin: 0;
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--gp-ink);
 }
@@ -231,7 +251,7 @@
 .gp-hero-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.12em !important;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
 }
@@ -253,7 +273,7 @@
   color: var(--gp-gold);
   font-family: var(--gp-mono);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: 13px;
   padding: 4px 12px;
 }
 
@@ -382,7 +402,7 @@
   color: var(--gp-muted);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase;
   padding: 4px 12px;
   white-space: nowrap;
@@ -399,7 +419,7 @@
   background: var(--gp-success-bg);
   border-radius: var(--gp-radius);
   color: var(--gp-success);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   padding: 7px 16px;
   white-space: nowrap;
@@ -413,7 +433,7 @@
   text-align: center;
   padding: 30px 10px;
   color: var(--gp-muted);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 .gp-empty i {
@@ -472,7 +492,7 @@ body.sd-body .table thead th {
 body.gp-theme .table tbody td,
 body.sd-body .table tbody td {
   padding: 13px 12px;
-  font-size: 13.5px;
+  font-size: 14px;
   border: 0;
   border-bottom: 1px solid var(--gp-line-soft);
   border-radius: 0;
@@ -505,7 +525,7 @@ body.sd-body .table tbody tr:hover td {
 body.gp-theme .table-sm tbody td,
 body.sd-body .table-sm tbody td {
   padding: 8px 10px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* Detail views keep their grid, in the same hairline color */
@@ -552,7 +572,7 @@ body.gp-theme .table-bordered tbody td {
   border: 1px solid var(--gp-line) !important;
   background: #fff !important;
   color: var(--gp-ink) !important;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   margin-left: 4px !important;
 }
@@ -574,7 +594,7 @@ body.gp-theme .table-bordered tbody td {
   border: 1px solid var(--gp-line);
   border-radius: var(--gp-radius);
   color: var(--gp-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   padding: 6px 12px;
 }
@@ -622,7 +642,7 @@ body.gp-theme .form-select:focus {
 }
 
 body.gp-theme .form-label {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--gp-ink);
 }

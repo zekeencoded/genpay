@@ -1,7 +1,7 @@
 .ce-wu-bar-wrap{display:flex;align-items:center;gap:6px;margin:6px 0 4px}
 .ce-wu-bar{flex:1;height:6px;background:rgba(0,0,0,.12);border-radius:var(--gp-radius-tag);overflow:hidden}
 .ce-wu-bar-fill{height:100%;background:#22c55e;border-radius:var(--gp-radius-tag);transition:width .4s}
-.ce-wu-pct{font-size:11px;font-weight:700;color:#22c55e;white-space:nowrap}
+.ce-wu-pct{font-size:11px;font-weight:700;color:var(--gp-success);white-space:nowrap}
 .ce-wu-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
 .ce-wu-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--gp-radius)}
 .ce-wu-badge--active{background:rgba(34,197,94,.15);color:var(--gp-success)}
@@ -11,7 +11,7 @@
 .ce-wu-dot--inactive{background:var(--gp-subtle)}
 .ce-wu-bar-fill--merchant{background:#f59e0b}
 .ce-wu-pct--merchant{color:var(--gp-warning)}
-.ce-wu-badge--merchant-active{background:rgba(245,158,11,.15);color:#b45309}
+.ce-wu-badge--merchant-active{background:rgba(245,158,11,.15);color:var(--gp-warning)}
 .ce-wu-dot--merchant{background:#f59e0b}
 /* Total Wallet Users card (replaces Active Vouchers) */
 .ce-pool-card.ce-pool-users{background:var(--gjc-panel)}

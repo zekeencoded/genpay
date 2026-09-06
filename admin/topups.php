@@ -47,14 +47,14 @@ $currentPage = 'topups';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=26">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
     <link rel="stylesheet" href="<?= CSS_URL ?>/topups.css?v=9">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=19">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=21">
     <style>
         .sgc-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
     </style>

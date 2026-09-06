@@ -1,5 +1,5 @@
-@import url("gjc-clear.css?v=18");
-@import url("theme.css?v=9");
+@import url("gjc-clear.css?v=21");
+@import url("theme.css?v=11");
 
 /* ===== GLOBAL =====
    The photo-background "auth glass" treatment is a deliberate departure
@@ -73,41 +73,6 @@ body {
   text-align: center;
 }
 
-/* ===== ROLE SWITCH ===== */
-.role-switch {
-  position: relative;
-  display: flex;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: var(--gp-radius);
-  overflow: hidden;
-  margin-bottom: 24px;
-}
-
-.slider {
-  position: absolute;
-  width: 50%;
-  height: 100%;
-  background: #fff;
-  border-radius: var(--gp-radius);
-  transition: 0.3s;
-  left: 0;
-}
-
-.role {
-  flex: 1;
-  padding: 10px;
-  border: none;
-  background: transparent;
-  color: #fff;
-  z-index: 1;
-  font-weight: 500;
-}
-
-.role.active {
-  color: var(--gp-green-850);
-  font-weight: 600;
-}
-
 /* ===== INPUT FIELDS ===== */
 .input-group-box {
   position: relative;
@@ -138,7 +103,7 @@ body {
 .input-group-box input:focus + label,
 .input-group-box input:not(:placeholder-shown) + label {
   top: -8px;
-  font-size: 10px;
+  font-size: 11px;
   color: #fff;
 }
 
@@ -351,7 +316,6 @@ body {
 /* TITLE */
 .modal-title {
   font-weight: 700;
-  margin-bottom: 10px;
 }
 
 /* TEXT */

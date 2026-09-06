@@ -1,5 +1,5 @@
-@import url("gjc-clear.css?v=18");
-@import url("theme.css?v=9");
+@import url("gjc-clear.css?v=21");
+@import url("theme.css?v=11");
 
 :root {
   /* Alias layer — pure aliases of the shared gp-* theme
@@ -125,27 +125,10 @@ html {
   content: none;
 }
 
-.merchant-metric-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--gp-radius);
-  display: grid;
-  place-items: center;
-  background: var(--gold-soft);
-  margin-bottom: 16px;
-  position: relative;
-  z-index: 2;
-}
-
-.merchant-metric-icon i {
-  font-size: 20px;
-  color: var(--gold);
-}
-
 .merchant-metric-card span {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.12em !important;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
   position: relative;
@@ -189,7 +172,7 @@ html {
 
 .merchant-panel-header h3 {
   margin: 0;
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--text-main);
 }
@@ -252,7 +235,7 @@ html {
 .merchant-view-btn {
   text-decoration: none;
   color: var(--gp-success);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   background: var(--gp-success-bg);
   border: none;
@@ -293,7 +276,7 @@ html {
 .merchant-type-pill {
   padding: 4px 12px;
   border-radius: var(--gp-radius);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   background: var(--gp-cream);
   border: 1px solid var(--ad-line);
@@ -333,222 +316,8 @@ html {
   border: 1px solid #a8dcbe;
 }
 
-
 /* ============================= */
 /* MERCHANT QR PAGE */
-/* ============================= */
-
-.qr-layout-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 24px;
-}
-
-.qr-form-panel,
-.qr-preview-panel {
-  min-height: 430px;
-}
-
-.qr-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.qr-field label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--text-main);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.qr-field > input {
-  width: 100%;
-  height: 54px;
-  border: 1px solid var(--gp-line);
-  border-radius: var(--gp-radius);
-  padding: 0 16px;
-  color: var(--gp-ink);
-  font-size: 15px;
-  font-weight: 700;
-  outline: none;
-}
-
-.qr-field > input:focus {
-  border-color: var(--gp-gold);
-  box-shadow: var(--gp-focus-ring);
-}
-
-.qr-money-input {
-  height: 54px;
-  border: 1px solid var(--gp-line);
-  border-radius: var(--gp-radius);
-  display: flex;
-  overflow: hidden;
-  background: white;
-}
-
-.qr-money-input span {
-  width: 52px;
-  min-width: 52px;
-  display: grid;
-  place-items: center;
-  background: var(--emerald-800);
-  color: white;
-  font-weight: 800;
-}
-
-.qr-money-input input {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--gp-ink);
-}
-
-.qr-generate-btn {
-  height: 54px;
-  border: none;
-  border-radius: var(--gp-radius-pill);
-  background: var(--emerald-800);
-  color: white;
-  font-size: 15px;
-  font-weight: 800;
-  box-shadow: var(--gjc-shadow-lg);
-  transition: 0.25s ease;
-}
-
-.qr-generate-btn:hover {
-  transform: translateY(-2px);
-}
-
-.qr-preview-panel {
-  display: grid;
-  place-items: center;
-}
-
-.qr-preview-empty {
-  max-width: 360px;
-  text-align: center;
-}
-
-.qr-preview-icon {
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  background: var(--gp-success-bg);
-  display: grid;
-  place-items: center;
-}
-
-.qr-preview-icon i {
-  font-size: 40px;
-  color: var(--emerald-700);
-}
-
-.qr-preview-empty h3 {
-  margin: 0;
-  color: var(--text-main);
-  font-size: 23px;
-  font-weight: 800;
-}
-
-.qr-preview-empty p {
-  margin: 10px 0 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.5;
-  font-weight: 700;
-}
-
-.qr-bottom-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr;
-  gap: 24px;
-}
-
-.qr-instruction-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-
-.qr-instruction-list div {
-  min-height: 72px;
-  padding: 14px;
-  border-radius: var(--gp-radius);
-  background: var(--emerald-soft);
-  border: 1px solid rgba(14, 99, 50, 0.08);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.qr-instruction-list strong {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  border-radius: var(--gp-radius);
-  background: var(--gold);
-  color: var(--emerald-950);
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.qr-instruction-list span {
-  color: var(--text-main);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.qr-setting-box {
-  min-height: 168px;
-  border-radius: var(--gp-radius);
-  padding: 20px;
-  background: var(--emerald-800);
-  color: white;
-}
-
-.qr-setting-box span {
-  display: block;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-
-.qr-setting-box strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 28px;
-  font-weight: 800;
-}
-
-.qr-setting-box p {
-  margin: 10px 0 0;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-@media (max-width: 1200px) {
-  .qr-layout-grid,
-  .qr-bottom-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .qr-instruction-list {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ============================= */
 /* MERCHANT ENCASH PAGE */
@@ -698,7 +467,7 @@ html {
 .encash-empty-state {
   padding: 34px !important;
   text-align: center;
-  color: #8b9bb3 !important;
+  color: var(--gp-muted) !important;
   font-weight: 800;
 }
 
@@ -742,7 +511,7 @@ html {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.12em !important;
 }
 
 .history-mini-card {
@@ -785,19 +554,6 @@ html {
   font-weight: 800;
 }
 
-.history-status-pill {
-  padding: 4px 12px;
-  border-radius: var(--gp-radius);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--gp-success-bg);
-  color: var(--gp-success);
-  display: inline-flex;
-  align-items: center;
-}
-
 @media (max-width: 1200px) {
   .history-summary-grid {
     grid-template-columns: 1fr;
@@ -812,7 +568,6 @@ html {
 .me-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 /* ── Header ──────────────────────────────────────────────── */
@@ -824,7 +579,6 @@ html {
 .me-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -832,13 +586,7 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
   border-radius: var(--gp-radius);
-  background: var(--emerald-800);
-  color: white;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 8px 22px rgba(13, 36, 24, 0.22);
 }
 .me-pill-icon {
   font-size: 14px;
@@ -849,13 +597,10 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 16px;
-  border-radius: var(--gp-radius);
-  font-size: 12px;
   font-weight: 800;
 }
-.me-badge-ok  { background: var(--gp-success-bg); color: var(--gp-success); border: 1.5px solid #a8dcbe; }
-.me-badge-err { background: var(--gp-danger-bg); color: var(--gp-danger); border: 1.5px solid #f0b8b2; }
+.me-badge-ok  { border: 1.5px solid #a8dcbe; }
+.me-badge-err { border: 1.5px solid #f0b8b2; }
 
 .me-header-sub {
   font-size: 13px;
@@ -877,8 +622,6 @@ html {
   0%,100% { opacity:1; transform:scale(1); }
   50%      { opacity:0.4; transform:scale(1.35); }
 }
-.me-text-green { color: var(--gp-success); }
-.me-text-red   { color: var(--gp-red); }
 
 /* Live Order Queue — brief highlight when new AJAX data lands */
 #liveQueueBody.queue-flash {
@@ -891,38 +634,25 @@ html {
 
 /* ── Hero strip ──────────────────────────────────────────── */
 .me-hero-strip {
-  display: flex;
   align-items: stretch;
-  padding: 22px 28px;
-  border-radius: var(--gp-radius);
   /* NOTE: this whole block is superseded by the later top-level
      .me-hero-strip rule (~line 1253), which makes the strip a transparent
      5-column grid. Kept flat for correctness, but it does not paint. No
      keyline here: a border-top before the `border` shorthand below would be
      wiped by it anyway, and a transparent grid has no hero to key. */
   background: var(--emerald-950);
-  box-shadow: var(--gp-shadow-hero);
-  border: 1px solid rgba(255,255,255,0.07);
   overflow-x: auto;
-  gap: 0;
 }
 
 .me-hero-stat {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 0 28px;
-  gap: 4px;
   flex: 1;
-  min-width: 120px;
 }
 .me-hero-stat span {
-  font-size: 11px;
   font-weight: 700;
-  color: rgba(255,255,255,0.6);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.5px !important;
 }
 .me-hero-stat strong {
   font-family: var(--gp-mono);
@@ -932,7 +662,6 @@ html {
   letter-spacing: -0.5px;
 }
 .me-hero-stat small {
-  font-size: 11px;
   color: rgba(255,255,255,0.5);
   font-weight: 600;
 }
@@ -1025,10 +754,10 @@ html {
   border-radius: var(--gp-radius);
   background: var(--gold);
   color: var(--emerald-950);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.4px !important;
 }
 
 .me-pool-label {
@@ -1036,7 +765,7 @@ html {
   font-weight: 700;
   color: rgba(255,255,255,0.72);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.4px !important;
   position: relative;
   z-index: 1;
 }
@@ -1139,8 +868,6 @@ html {
   }
 
   .encash-layout-grid,
-  .qr-layout-grid,
-  .qr-bottom-grid,
   .history-summary-grid,
   .me-pool-grid {
     gap: 12px;
@@ -1154,21 +881,16 @@ html {
   .merchant-metric-card,
   .merchant-premium-panel,
   .history-mini-card,
-  .qr-form-panel,
-  .qr-preview-panel,
   .encash-form-panel,
-  .encash-info-panel,
-  .merchant-manual-panel {
+  .encash-info-panel {
     border-radius: var(--gp-radius);
     box-shadow: 0 10px 26px rgba(5, 41, 22, 0.07);
   }
 
   .merchant-quick-actions a,
   .merchant-view-btn,
-  .qr-generate-btn,
   .encash-submit-btn,
-  .encash-withdraw-all-btn,
-  .merchant-scan-btn {
+  .encash-withdraw-all-btn {
     min-height: 52px;
     border-radius: var(--gp-radius-pill);
     touch-action: manipulation;
@@ -1183,10 +905,6 @@ html {
 
   .merchant-reader {
     border-radius: var(--gp-radius);
-  }
-
-  .merchant-pay-row {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -1286,7 +1004,7 @@ html {
 
 .me-hero-stat span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0;
 }
 
@@ -1353,7 +1071,7 @@ html {
 .gc-price-sub {
   font-size: 11px;
   font-weight: 600;
-  color: var(--gp-subtle);
+  color: var(--gp-muted);
   white-space: nowrap;
 }
 
@@ -1388,7 +1106,7 @@ html {
   background: #fff;
   border: 1px solid var(--gp-line);
   color: var(--gp-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -1444,7 +1162,7 @@ html {
 .gp-rent-hero-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.12em !important;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.62);
 }
@@ -1459,7 +1177,7 @@ html {
 .gp-rent-hero-note {
   margin: 0;
   max-width: 62ch;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.82);
 }
@@ -1485,7 +1203,7 @@ html {
   align-items: center;
   padding: 5px 11px;
   border-radius: var(--gp-radius);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
   background: #e2e8f0;
@@ -1521,7 +1239,7 @@ html {
 .gp-rent-empty p {
   margin: 8px auto 0;
   max-width: 46ch;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -1597,7 +1315,7 @@ html {
   margin: 0 0 4px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.08em !important;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -1622,7 +1340,7 @@ html {
   align-items: center;
   padding: 4px 10px;
   border-radius: var(--gp-radius);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   background: #e2e8f0;
   color: #475569;
@@ -1657,7 +1375,7 @@ html {
   color: var(--text-main);
 }
 .gp-bp-doc-body span {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .gp-bp-doc-actions {
@@ -1685,7 +1403,7 @@ html {
 .gp-bp-empty p {
   margin: 8px auto 0;
   max-width: 52ch;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.6;
 }
 

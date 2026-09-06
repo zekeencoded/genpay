@@ -1,18 +1,18 @@
 /* GenPay Clear UI Theme
    Shared override for admin, student, merchant, login, and public pages. */
-@import url("theme.css?v=9");
+@import url("theme.css?v=11");
 
 :root {
   /* Primary green scale — aliases of the shared gp-* theme
      (assets/css/theme.css, the Scan & Pay design language). theme.css is
-     the single source of truth for the palette; these --gjc-* names stay
-     defined (many older rules across the app still reference them) but
-     no longer carry independent values. */
+     the single source of truth for the palette; the --gjc-* names below
+     stay defined because rules across the app still reference them, but
+     they no longer carry independent values. Aliases that nothing
+     referenced any more were dropped 2026-09-05 — reach for the --gp-*
+     token directly rather than re-adding a shim. */
   --gjc-green-950: var(--gp-green-950);
-  --gjc-green-900: var(--gp-green-900);
   --gjc-green-800: var(--gp-green-850);
   --gjc-green-700: var(--gp-green-700);
-  --gjc-green-600: #27764b;
 
   /* Gold scale */
   --gjc-gold-600: var(--gp-gold);
@@ -29,7 +29,6 @@
   --gjc-panel: var(--gp-card);
   --gjc-soft: var(--gp-cream);
   --gjc-soft-2: #f4faf7;
-  --gjc-sidebar: var(--gp-green-950);
 
   /* Semantic / status — aliased to the same gp-* status tokens used
      everywhere else in the app (success/warning/danger/info). */
@@ -39,13 +38,7 @@
   --gjc-success: var(--gp-success);
   --gjc-success-bg: var(--gp-success-bg);
   --gjc-success-border: #a8dcbe;
-  --gjc-warning: var(--gp-warning);
-  --gjc-warning-bg: var(--gp-warning-bg);
-  --gjc-info: var(--gp-info);
-  --gjc-info-bg: var(--gp-info-bg);
-  --gjc-alert: var(--gp-red);
   --gjc-slate: #3f4b45;
-
 
   /* Radius scale — aliases of theme.css, which is the single source of
      truth for shape. The old 8/12/16/20/24 ramp is collapsed: containers,
@@ -70,7 +63,6 @@
      Manrope kept as fallback only */
   --gjc-font-display: "Plus Jakarta Sans", "Manrope", Arial, sans-serif;
   --gjc-font-body: "Plus Jakarta Sans", "Manrope", Arial, sans-serif;
-  --gjc-font-mono: "IBM Plex Mono", Consolas, monospace;
 }
 
 * {
@@ -89,6 +81,10 @@ body {
   /* Tabular figures everywhere: balances, amounts, and tables align and
      don't jiggle when values change. */
   font-variant-numeric: tabular-nums;
+  /* Bootstrap already lands on 1.5 here, but print_fee_waiver.php and the
+     generated preview documents do not load Bootstrap — stating it makes the
+     theme self-sufficient instead of inheriting a browser default of ~1.15. */
+  line-height: var(--gp-leading-normal);
 }
 
 h1, h2, h3, h4, h5, h6,
@@ -129,31 +125,19 @@ img {
 
 /* Panels, cards, and dashboards */
 .premium-panel,
-.student-premium-panel,
 .merchant-premium-panel,
 .users-command-panel,
 .transactions-command-panel,
 .transactions-table-panel,
 .topup-panel,
 .encash-panel,
-.topup-form-panel,
-.topup-guide-panel,
 .encash-form-panel,
 .encash-info-panel,
-.qr-form-panel,
-.qr-preview-panel,
-.scan-camera-panel,
-.scan-guide-panel,
-.profile-form-panel,
-.profile-status-panel,
-.student-quick-panel,
 .merchant-premium-panel,
-.ce-flow-panel,
 .ce-mint-info-panel,
 .ce-flow-guide,
 .history-mini-card,
-.merchant-note,
-.profile-alert {
+.merchant-note {
   background: var(--gjc-panel) !important;
   border: 1px solid var(--gjc-line) !important;
   border-radius: var(--gjc-radius) !important;
@@ -162,7 +146,6 @@ img {
 }
 
 .panel-header h3,
-.student-panel-header h3,
 .merchant-panel-header h3,
 .users-panel-header h3,
 .transactions-panel-header h3,
@@ -175,7 +158,6 @@ img {
 }
 
 .panel-header p,
-.student-panel-header p,
 .merchant-panel-header p,
 .users-panel-header p,
 .transactions-panel-header p,
@@ -194,12 +176,10 @@ img {
 
 /* Tier 2 — stat tiles */
 .metric-card,
-.student-metric-card,
 .merchant-metric-card,
 .topup-stat-card,
 .encash-stat-card,
 .transaction-stat-card,
-.history-stat-card,
 .mini-metric-card,
 .history-mini-card {
   background: var(--gjc-panel) !important;
@@ -212,14 +192,8 @@ img {
 }
 
 /* Tier 3 — hero balance cards */
-.student-wallet-card,
-.qr-balance-card,
 .encash-hero-card,
-.scan-balance-card,
-.topup-hero-card,
-.profile-hero-card,
-.history-balance-card,
-.gc-ticket {
+.history-balance-card {
   background: var(--gjc-green-950) !important;
   border: 1px solid var(--gjc-green-700) !important;
   border-top: 3px solid var(--gjc-gold-500) !important;
@@ -229,14 +203,8 @@ img {
 }
 
 .metric-card::after,
-.student-metric-card::after,
 .merchant-metric-card::after,
-.student-wallet-card::after,
-.qr-balance-card::after,
 .encash-hero-card::after,
-.scan-balance-card::after,
-.topup-hero-card::after,
-.profile-hero-card::after,
 .history-balance-card::after,
 .topup-stat-card::after,
 .encash-stat-card::after,
@@ -246,25 +214,22 @@ img {
 
 /* Tile hierarchy: quiet uppercase label, dominant tabular figure, muted hint */
 .metric-card span,
-.student-metric-card span,
 .merchant-metric-card span,
 .topup-stat-card span,
 .encash-stat-card span,
-.transaction-stat-card span,
-.history-stat-card span {
+.transaction-stat-card span {
   color: var(--gjc-muted) !important;
   font-size: 12px !important;
   font-weight: 700 !important;
   text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
 }
 
 .metric-card h2,
-.student-metric-card h2,
 .merchant-metric-card h2,
 .topup-stat-card h2,
 .encash-stat-card h2,
-.transaction-stat-card h2,
-.history-stat-card h2 {
+.transaction-stat-card h2 {
   color: var(--gjc-ink) !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
@@ -272,12 +237,10 @@ img {
 
 /* Guard: spans nested inside a figure are part of the number, not labels */
 .metric-card h2 span,
-.student-metric-card h2 span,
 .merchant-metric-card h2 span,
 .topup-stat-card h2 span,
 .encash-stat-card h2 span,
-.transaction-stat-card h2 span,
-.history-stat-card h2 span {
+.transaction-stat-card h2 span {
   color: var(--gjc-ink) !important;
   font-size: inherit !important;
   font-weight: inherit !important;
@@ -285,19 +248,15 @@ img {
 }
 
 .metric-card p,
-.student-metric-card p,
 .merchant-metric-card p,
 .topup-stat-card p,
 .encash-stat-card p,
-.transaction-stat-card p,
-.history-stat-card p {
+.transaction-stat-card p {
   color: var(--gjc-muted) !important;
 }
 
 /* Tile icon chips: flat brand tint, green glyph (outranks inline color:#fff) */
 .metric-icon,
-.student-metric-icon,
-.merchant-metric-icon,
 .stat-icon-wrap,
 .mini-icon-wrap {
   width: 40px !important;
@@ -309,8 +268,6 @@ img {
 }
 
 .metric-icon i,
-.student-metric-icon i,
-.merchant-metric-icon i,
 .stat-icon-wrap i,
 .mini-icon-wrap i {
   color: var(--gjc-green-700) !important;
@@ -325,25 +282,13 @@ img {
   box-shadow: var(--gjc-shadow-md) !important;
 }
 
-
 /* Hero hierarchy: gold-muted label, white tabular figure */
-.student-wallet-card span,
-.qr-balance-card span,
 .encash-hero-card span,
-.scan-balance-card span,
-.topup-hero-card span,
-.profile-hero-card span,
 .history-balance-card span {
   color: var(--gjc-gold-100) !important;
   font-weight: 600 !important;
 }
-
-.student-wallet-card h2,
-.qr-balance-card h2,
 .encash-hero-card h2,
-.scan-balance-card h2,
-.topup-hero-card h2,
-.profile-hero-card h2,
 .history-balance-card h2 {
   color: #fff !important;
   font-weight: 800 !important;
@@ -351,32 +296,19 @@ img {
 }
 
 /* Guard: the figure's nested spans stay part of the number */
-.student-wallet-card h2 span,
-.qr-balance-card h2 span,
 .encash-hero-card h2 span,
-.scan-balance-card h2 span,
-.topup-hero-card h2 span,
-.profile-hero-card h2 span,
 .history-balance-card h2 span {
   color: #fff !important;
   font-size: inherit !important;
   font-weight: inherit !important;
 }
-
-.student-wallet-card p,
-.qr-balance-card p,
 .encash-hero-card p,
-.scan-balance-card p,
-.topup-hero-card p,
-.profile-hero-card p,
 .history-balance-card p {
   color: rgba(255, 255, 255, 0.72) !important;
 }
 
 /* Hero icon chips stay translucent on the dark card */
-.history-balance-icon,
-.student-empty-icon,
-.qr-preview-icon {
+.history-balance-icon {
   background: rgba(255, 255, 255, 0.14) !important;
   border-radius: var(--gjc-radius) !important;
   box-shadow: none !important;
@@ -384,18 +316,11 @@ img {
 
 /* Forms */
 .premium-field,
-.profile-field input,
-.qr-field > input,
-.qr-money-input,
 .encash-money-input,
-.topup-money-input,
-.add-user-input,
 .form-control,
 .ce-input,
 .input-modern input,
-.input-group-box input,
-.topup-method-card,
-.gateway-card {
+.input-group-box input {
   background: #fff !important;
   border: 1px solid var(--gjc-line) !important;
   border-radius: var(--gjc-radius) !important;
@@ -404,11 +329,7 @@ img {
 }
 
 .premium-field:focus-within,
-.qr-money-input:focus-within,
 .encash-money-input:focus-within,
-.profile-field input:focus,
-.qr-field > input:focus,
-.add-user-input:focus,
 .form-control:focus,
 .ce-input:focus,
 .input-modern input:focus,
@@ -418,21 +339,13 @@ img {
 }
 
 .premium-field label,
-.profile-field label,
-.qr-field label,
 .encash-field label,
-.topup-field label,
-.add-user-label,
 .ce-label {
   color: var(--gjc-green-950) !important;
   font-weight: 800 !important;
 }
-
-.qr-money-input span,
 .encash-money-input span,
-.topup-money-input span,
-.input-with-prefix span,
-.load-money-field span {
+.input-with-prefix span {
   background: var(--gjc-green-800) !important;
   color: #fff !important;
 }
@@ -441,17 +354,12 @@ img {
 .btn-primary-custom,
 .login-btn,
 .filter-btn,
-.add-user-btn,
 .modal-create-btn,
-.topup-submit-btn,
 .encash-submit-btn,
-.qr-generate-btn,
-.profile-save-btn,
 .ce-mint-btn,
 .btn-primary-custom,
 .create-topup-btn,
 .export-btn,
-.load-cash-btn,
 .save-settings-btn {
   background: var(--gjc-green-800) !important;
   color: #fff !important;
@@ -465,16 +373,11 @@ img {
 .btn-primary-custom:hover,
 .login-btn:hover,
 .filter-btn:hover,
-.add-user-btn:hover,
 .modal-create-btn:hover,
-.topup-submit-btn:hover,
 .encash-submit-btn:hover,
-.qr-generate-btn:hover,
-.profile-save-btn:hover,
 .ce-mint-btn:hover,
 .create-topup-btn:hover,
 .export-btn:hover,
-.load-cash-btn:hover,
 .save-settings-btn:hover {
   background: var(--gjc-green-950) !important;
   border-color: var(--gjc-green-950) !important;
@@ -508,7 +411,6 @@ img {
 .details-btn,
 .premium-action-btn,
 .btn-outline,
-.profile-password-btn,
 .encash-withdraw-all-btn {
   background: #fff !important;
   color: var(--gjc-green-800) !important;
@@ -523,7 +425,6 @@ img {
 .details-btn:hover,
 .premium-action-btn:hover,
 .btn-outline:hover,
-.profile-password-btn:hover,
 .encash-withdraw-all-btn:hover {
   background: var(--gjc-green-800) !important;
   color: #fff !important;
@@ -545,13 +446,6 @@ img {
   border-radius: var(--gp-radius-pill) !important;
 }
 
-.freeze-btn {
-  background: var(--gjc-gold-100) !important;
-  color: var(--gjc-green-950) !important;
-  border: 1px solid var(--gjc-gold-500) !important;
-  border-radius: var(--gp-radius-pill) !important;
-}
-
 /* Tables */
 .table-responsive {
   border-radius: var(--gjc-radius);
@@ -562,19 +456,14 @@ img {
 
 .role-pill,
 .status-pill,
-.student-type-pill,
 .merchant-type-pill,
 .method-pill,
 .type-pill,
 .transaction-status,
 .topup-status,
 .encash-status,
-.topup-status-pill,
-.history-status-pill,
-.profile-pill,
 .badge-success,
-.badge-warning,
-.scan-status-badge {
+.badge-warning {
   border-radius: var(--gjc-radius) !important;
   min-height: 28px;
   font-weight: 800 !important;
@@ -585,7 +474,6 @@ img {
 .transaction-status.completed,
 .topup-status.approved,
 .encash-status.released,
-.student-type-pill,
 .merchant-type-pill {
   background: var(--gjc-success-bg) !important;
   color: var(--gjc-success) !important;
@@ -594,48 +482,16 @@ img {
 .badge-warning,
 .topup-status.pending,
 .encash-status.pending,
-.transaction-status.pending,
-.scan-status-badge {
+.transaction-status.pending {
   background: var(--gjc-gold-100) !important;
   color: #76580b !important;
 }
 
 .transaction-status.rejected,
 .topup-status.rejected,
-.encash-status.rejected,
-.scan-status-badge.blocked {
+.encash-status.rejected {
   background: var(--gjc-danger-bg) !important;
   color: var(--gjc-danger) !important;
-}
-
-/* ── Remaining heavy gradient/blur components (Dashboard, Economy) ── */
-.economy-balance-card {
-  background: var(--gjc-green-800) !important;
-  border: 1px solid var(--gjc-green-700) !important;
-  /* The gold keyline every dark hero carries. It has to be declared here,
-     after the border shorthand and with !important, because this block is
-     what actually paints the card — the rule in admin.css never wins. */
-  border-top: var(--gp-keyline) !important;
-  border-radius: var(--gjc-radius) !important;
-  box-shadow: var(--gjc-shadow-md) !important;
-}
-
-.economy-mini-card {
-  background: var(--gjc-panel) !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--gjc-line) !important;
-  border-radius: var(--gjc-radius) !important;
-  box-shadow: var(--gjc-shadow-sm) !important;
-}
-
-.economy-mini-card.economy-ok {
-  background: var(--gjc-success-bg) !important;
-  border-color: var(--gjc-success-border) !important;
-}
-
-.economy-mini-card.economy-alert {
-  background: var(--gjc-gold-100) !important;
-  border-color: var(--gjc-gold-500) !important;
 }
 
 .quick-actions a {
@@ -651,93 +507,12 @@ img {
   box-shadow: none !important;
 }
 
-/* Metric card colour-coded variants - one restrained brand-green/gold/neutral
-   family instead of unrelated primary hues, keeps the category distinction
-   (cap/vault/students/merchants) meaningful without reading as a rainbow. */
-.metric-card.metric-cap       { background: var(--gjc-green-800) !important; }
-.metric-card.metric-vault     { background: var(--gjc-green-700) !important; }
-.metric-card.metric-students  { background: var(--gjc-gold-600) !important; }
-.metric-card.metric-merchants { background: var(--gjc-slate) !important; }
-
-/* Gold is light - swap to dark ink text so this variant stays readable */
-.metric-card.metric-students h2,
-.metric-card.metric-students span,
-.metric-card.metric-students p,
-.metric-card.metric-students small {
-  color: var(--gjc-green-950) !important;
-}
-.metric-card.metric-students .metric-icon {
-  background: rgba(6, 55, 29, 0.12) !important;
-}
-.metric-card.metric-students .metric-icon i {
-  color: var(--gjc-green-950) !important;
-}
-
-/* Mirror of the rule above, for the other direction. cap/vault/merchants are
-   DARK fills, but the .metric-card block further up forces every tile's text
-   to the white-card ink (--gjc-muted / --gjc-ink) with !important. That left
-   these three at 1.4-2.6:1 — effectively unreadable. Bring the text back to
-   white; the label and hint stay a step down so the figure still dominates. */
-.metric-card.metric-cap h2,
-.metric-card.metric-cap h2 span,
-.metric-card.metric-vault h2,
-.metric-card.metric-vault h2 span,
-.metric-card.metric-merchants h2,
-.metric-card.metric-merchants h2 span {
-  color: #ffffff !important;
-}
-
-.metric-card.metric-cap span,
-.metric-card.metric-cap p,
-.metric-card.metric-cap small,
-.metric-card.metric-vault span,
-.metric-card.metric-vault p,
-.metric-card.metric-vault small,
-.metric-card.metric-merchants span,
-.metric-card.metric-merchants p,
-.metric-card.metric-merchants small {
-  color: rgba(255, 255, 255, 0.78) !important;
-}
-
-.metric-card.metric-cap .metric-icon,
-.metric-card.metric-vault .metric-icon,
-.metric-card.metric-merchants .metric-icon {
-  background: rgba(255, 255, 255, 0.14) !important;
-}
-.metric-card.metric-cap .metric-icon i,
-.metric-card.metric-vault .metric-icon i,
-.metric-card.metric-merchants .metric-icon i {
-  color: #ffffff !important;
-}
-
 /* Circulation widget (admin/economy.php via includes/circulation_widget.php)
    The widget's own CSS in admin.css now owns this component's look (flat
    white panels, ledger bar, neutral pool cards) - nothing left to override
    here. .ce-pool-vault/.ce-pool-students/.ce-pool-merchants/
    .ce-pool-parents are colour identifiers consumed directly by admin.css, not full-card
    background painters, so no !important fight is needed any more. */
-
-/* economy.php's non-namespaced mint/budget panels - same flat treatment
-   as the rest of the panel system instead of their own gold gradient. */
-.minting-budget-card {
-  background: var(--gjc-panel) !important;
-  border: 1px solid var(--gjc-line) !important;
-  border-radius: var(--gjc-radius) !important;
-  box-shadow: var(--gjc-shadow-sm) !important;
-}
-.minting-budget-card.limit-exceeded {
-  background: var(--gjc-gold-100) !important;
-  border-color: var(--gjc-gold-500) !important;
-}
-.minting-budget-card.limit-ok { border-color: var(--gjc-line) !important; }
-
-.mint-panel {
-  background: var(--gjc-gold-100) !important;
-  border: 1px solid var(--gjc-gold-500) !important;
-  border-radius: var(--gjc-radius) !important;
-  box-shadow: var(--gjc-shadow-sm) !important;
-}
-.mint-panel h4 { color: var(--gjc-green-950) !important; }
 
 .ce-mint-info-panel.ce-limit-hit {
   background: var(--gjc-gold-100) !important;
@@ -747,15 +522,6 @@ img {
 .badge-secondary {
   background: var(--gp-line-soft) !important;
   color: var(--gjc-muted) !important;
-}
-
-.session-btn {
-  background: var(--gjc-gold-500) !important;
-  color: var(--gjc-green-950) !important;
-}
-.session-btn:hover {
-  background: var(--gjc-gold-600) !important;
-  transform: none !important;
 }
 
 .mini-icon-wrap {
@@ -833,8 +599,7 @@ img {
   border-radius: var(--gjc-radius) !important;
 }
 
-.custom-modal,
-.add-user-modal {
+.custom-modal {
   background: #fff !important;
   color: var(--gjc-ink) !important;
   border-radius: var(--gjc-radius) !important;
@@ -904,37 +669,28 @@ footer {
 
 @media (max-width: 992px) {
   .admin-main,
-  .student-main,
   .merchant-main {
     padding: 16px !important;
   }
 
-  .topbar,
-  .student-topbar {
+  .topbar {
     align-items: flex-start !important;
   }
 }
 
 @media (max-width: 576px) {
   .admin-main,
-  .student-main,
   .merchant-main {
     padding: 12px !important;
   }
 
-  .topbar h1,
-  .student-topbar h1 {
+  .topbar h1 {
     font-size: 20px !important;
   }
 
   .metric-card h2,
-  .student-metric-card h2,
   .merchant-metric-card h2,
-  .student-wallet-card h2,
-  .qr-balance-card h2,
-  .encash-hero-card h2,
-  .scan-balance-card h2,
-  .topup-hero-card h2 {
+  .encash-hero-card h2 {
     font-size: 28px !important;
   }
 

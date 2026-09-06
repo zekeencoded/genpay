@@ -114,11 +114,27 @@ if ($lease) {
         'off_contract' => ['Outside term', 'is-partial'],
     ];
 
-    // Every link back to this same page keeps the token and the return trail.
+    // ── Which section is on screen ───────────────────────────────────────
+    // Addressed in the URL rather than switched in the browser, so paging the
+    // receipts keeps you on Receipts, and the rent roll can link straight to
+    // the section its button means.
+    $tabs = [
+        'collect'  => ['Record payment', 'fa-solid fa-hand-holding-dollar'],
+        'receipts' => ['Receipts',       'fa-solid fa-receipt'],
+        'contract' => ['Contract',       'fa-solid fa-file-signature'],
+    ];
+    $tab = (string) ($_GET['tab'] ?? 'collect');
+    if (!isset($tabs[$tab])) {
+        $tab = 'collect';
+    }
+
+    // Every link back to this same page keeps the token, the tab and the
+    // return trail.
     $selfBase = ADMIN_URL . '/lease_details.php?token=' . rawurlencode((string) ($_GET['token'] ?? ''))
         . ($retRaw !== '' ? '&ret=' . rawurlencode($retRaw) : '');
-    $selfUrl = static function (array $overrides = []) use ($selfBase, $receiptPage, $showAllMonths): string {
+    $selfUrl = static function (array $overrides = []) use ($selfBase, $tab, $receiptPage, $showAllMonths): string {
         $params = array_filter([
+            'tab'  => $overrides['tab']  ?? $tab,
             'page' => $overrides['page'] ?? ($receiptPage > 1 ? $receiptPage : ''),
             'all'  => array_key_exists('all', $overrides) ? $overrides['all'] : ($showAllMonths ? 1 : ''),
         ], static fn ($v) => $v !== '' && $v !== null);
@@ -138,8 +154,8 @@ if ($lease) {
     <title><?= $lease ? lease_e($lease['stall_name']) . ' — Lease' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=31">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -232,6 +248,19 @@ if ($lease) {
                 </div>
             </section>
 
+            <!-- ── Section switcher ─────────────────────────────────────── -->
+            <nav class="gp-tabs mb-4" aria-label="Lease sections">
+                <?php foreach ($tabs as $key => [$label, $icon]): ?>
+                    <a class="gp-tab <?= $tab === $key ? 'is-active' : '' ?>"
+                       href="<?= $selfUrl(['tab' => $key]) ?>"
+                       <?= $tab === $key ? 'aria-current="page"' : '' ?>>
+                        <i class="<?= lease_e($icon) ?>"></i>
+                        <span><?= lease_e($label) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+
+            <?php if ($tab === 'collect'): ?>
             <!-- ── Record a payment, against a specific month ───────────── -->
             <section class="premium-panel mb-4" id="record">
                 <div class="panel-header">
@@ -363,16 +392,18 @@ if ($lease) {
                 <?php if ($hiddenMonths > 0 || $showAllMonths): ?>
                     <div class="text-center mt-2">
                         <?php if ($showAllMonths): ?>
-                            <a class="btn btn-sm btn-link" href="<?= $selfUrl(['all' => '']) ?>#record">Show fewer months</a>
+                            <a class="btn btn-sm btn-link" href="<?= $selfUrl(['all' => '']) ?>">Show fewer months</a>
                         <?php else: ?>
-                            <a class="btn btn-sm btn-link" href="<?= $selfUrl(['all' => 1]) ?>#record">
+                            <a class="btn btn-sm btn-link" href="<?= $selfUrl(['all' => 1]) ?>">
                                 Show all <?= count($schedule) ?> months (<?= $hiddenMonths ?> more)
                             </a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'receipts'): ?>
             <!-- ── Receipts ─────────────────────────────────────────────── -->
             <section class="premium-panel mb-4" id="receipts">
                 <div class="panel-header">
@@ -430,16 +461,18 @@ if ($lease) {
                     </span>
                     <span class="btn-group btn-group-sm">
                         <?php if ((int) $payments['page'] > 1): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['page' => (int) $payments['page'] - 1]) ?>#receipts">Previous</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['page' => (int) $payments['page'] - 1]) ?>">Previous</a>
                         <?php endif; ?>
                         <?php if ((int) $payments['page'] < (int) $payments['total_pages']): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['page' => (int) $payments['page'] + 1]) ?>#receipts">Next</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['page' => (int) $payments['page'] + 1]) ?>">Next</a>
                         <?php endif; ?>
                     </span>
                 </nav>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'contract'): ?>
             <!-- ── Contract terms ───────────────────────────────────────── -->
             <section class="premium-panel" id="contract">
                 <div class="panel-header">
@@ -515,6 +548,7 @@ if ($lease) {
                     </div>
                 </form>
             </section>
+            <?php endif; ?>
 
         <?php endif; ?>
 

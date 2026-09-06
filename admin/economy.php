@@ -20,9 +20,9 @@ $currentPage = 'economy';
     <title>System Economy | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=26">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/circulation_widget.css?v=6">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/circulation_widget.css?v=8">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 

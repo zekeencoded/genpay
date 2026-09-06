@@ -772,38 +772,6 @@ class MerchantTenantDirectory
         return $stmt->rowCount() > 0;
     }
 
-    public function updateLease(array $input): bool
-    {
-        if (!gjc_table_exists($this->db, 'merchant_leases')) {
-            return false;
-        }
-
-        $stmt = $this->db->prepare(
-            "UPDATE merchant_leases
-             SET monthly_rent = ?,
-                 deposit_amount = ?,
-                 lease_start = ?,
-                 lease_end = ?,
-                 next_due_date = ?,
-                 status = ?,
-                 contract_notes = ?
-             WHERE id = ?"
-        );
-
-        $stmt->execute([
-            (float) $input['monthly_rent'],
-            (float) $input['deposit_amount'],
-            (string) $input['lease_start'],
-            (string) $input['lease_end'],
-            (string) $input['next_due_date'],
-            (string) $input['status'],
-            (string) $input['contract_notes'],
-            (int) $input['lease_id'],
-        ]);
-
-        return $stmt->rowCount() >= 0;
-    }
-
     public function recordRentPayment(int $leaseId, float $amount, string $period, string $paymentDate, string $method, string $notes, int $adminId): string
     {
         $reference = 'RENT-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));

@@ -38,7 +38,7 @@
 .pcard h5 { font-size: 15px; font-weight: 800; color: var(--gp-ink); margin: 0 0 4px; }
 .pcard p  { font-size: 13px; color: var(--gp-muted); margin: 0 0 18px; }
 .pfield { margin-bottom: 14px; }
-.pfield label { font-size: 12px; font-weight: 700; color: var(--gp-muted); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 5px; }
+.pfield label { font-size: 12px; font-weight: 700; color: var(--gp-muted); text-transform: uppercase; letter-spacing: .04em !important; display: block; margin-bottom: 5px; }
 .pfield select { width: 100%; border: 1.5px solid var(--ad-line); border-radius: 10px; padding: 9px 34px 9px 12px; font-size: 14px; font-weight: 500; line-height: 1.45; outline: none; background: #fff; }
 .pfield select:focus { border-color: var(--gp-gold); box-shadow: var(--gp-focus-ring); }
 .pfield input { width: 100%; border: 1.5px solid var(--ad-line); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 500; line-height: 1.45; outline: none; transition: border .15s, box-shadow .15s; }
@@ -56,4 +56,4 @@
 
 /* Group heading inside a profile form ("Address", "Emergency Contact") —
    see includes/partials/profile_details_fields.php. */
-.pcard .pd-subhead { margin: 20px 0 12px; padding-top: 16px; border-top: 1px dashed var(--ad-line); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--gp-muted); }
+.pcard .pd-subhead { margin: 20px 0 12px; padding-top: 16px; border-top: 1px dashed var(--ad-line); font-size: 12px; font-weight: 800; letter-spacing: .06em !important; text-transform: uppercase; color: var(--gp-muted); }

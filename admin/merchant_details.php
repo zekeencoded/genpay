@@ -114,6 +114,23 @@ if ($summary) {
     $lease   = $directory->activeLease($merchantUserId);
     $account = $lease['account'] ?? null;
 
+    // ── Which section is on screen ───────────────────────────────────────
+    // Tabs are addressed in the URL rather than switched in the browser, so a
+    // paged table or a filtered list stays on its own tab across a reload, and
+    // a tab can be linked to directly (the rent roll does exactly that).
+    $tabs = [
+        'overview'    => ['Overview',     'fa-solid fa-circle-info'],
+        'lease'       => ['Lease & rent', 'fa-solid fa-file-signature'],
+        'application' => ['Application',  'fa-solid fa-folder-open'],
+        'staff'       => ['Staff',        'fa-solid fa-users'],
+        'inventory'   => ['Inventory',    'fa-solid fa-box'],
+        'activity'    => ['Activity',     'fa-solid fa-clock-rotate-left'],
+    ];
+    $tab = (string) ($_GET['tab'] ?? 'overview');
+    if (!isset($tabs[$tab])) {
+        $tab = 'overview';
+    }
+
     // ── Inventory compliance (filtered and paged through the URL) ────────
     $invSearch   = trim((string) ($_GET['q'] ?? ''));
     $invCategory = trim((string) ($_GET['cat'] ?? ''));
@@ -121,12 +138,27 @@ if ($summary) {
     if (!in_array($invRestrict, ['', 'restricted', 'allowed'], true)) {
         $invRestrict = '';
     }
-    $invPage   = max(1, (int) ($_GET['ipage'] ?? 1));
-    $inventory = $directory->pagedInventory($merchantUserId, $invSearch, $invCategory, $invRestrict, $invPage, $perPage);
+    $invPage = max(1, (int) ($_GET['ipage'] ?? 1));
+
+    // The stat tile counts the whole menu, so it stays truthful on every tab
+    // even while the Inventory tab is showing a filtered slice of it.
+    $productTotal = 0;
+    if (gjc_table_exists($db, 'merchant_inventory')) {
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM merchant_inventory WHERE merchant_user_id = ?");
+        $countStmt->execute([$merchantUserId]);
+        $productTotal = (int) $countStmt->fetchColumn();
+    }
+
+    // Only the visible tab's list is queried; the rest cost nothing.
+    $inventory = $tab === 'inventory'
+        ? $directory->pagedInventory($merchantUserId, $invSearch, $invCategory, $invRestrict, $invPage, $perPage)
+        : null;
 
     // ── Management activity ──────────────────────────────────────────────
     $actPage  = max(1, (int) ($_GET['apage'] ?? 1));
-    $activity = $directory->pagedActivity($merchantUserId, $actPage, $perPage);
+    $activity = $tab === 'activity'
+        ? $directory->pagedActivity($merchantUserId, $actPage, $perPage)
+        : null;
 
     $activityMeta = [
         'MENU_MUTATION'       => ['Product / Menu', 'bg-success'],
@@ -161,10 +193,12 @@ if ($summary) {
         return $parts ? implode(' · ', $parts) : '—';
     };
 
-    // Every link back to this page keeps the token and the current filters.
-    $selfUrl = static function (array $overrides = []) use ($invSearch, $invCategory, $invRestrict, $invPage, $actPage): string {
+    // Every link back to this page keeps the token, the tab and the filters, so
+    // switching tabs and coming back lands you where you were.
+    $selfUrl = static function (array $overrides = []) use ($tab, $invSearch, $invCategory, $invRestrict, $invPage, $actPage): string {
         $params = array_filter([
             'token'    => (string) ($_GET['token'] ?? ''),
+            'tab'      => $overrides['tab']      ?? $tab,
             'q'        => $overrides['q']        ?? $invSearch,
             'cat'      => $overrides['cat']      ?? $invCategory,
             'restrict' => $overrides['restrict'] ?? $invRestrict,
@@ -175,8 +209,10 @@ if ($summary) {
         return htmlspecialchars(ADMIN_URL . '/merchant_details.php?' . http_build_query($params), ENT_QUOTES);
     };
 
+    // Uploads are served through the admin document proxy, never linked
+    // directly — same DOC_URL shape admin/stall_applications.php uses.
     $docUrl = static fn (string $path): string => htmlspecialchars(
-        ADMIN_URL . '/doc.php?f=' . rawurlencode(ltrim(str_replace('\\', '/', $path), '/')),
+        ADMIN_URL . '/doc?f=' . rawurlencode(ltrim(str_replace('\\', '/', $path), '/')),
         ENT_QUOTES
     );
 
@@ -206,8 +242,8 @@ if ($summary) {
     <title><?= $summary ? md_e($summary['stall_name']) . ' — Stall' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=32">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -287,8 +323,8 @@ if ($summary) {
                 <div class="col-6 col-md-3">
                     <div class="detail-stat h-100">
                         <span>Products listed</span>
-                        <strong><?= (int) $inventory['total'] ?></strong>
-                        <small><?= $invSearch !== '' || $invCategory !== '' || $invRestrict !== '' ? 'matching the filter below' : 'in the stall menu' ?></small>
+                        <strong><?= $productTotal ?></strong>
+                        <small>in the stall menu</small>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
@@ -306,10 +342,23 @@ if ($summary) {
                     <strong>Revenue privacy enforced.</strong>
                     This view deliberately excludes the stall's sales figures, POS transaction
                     history and merchant wallet. Rent collection is finance business and appears
-                    below; what the stall earns is not.
+                    under Lease &amp; rent; what the stall earns is not.
                 </div>
             </div>
 
+            <!-- ── Section switcher ─────────────────────────────────────── -->
+            <nav class="gp-tabs mb-4" aria-label="Stall sections">
+                <?php foreach ($tabs as $key => [$label, $icon]): ?>
+                    <a class="gp-tab <?= $tab === $key ? 'is-active' : '' ?>"
+                       href="<?= $selfUrl(['tab' => $key]) ?>"
+                       <?= $tab === $key ? 'aria-current="page"' : '' ?>>
+                        <i class="<?= md_e($icon) ?>"></i>
+                        <span><?= md_e($label) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+
+            <?php if ($tab === 'lease'): ?>
             <!-- ── Rent standing (read-only) ────────────────────────────── -->
             <section class="premium-panel mb-4" id="rent">
                 <div class="panel-header d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -387,7 +436,9 @@ if ($summary) {
                     </div>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'overview'): ?>
             <!-- ── Proprietor ───────────────────────────────────────────── -->
             <section class="premium-panel mb-4" id="proprietor">
                 <div class="panel-header d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -482,7 +533,9 @@ if ($summary) {
                     </p>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'application'): ?>
             <!-- ── Application & documents ──────────────────────────────── -->
             <section class="premium-panel mb-4" id="application">
                 <div class="panel-header">
@@ -549,7 +602,9 @@ if ($summary) {
                     <?php endif; ?>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'staff'): ?>
             <!-- ── Staff accounts ───────────────────────────────────────── -->
             <section class="premium-panel mb-4" id="staff">
                 <div class="panel-header">
@@ -599,7 +654,9 @@ if ($summary) {
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'inventory'): ?>
             <!-- ── Inventory compliance ─────────────────────────────────── -->
             <section class="premium-panel mb-4" id="inventory">
                 <div class="panel-header">
@@ -611,6 +668,7 @@ if ($summary) {
 
                 <form method="get" class="lease-filter-bar">
                     <input type="hidden" name="token" value="<?= md_e($_GET['token'] ?? '') ?>">
+                    <input type="hidden" name="tab" value="inventory">
                     <?php if ($actPage > 1): ?>
                         <input type="hidden" name="apage" value="<?= (int) $actPage ?>">
                     <?php endif; ?>
@@ -623,9 +681,11 @@ if ($summary) {
                     </select>
                     <button type="submit" class="btn btn-outline-secondary">Filter</button>
                     <?php if ($invSearch !== '' || $invCategory !== '' || $invRestrict !== ''): ?>
-                        <a href="<?= $selfUrl(['q' => '', 'cat' => '', 'restrict' => '', 'ipage' => '']) ?>#inventory" class="btn btn-link">Clear</a>
+                        <a href="<?= $selfUrl(['q' => '', 'cat' => '', 'restrict' => '', 'ipage' => '']) ?>" class="btn btn-link">Clear</a>
                     <?php endif; ?>
-                    <span class="ms-auto text-muted small"><?= (int) $inventory['total'] ?> product<?= (int) $inventory['total'] === 1 ? '' : 's' ?></span>
+                    <span class="ms-auto text-muted small">
+                        <?= (int) $inventory['total'] ?> product<?= (int) $inventory['total'] === 1 ? '' : 's' ?><?= (int) $inventory['total'] !== $productTotal ? ' of ' . $productTotal : '' ?>
+                    </span>
                 </form>
 
                 <div class="table-responsive">
@@ -693,16 +753,18 @@ if ($summary) {
                     </span>
                     <span class="btn-group btn-group-sm">
                         <?php if ((int) $inventory['page'] > 1): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['ipage' => (int) $inventory['page'] - 1]) ?>#inventory">Previous</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['ipage' => (int) $inventory['page'] - 1]) ?>">Previous</a>
                         <?php endif; ?>
                         <?php if ((int) $inventory['page'] < (int) $inventory['total_pages']): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['ipage' => (int) $inventory['page'] + 1]) ?>#inventory">Next</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['ipage' => (int) $inventory['page'] + 1]) ?>">Next</a>
                         <?php endif; ?>
                     </span>
                 </nav>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
+            <?php if ($tab === 'activity'): ?>
             <!-- ── Management activity ──────────────────────────────────── -->
             <section class="premium-panel" id="activity">
                 <div class="panel-header">
@@ -753,15 +815,16 @@ if ($summary) {
                     </span>
                     <span class="btn-group btn-group-sm">
                         <?php if ((int) $activity['page'] > 1): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['apage' => (int) $activity['page'] - 1]) ?>#activity">Previous</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['apage' => (int) $activity['page'] - 1]) ?>">Previous</a>
                         <?php endif; ?>
                         <?php if ((int) $activity['page'] < (int) $activity['total_pages']): ?>
-                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['apage' => (int) $activity['page'] + 1]) ?>#activity">Next</a>
+                            <a class="btn btn-outline-secondary" href="<?= $selfUrl(['apage' => (int) $activity['page'] + 1]) ?>">Next</a>
                         <?php endif; ?>
                     </span>
                 </nav>
                 <?php endif; ?>
             </section>
+            <?php endif; ?>
 
         <?php endif; ?>
 

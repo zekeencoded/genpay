@@ -570,7 +570,7 @@ function maintenance_send_guardian_credentials(string $email, string $name, stri
                     <p style="margin:6px 0 0"><strong>Temporary Password:</strong> ' . $safePass . '</p>
                 </div>
                 <p style="color:var(--gp-danger);font-weight:700">You must change this password on first login before accessing your dashboard.</p>
-                <p style="color:var(--gjc-slate)">Login page: <a href="' . $loginUrl . '" style="color:#16a34a">' . $loginUrl . '</a></p>
+                <p style="color:var(--gjc-slate)">Login page: <a href="' . $loginUrl . '" style="color:#147b3a">' . $loginUrl . '</a></p>
                 <p style="font-size:12px;color:var(--gp-muted)">GenPay Team</p>
             </div>';
     $altBody = "Dear {$name},\n\nA GenPay parent account has been created so you can monitor and manage your child's wallet.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
@@ -1015,11 +1015,11 @@ $vacantStalls = $db->query(
     <title>Maintenance | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=26">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=35">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=17">
 </head>
 <body class="gp-theme">
 <div class="admin-layout">
@@ -1625,7 +1625,7 @@ $vacantStalls = $db->query(
                         <input type="hidden" id="fwc-upload-student-id">
                         <p style="margin:0 0 14px">
                             <a id="fwc-upload-blank-link" href="#" target="_blank"
-                               style="font-size:12.5px;color:var(--gp-success);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+                               style="font-size:13px;color:var(--gp-success);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
                                 <i class="fa-solid fa-print"></i>Download blank waiver
                             </a>
                         </p>

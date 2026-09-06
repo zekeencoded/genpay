@@ -64,8 +64,8 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=19">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
 </head>
 
 <body>

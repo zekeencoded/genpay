@@ -165,7 +165,7 @@ function gjc_send_stall_meeting_email(
             <p style="color:#374151;line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
             <p style="color:#374151;line-height:1.7">Your stall application for <strong>' . $safeBiz . '</strong> has been received. A verification meeting has been scheduled for you. Everything - document verification, contract signing, and payment - will be handled in this one meeting.</p>
             <div style="background:#fff;border:1px solid #bbf7d4;border-radius:10px;padding:16px;margin:16px 0">
-                <p style="margin:0 0 8px;color:#059669;font-weight:700;text-transform:uppercase;font-size:12px">Meeting Details</p>
+                <p style="margin:0 0 8px;color:#147b3a;font-weight:700;text-transform:uppercase;font-size:12px">Meeting Details</p>
                 <p style="margin:0;color:#111827"><strong>Date:</strong> ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>
                 <p style="margin:4px 0 0;color:#111827"><strong>Time:</strong> ' . htmlspecialchars($prettyTime, ENT_QUOTES, 'UTF-8') . '</p>
                 <p style="margin:4px 0 0;color:#111827"><strong>Location:</strong> ' . $safePlace . '</p>
@@ -222,7 +222,7 @@ function gjc_send_stall_meeting_reschedule_email(
             <p style="color:#374151;line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
             <p style="color:#374151;line-height:1.7">The verification meeting for your stall application for <strong>' . $safeBiz . '</strong> has been moved to a new schedule by our finance office. Everything - document verification, contract signing, and payment - will still be handled in this one meeting.</p>
             <div style="background:#fff;border:1px solid #bbf7d4;border-radius:10px;padding:16px;margin:16px 0">
-                <p style="margin:0 0 8px;color:#059669;font-weight:700;text-transform:uppercase;font-size:12px">New Meeting Details</p>
+                <p style="margin:0 0 8px;color:#147b3a;font-weight:700;text-transform:uppercase;font-size:12px">New Meeting Details</p>
                 <p style="margin:0;color:#111827"><strong>Date:</strong> ' . htmlspecialchars($newDate, ENT_QUOTES, 'UTF-8') . '</p>
                 <p style="margin:4px 0 0;color:#111827"><strong>Time:</strong> ' . htmlspecialchars($newTime, ENT_QUOTES, 'UTF-8') . '</p>
                 <p style="margin:4px 0 0;color:#111827"><strong>Location:</strong> ' . $safePlace . '</p>
@@ -272,8 +272,8 @@ function gjc_send_stall_application_termination_email(array $app, string $headin
                 <p style="margin:0;color:#374151">' . $safeReason . '</p>
             </div>
             <p style="color:#374151;line-height:1.7">You are welcome to submit a brand-new application anytime. A new verification meeting will be scheduled automatically at submission.</p>
-            <p style="color:#374151"><a href="' . $applyUrl . '" style="color:#059669;font-weight:700">Submit a new application</a></p>
-            <p style="font-size:12px;color:#9ca3af">GenPay Team</p>
+            <p style="color:#374151"><a href="' . $applyUrl . '" style="color:#147b3a;font-weight:700">Submit a new application</a></p>
+            <p style="font-size:12px;color:#637168">GenPay Team</p>
         </div>';
     $altBody = "Dear {$app['proprietor_name']},\n\n{$intro}\n\nReason: {$reason}\n\n"
         . "You may submit a brand-new application anytime at {$applyUrl}. A new meeting will be auto-scheduled.\n\nGenPay Team";

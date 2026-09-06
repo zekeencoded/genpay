@@ -1,4 +1,4 @@
-@import url("theme.css?v=9");
+@import url("theme.css?v=11");
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -139,7 +139,7 @@ body {
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.05em !important;
     color: var(--gray-6);
     margin-bottom: 6px;
 }
@@ -220,8 +220,6 @@ body {
 .frow:last-child { margin-bottom: 0; }
 .frow-2 { grid-template-columns: 1fr 1fr; }
 .frow-3 { grid-template-columns: 1fr 1fr 1fr; }
-.frow-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-.frow-2-1 { grid-template-columns: 2fr 1fr; }
 
 /* ── Stall preference card ──────────────────────────────────── */
 .stall-pref-note {
@@ -257,8 +255,8 @@ body {
 .file-tile-icon { font-size: 22px; color: var(--gray-5); margin-bottom: 6px; }
 .file-tile.has-file .file-tile-icon { color: var(--green-7); }
 .file-tile-label { font-size: 12px; font-weight: 700; color: var(--gray-7); }
-.file-tile-sub { font-size: 10px; color: var(--gray-5); margin-top: 3px; }
-.file-tile-name { font-size: 10px; color: var(--green-7); font-weight: 600; margin-top: 6px; word-break: break-all; display: none; }
+.file-tile-sub { font-size: 11px; color: var(--gray-5); margin-top: 3px; }
+.file-tile-name { font-size: 11px; color: var(--green-7); font-weight: 600; margin-top: 6px; word-break: break-all; display: none; }
 
 /* Profile photo tile */
 .photo-tile { display: flex; flex-direction: column; align-items: center; }
@@ -396,8 +394,6 @@ body {
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 600px) {
     .frow-3 { grid-template-columns: 1fr 1fr; }
-    .frow-4 { grid-template-columns: 1fr 1fr; }
-    .frow-2-1 { grid-template-columns: 1fr; }
     .frow-2 { grid-template-columns: 1fr; }
     .app-body { padding: 20px 12px 40px; }
 }

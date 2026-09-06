@@ -2,8 +2,8 @@
    Scoped under sd-* so gjc-clear.css's student-* !important overrides never
    apply here. Pages using the shared student sidebar / bottom-nav partials
    must link this file. */
-@import url("gjc-clear.css?v=18");
-@import url("theme.css?v=9");
+@import url("gjc-clear.css?v=21");
+@import url("theme.css?v=11");
 
 /* sd-* tokens are aliases of the shared gp-* theme (assets/css/theme.css)
    — theme.css is the single source of truth for the palette. */
@@ -80,7 +80,7 @@ body.sd-body {
 
 .sd-brand-text span {
   color: rgba(255, 255, 255, 0.55);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .sd-menu {
@@ -234,7 +234,7 @@ body.sd-body {
 
 .sd-topbar-greet p {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -295,7 +295,7 @@ body.sd-body {
   background: var(--sd-red);
   border: 1.5px solid var(--sd-forest-950);
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1;
   display: grid;
@@ -332,7 +332,7 @@ body.sd-body {
   justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid var(--sd-line);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--sd-ink);
 }
@@ -341,7 +341,7 @@ body.sd-body {
   border: 0;
   background: none;
   color: var(--sd-forest-700);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   padding: 4px 6px;
@@ -355,7 +355,7 @@ body.sd-body {
 .sd-notif-empty {
   padding: 28px 16px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--sd-muted);
 }
 
@@ -409,7 +409,7 @@ body.sd-body {
 }
 
 .sd-notif-item-body strong {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--sd-ink);
 }
@@ -424,7 +424,7 @@ body.sd-body {
 
 .sd-notif-item-body em {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--sd-muted);
   opacity: .8;
 }
@@ -500,12 +500,12 @@ body.sd-body {
   color: var(--sd-gold);
   font-family: var(--sd-mono);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: 13px;
   padding: 4px 12px;
 }
 
 .sd-gc-rate {
-  font-size: 11.5px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -576,7 +576,7 @@ body.sd-body {
   border: 1px solid rgba(240, 165, 0, 0.5);
   border-radius: var(--gp-radius);
   color: var(--sd-gold);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em !important;
   padding: 4px 10px;
@@ -608,7 +608,7 @@ body.sd-body {
   gap: 10px;
   color: var(--sd-ink);
   text-decoration: none;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -713,7 +713,7 @@ body.sd-body {
 
 .sd-panel-head h3 {
   margin: 0;
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--sd-ink);
 }
@@ -728,7 +728,7 @@ body.sd-body {
   background: #dcf3e4;
   border-radius: var(--gp-radius-pill);
   color: #15803d;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   padding: 7px 16px;
   text-decoration: none;
@@ -794,7 +794,7 @@ body.sd-body {
 }
 
 .sd-txn-type {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em !important;
   text-transform: uppercase;
@@ -819,7 +819,7 @@ body.sd-body {
 }
 
 .sd-txn-date {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--sd-muted);
   margin-top: 3px;
 }
@@ -828,7 +828,7 @@ body.sd-body {
   text-align: center;
   padding: 30px 10px;
   color: var(--sd-muted);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 .sd-empty i {
@@ -838,16 +838,11 @@ body.sd-body {
   color: #b9c9be;
 }
 
-/* ===== SHARED COMPONENTS (all student pages) ===== */
-.sd-mono {
-  font-family: var(--sd-mono);
-}
-
 .sd-count {
   background: #dcf3e4;
   border-radius: var(--gp-radius);
   color: #15803d;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   padding: 7px 16px;
   white-space: nowrap;
@@ -859,7 +854,7 @@ body.sd-body {
   border: 1px solid #dfe9e1;
   border-radius: var(--gp-radius);
   color: #2b4a38;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   padding: 4px 12px;
   white-space: nowrap;
@@ -928,7 +923,7 @@ body.sd-body {
 
 .sd-table td.sd-cell-mono {
   font-family: var(--sd-mono);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -980,7 +975,7 @@ body.sd-body {
   border: 1px solid var(--sd-line);
   border-radius: var(--gp-radius);
   color: var(--sd-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   padding: 6px 12px;
 }
@@ -1007,9 +1002,6 @@ body.sd-body {
 
 /* ===== MOBILE (<768px) ===== */
 @media (max-width: 767.98px) {
-  .sd-hide-mobile {
-    display: none !important;
-  }
 
   .sd-sidebar {
     display: none;
@@ -1040,7 +1032,7 @@ body.sd-body {
      on-screen home of something. */
   .sd-topbar.is-subtitle-mobile .sd-topbar-greet p {
     display: block;
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   .sd-content {
@@ -1078,7 +1070,7 @@ body.sd-body {
     padding: 12px 4px;
     border-radius: var(--gp-radius);
     gap: 8px;
-    font-size: 10.5px;
+    font-size: 11px;
   }
 
   .sd-quick-icon {
@@ -1206,7 +1198,7 @@ body.sd-body {
     gap: 4px;
     color: rgba(255, 255, 255, 0.55);
     text-decoration: none;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
   }
 
@@ -1263,7 +1255,7 @@ body.sd-body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   text-decoration: none;

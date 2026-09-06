@@ -48,7 +48,7 @@ $currentPage = $currentPage ?? ""; ?>
             try {
                 $__pendingCount = $db->query("SELECT COUNT(*) FROM stall_applications WHERE status='pending_verification'")->fetchColumn();
                 if ($__pendingCount > 0): ?>
-                <span style="background:var(--gp-red);color:#fff;font-size:10px;font-weight:700;border-radius:50px;padding:1px 7px;margin-left:auto;"><?= (int)$__pendingCount ?></span>
+                <span style="background:var(--gp-red);color:#fff;font-size:11px;font-weight:700;border-radius:50px;padding:1px 7px;margin-left:auto;"><?= (int)$__pendingCount ?></span>
             <?php endif;
             } catch (Throwable $__e) {}
             ?>

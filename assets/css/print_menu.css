@@ -10,7 +10,7 @@
 .menu-sheet-header h1 { font-weight: 800; color: #0e6332; margin: 0 0 4px; }
 .menu-sheet-header p { color: #6b7280; margin: 0; font-size: 13px; }
 .menu-category-title {
-    font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+    font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em !important;
     color: #0e6332; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e5e7eb;
 }
 .menu-item-grid {
@@ -21,10 +21,10 @@
     text-align: center; break-inside: avoid;
 }
 .menu-item-card img { width: 110px; height: 110px; margin-bottom: 8px; }
-.menu-item-name { font-weight: 800; font-size: 13.5px; color: #102018; margin: 0 0 2px; }
-.menu-item-desc { font-size: 11px; color: #9ca3af; margin: 0 0 4px; }
+.menu-item-name { font-weight: 800; font-size: 14px; color: #102018; margin: 0 0 2px; }
+.menu-item-desc { font-size: 11px; color: var(--gp-muted); margin: 0 0 4px; }
 .menu-item-price { font-weight: 800; font-size: 15px; color: #0e6332; margin: 0; }
-.menu-item-sku { font-size: 10px; color: #9ca3af; }
+.menu-item-sku { font-size: 11px; color: var(--gp-muted); }
 .menu-checkout-box {
     margin-top: 32px; padding: 20px; border-radius: 16px;
     background: #f8fafc; border: 1px dashed #0e6332;
@@ -32,7 +32,7 @@
 }
 .menu-checkout-box img { width: 130px; height: 130px; }
 .menu-checkout-text strong { display: block; color: #0e6332; font-size: 15px; margin-bottom: 4px; }
-.menu-checkout-text span { font-size: 12.5px; color: #6b7280; }
+.menu-checkout-text span { font-size: 13px; color: #6b7280; }
 
 @media print {
     .sd-sidebar, .sd-topbar, .sd-bottomnav, .menu-print-toolbar, .menu-skuless-note {
