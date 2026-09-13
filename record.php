@@ -41,7 +41,32 @@ class Record
                 $validPassword = password_verify($password, $storedPassword);
 
                 if ($validPassword) {
+                    // The three blocks below turn away an account whose password was
+                    // CORRECT. That is a different event from a bad password, and none
+                    // of them used to leave any trace — probing a deactivated or banned
+                    // account produced an audit trail identical to nobody trying at all.
+                    $blockedUserId = (int) ($user['id'] ?? $user['userID'] ?? 0);
+
                     if (!empty($user['status']) && $user['status'] === 'Inactive') {
+                        \logAudit(
+                            $this->con,
+                            $blockedUserId,
+                            \gjc_audit_role_from_user($this->con, $blockedUserId),
+                            'LOGIN_BLOCKED',
+                            'users',
+                            null,
+                            [
+                                'userID' => $blockedUserId,
+                                'email'  => $user['email'] ?? '',
+                                'block'  => 'account_deactivated',
+                            ],
+                            null,
+                            [
+                                'target_id' => $blockedUserId,
+                                'outcome'   => 'denied',
+                                'reason'    => 'Credentials correct, but the account is deactivated.',
+                            ]
+                        );
                         return 'Access Denied: Your account has been deactivated. Please contact your merchant admin.';
                     }
 
@@ -49,6 +74,26 @@ class Record
                     // the owner and every staff account for the duration.
                     $suspendedUntil = \gjc_merchant_suspended_until($this->con, (int) ($user['id'] ?? $user['userID'] ?? 0));
                     if ($suspendedUntil !== null) {
+                        \logAudit(
+                            $this->con,
+                            $blockedUserId,
+                            \gjc_audit_role_from_user($this->con, $blockedUserId),
+                            'LOGIN_BLOCKED',
+                            'users',
+                            null,
+                            [
+                                'userID'          => $blockedUserId,
+                                'email'           => $user['email'] ?? '',
+                                'block'           => 'merchant_suspended',
+                                'suspended_until' => $suspendedUntil,
+                            ],
+                            null,
+                            [
+                                'target_id' => $blockedUserId,
+                                'outcome'   => 'denied',
+                                'reason'    => 'Merchant stall suspended over restricted-product strikes until ' . $suspendedUntil . '.',
+                            ]
+                        );
                         return 'Access Denied: This merchant account is temporarily suspended until '
                             . date('M d, Y g:i A', strtotime($suspendedUntil))
                             . ' due to repeated attempts to list restricted products.';
@@ -62,6 +107,28 @@ class Record
                         in_array((int) ($user['roleID'] ?? 0), [2, 5, 6], true)
                     );
                     if ($accountSuspension !== null) {
+                        \logAudit(
+                            $this->con,
+                            $blockedUserId,
+                            \gjc_audit_role_from_user($this->con, $blockedUserId),
+                            'LOGIN_BLOCKED',
+                            'users',
+                            null,
+                            [
+                                'userID'          => $blockedUserId,
+                                'email'           => $user['email'] ?? '',
+                                'block'           => ($accountSuspension['kind'] ?? '') === 'ban' ? 'account_banned' : 'account_suspended',
+                                'suspended_until' => $accountSuspension['until'] ?? null,
+                            ],
+                            null,
+                            [
+                                'target_id' => $blockedUserId,
+                                'outcome'   => 'denied',
+                                'reason'    => (string) ($accountSuspension['reason'] ?? '') !== ''
+                                    ? (string) $accountSuspension['reason']
+                                    : 'Account locked by finance.',
+                            ]
+                        );
                         return 'Access Denied: ' . \gjc_suspension_notice($accountSuspension, 'Your account');
                     }
 
@@ -103,7 +170,9 @@ class Record
                             'email' => $user['email'] ?? '',
                             'roleID' => $roleId,
                             'sub_role' => $subRole,
-                        ]
+                        ],
+                        null,
+                        ['target_id' => $userId]
                     );
 
                     if ($mustChangePassword) {
@@ -128,11 +197,42 @@ class Record
                             'userID' => $failedUserId,
                             'email' => $user['email'] ?? '',
                             'roleID' => $failedRoleId,
+                        ],
+                        null,
+                        [
+                            'target_id' => $failedUserId,
+                            'outcome'   => 'failure',
+                            'reason'    => 'Incorrect password.',
                         ]
                     );
                     return "Invalid password";
                 }
             } else {
+                // No matching account. This is the shape a password spray against
+                // made-up addresses takes, and it used to produce no row at all —
+                // the log looked exactly as though nobody had tried.
+                //
+                // There is no user id to attribute it to, so logAudit() files it
+                // against a NULL actor as 'Anonymous'. The attempted identifier is
+                // capped at 100 characters: it is unvalidated request input and
+                // there is no reason to keep more of it than that.
+                \logAudit(
+                    $this->con,
+                    0,
+                    '',
+                    'LOGIN_FAILED',
+                    'users',
+                    null,
+                    [
+                        'attempted_email' => mb_substr((string) $email, 0, 100),
+                        'block'           => 'no_such_account',
+                    ],
+                    null,
+                    [
+                        'outcome' => 'failure',
+                        'reason'  => 'Login attempted for an address with no account.',
+                    ]
+                );
                 return "User not found";
             }
         }

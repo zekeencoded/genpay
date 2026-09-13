@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
+require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['merchant']);
 
@@ -56,6 +57,25 @@ if (!$baseUploads || !$absPath || !is_file($absPath)
     http_response_code(404);
     exit('Contract file not found.');
 }
+
+// Reference only, never contents — see admin/doc.php.
+logAudit(
+    $db,
+    (int) $currentUser['id'],
+    gjc_current_role(),
+    'DOCUMENT_VIEW',
+    'uploads',
+    null,
+    [
+        'file'     => $relPath,
+        'document_type' => 'signed_lease_contract',
+        'bytes'    => filesize($absPath) ?: null,
+        'via'      => 'merchant/contract.php',
+        'download' => !empty($_GET['dl']),
+    ],
+    null,
+    ['target_id' => basename($absPath)]
+);
 
 $ext  = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
 $mime = match ($ext) {

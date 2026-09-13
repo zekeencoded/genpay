@@ -186,6 +186,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -199,6 +200,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -310,6 +312,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -323,6 +326,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -380,9 +384,11 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return ["success" => true, "reference" => $ref];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -498,6 +504,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -510,6 +517,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -613,6 +621,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -625,6 +634,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -699,12 +709,14 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -762,6 +774,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -769,6 +782,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -831,6 +845,7 @@ class CirculationEngine
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "reference" => $ref,
@@ -838,6 +853,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -897,9 +913,25 @@ class CirculationEngine
                 $settings["cashier_vault_points"],
                 $vaultAfter,
                 notes: "Cap raised from Php {$oldCap} to Php {$newCap}. Reason: {$reason}",
+                // increaseCirculationCap() refuses to run without a
+                // justification; until now that justification only reached
+                // transactions.notes and never the audit trail.
+                audit: [
+                    "reason" => $reason,
+                    "old" => [
+                        "total_circulation_cap" => $oldCap,
+                        "cashier_vault_points"  => $settings["cashier_vault_points"],
+                    ],
+                    "new" => [
+                        "total_circulation_cap" => $newCap,
+                        "cap_increased_by"      => $increaseBy,
+                        "minted_by"             => $superAdminId,
+                    ],
+                ],
             );
 
             $this->db->commit();
+            gjc_audit_commit($this->db);
             return [
                 "success" => true,
                 "old_cap" => $oldCap,
@@ -909,6 +941,7 @@ class CirculationEngine
             ];
         } catch (\Throwable $e) {
             $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
         }
     }
@@ -1021,6 +1054,11 @@ class CirculationEngine
         float $feeAmount = null,
         float $creditedAmount = null,
         int $parentWalletId = null,
+        // Audit-only extras. Nothing here touches the ledger or the money maths:
+        //   reason  the operator's justification, for actions that demand one
+        //   old     the before-state to record as old_value
+        //   new     extra fields to merge into new_value
+        array $audit = [],
     ): string {
         $total = (float) $this->db
             ->query(
@@ -1089,24 +1127,37 @@ class CirculationEngine
             }
         }
 
+        // old_value used to be null on every money movement, which left the
+        // entry with no before-state to compare against.
+        $auditOld = $audit["old"] ?? [
+            "cashier_vault_points" => $vaultBefore,
+        ];
+
+        $auditNew = array_merge([
+            "reference_no" => $ref,
+            "transaction_type" => $type,
+            "amount" => $amount,
+            "student_wallet_id" => $studentWalletId,
+            "merchant_wallet_id" => $merchantWalletId,
+            "voucher_id" => $voucherId,
+            "vault_before" => $vaultBefore,
+            "vault_after" => $vaultAfter,
+            "total_in_circulation" => $total,
+            "status" => "completed",
+        ], $audit["new"] ?? []);
+
         logAudit(
             $this->db,
             $initiatedBy,
             gjc_audit_role_from_user($this->db, $initiatedBy),
             "TRANSACTION",
-            "e_wallet_transactions",
+            "transactions",
+            $auditOld,
+            $auditNew,
             null,
             [
-                "reference_no" => $ref,
-                "transaction_type" => $type,
-                "amount" => $amount,
-                "student_wallet_id" => $studentWalletId,
-                "merchant_wallet_id" => $merchantWalletId,
-                "voucher_id" => $voucherId,
-                "vault_before" => $vaultBefore,
-                "vault_after" => $vaultAfter,
-                "total_in_circulation" => $total,
-                "status" => "completed",
+                "target_id" => $ref,
+                "reason" => $audit["reason"] ?? null,
             ],
         );
 

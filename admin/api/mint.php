@@ -13,6 +13,27 @@ require_once __DIR__ . '/../../connection/app.php';
 require_once __DIR__ . '/../../connection/MintingGuard.php';
 
 if (!isset($_SESSION['userID']) || ($_SESSION['sub_role'] ?? '') !== 'super_admin') {
+    // Minting is the single most sensitive endpoint in the system. Somebody
+    // reaching for it without super-admin now leaves a record; it used to be
+    // a bare 403 with nothing written anywhere.
+    logAudit(
+        $db,
+        (int) ($_SESSION['userID'] ?? 0),
+        (string) ($_SESSION['sub_role'] ?? ''),
+        'ACCESS_DENIED',
+        'system_settings',
+        null,
+        [
+            'endpoint_action' => 'mint',
+            'actual_sub_role' => (string) ($_SESSION['sub_role'] ?? ''),
+            'required'        => 'super_admin',
+        ],
+        null,
+        [
+            'outcome' => 'denied',
+            'reason'  => 'Mint endpoint reached without the super-admin sub-role.',
+        ]
+    );
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'ACCESS_DENIED: Super-Admin only.']);
     exit;

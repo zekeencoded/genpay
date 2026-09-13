@@ -101,7 +101,9 @@ try {
                     'parent_wallet_id' => $parentWallet['id'],
                     'student_wallet_id' => $studentWallet['id'],
                     'student_user_id' => $studentUserId,
-                ]
+                ],
+                null,
+                ['target_id' => $result['reference']]
             );
 
             gjc_notify_wallet(

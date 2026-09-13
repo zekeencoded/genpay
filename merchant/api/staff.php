@@ -102,7 +102,9 @@ try {
                     'role' => 'merchant_staff',
                     'position' => $position !== '' ? $position : null,
                     'merchant_owner_id' => $merchantUserId,
-                ]
+                ],
+                null,
+                ['target_id' => $newStaffId]
             );
 
             echo json_encode(['success' => true, 'message' => 'Staff account created successfully.', 'user_id' => $newStaffId]);
@@ -141,7 +143,9 @@ try {
                 'USER_ACCOUNT',
                 'users',
                 ['user_id' => $userId, 'status' => $currentStatus],
-                ['event' => $newStatus === 'Active' ? 'reactivated' : 'deactivated', 'user_id' => $userId, 'changed_by' => $merchantUserId, 'new_status' => $newStatus]
+                ['event' => $newStatus === 'Active' ? 'reactivated' : 'deactivated', 'user_id' => $userId, 'changed_by' => $merchantUserId, 'new_status' => $newStatus],
+                null,
+                ['target_id' => $userId]
             );
 
             echo json_encode(['success' => true, 'new_status' => $newStatus, 'message' => "Staff account set to {$newStatus}."]);

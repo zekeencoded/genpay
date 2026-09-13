@@ -328,6 +328,19 @@ html {
    directly (assets/css/student_dashboard.css) instead of a near-duplicate
    — see merchant/encash.php. */
 
+/* The status badge sits directly in the flex hero rather than in a column,
+   so without this it stretches to the hero's full height. */
+.encash-hero-badge {
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  .encash-hero-badge {
+    align-self: center;
+  }
+}
+
 .encash-layout-grid {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;

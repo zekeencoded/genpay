@@ -874,7 +874,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'parents_emailed'  => $summary['parents_emailed'],
                     'parents_email_failed' => $summary['parents_email_failed'],
                     'created_user_ids' => $createdUserIds,
-                ]
+                ],
+                null,
+                ['target_id' => $summary['batch_id']]
             );
 
             $importSummary = $summary;
@@ -971,7 +973,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'sub_role' => 'merchant_admin',
                     'forced_password_change' => true,
                     'email_sent' => false,
-                ]
+                ],
+                null,
+                ['target_id' => $newMerchantUserId]
             );
 
             $merchantSuccess = [

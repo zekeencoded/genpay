@@ -58,7 +58,9 @@ try {
                         'merchant_user_id' => $merchantUserId,
                         'attempted_name' => $productName,
                         'matched_reason' => $restrictionReason,
-                    ]
+                    ],
+                    null,
+                    ['reason' => $restrictionReason]
                 );
                 $violationCount = gjc_record_product_violation($db, $merchantUserId, $restrictionReason);
                 echo json_encode([
@@ -120,7 +122,9 @@ try {
                     'is_available' => $isAvailable,
                     'is_restricted' => $isRestricted,
                     'restriction_note' => $restrictionReason,
-                ]
+                ],
+                null,
+                ['target_id' => $itemId]
             );
 
             $msg = $isRestricted
@@ -152,7 +156,11 @@ try {
             }
 
             // Verify ownership
-            $own = $db->prepare("SELECT * FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?");
+            $own = $db->prepare(
+                "SELECT id, sku, product_name, description, category, unit, price,
+                        stock_qty, min_stock_alert, is_available, is_restricted, restriction_note
+                   FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?"
+            );
             $own->execute([$itemId, $merchantUserId]);
             $oldItem = $own->fetch(PDO::FETCH_ASSOC);
             if (!$oldItem) {
@@ -183,7 +191,9 @@ try {
                         'merchant_user_id' => $merchantUserId,
                         'attempted_name' => $productName,
                         'matched_reason' => $restrictionReason,
-                    ]
+                    ],
+                    null,
+                    ['target_id' => $itemId, 'reason' => $restrictionReason]
                 );
                 $violationCount = gjc_record_product_violation($db, $merchantUserId, $restrictionReason);
                 echo json_encode([
@@ -234,7 +244,9 @@ try {
                     'is_available' => $isAvailable,
                     'is_restricted' => $isRestricted,
                     'restriction_note' => $restrictionReason,
-                ]
+                ],
+                null,
+                ['target_id' => $itemId]
             );
             echo json_encode([
                 'success' => true,
@@ -255,7 +267,11 @@ try {
             }
 
             // Verify ownership before deleting (mirrors edit_product)
-            $own = $db->prepare("SELECT * FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?");
+            $own = $db->prepare(
+                "SELECT id, sku, product_name, description, category, unit, price,
+                        stock_qty, min_stock_alert, is_available, is_restricted, restriction_note
+                   FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?"
+            );
             $own->execute([$itemId, $merchantUserId]);
             $oldItem = $own->fetch(PDO::FETCH_ASSOC);
             if (!$oldItem) {
@@ -274,7 +290,9 @@ try {
                 'MENU_MUTATION',
                 'menu_items',
                 $oldItem,
-                null
+                null,
+                null,
+                ['target_id' => $itemId]
             );
 
             echo json_encode(['success' => true, 'message' => 'Product deleted.']);
@@ -291,7 +309,11 @@ try {
             }
 
             // Ownership check — staff can only update stock for their owner's inventory
-            $oldStmt = $db->prepare("SELECT * FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?");
+            $oldStmt = $db->prepare(
+                "SELECT id, sku, product_name, description, category, unit, price,
+                        stock_qty, min_stock_alert, is_available, is_restricted, restriction_note
+                   FROM merchant_inventory WHERE id = ? AND merchant_user_id = ?"
+            );
             $oldStmt->execute([$itemId, $ownerMerchId]);
             $oldItem = $oldStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -309,7 +331,9 @@ try {
                     'MENU_MUTATION',
                     'menu_items',
                     $oldItem,
-                    $newItem
+                    $newItem,
+                    null,
+                    ['target_id' => $itemId]
                 );
             }
             echo json_encode(['success' => $stmt->rowCount() > 0, 'message' => $stmt->rowCount() > 0 ? 'Stock updated.' : 'Item not found.']);

@@ -57,10 +57,14 @@ $currentPage = $currentPage ?? ""; ?>
             <i class="fa-solid fa-graduation-cap nav-icon"></i>
             <span class="nav-text">School Years</span>
         </a>
+        <?php if (function_exists('gjc_sub_role') && gjc_sub_role() === 'super_admin'): ?>
+        <!-- Super-admin only, matching the gate on the page itself — otherwise
+             every cashier sees a link that just bounces them. -->
         <a href="<?= ADMIN_URL ?>/audit_log.php" class="<?= $currentPage === 'audit_log' ? 'active' : '' ?>">
             <i class="fa-solid fa-clipboard-list nav-icon"></i>
             <span class="nav-text">Audit Log</span>
         </a>
+        <?php endif; ?>
         <?php if (function_exists('gjc_current_role') && gjc_current_role() === 'finance'): ?>
         <a href="<?= ADMIN_URL ?>/maintenance.php" class="<?= $currentPage === 'maintenance' ? 'active' : '' ?>">
             <i class="fa-solid fa-screwdriver-wrench nav-icon"></i>

@@ -175,7 +175,7 @@ try {
             $parentUserId,
             gjc_current_role(),
             'TRANSACTION',
-            'e_wallet_transactions',
+            'transactions',
             null,
             [
                 'reference_no' => $refNo,
@@ -185,7 +185,9 @@ try {
                 'merchant_wallet_id' => (int) $order['merchant_wallet_id'],
                 'items' => $lines,
                 'status' => 'completed',
-            ]
+            ],
+            null,
+            ['target_id' => $refNo]
         );
 
         gjc_notify(

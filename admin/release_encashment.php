@@ -88,7 +88,9 @@ try {
             'merchant_wallet_id' => $requestWalletId,
             'amount' => $requestAmount,
             'reference_no' => $result['reference'],
-        ]
+        ],
+        null,
+        ['target_id' => $encashmentId]
     );
 
     $merchOwnerStmt = $db->prepare("SELECT user_id FROM merchant_wallets WHERE id = ?");

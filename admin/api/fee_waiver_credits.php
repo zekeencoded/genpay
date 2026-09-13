@@ -114,7 +114,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
                 ['student_user_id' => $studentUserId, 'status' => 'empty'],
-                ['student_user_id' => $studentUserId, 'status' => 'pending', 'amount' => $amount]
+                ['student_user_id' => $studentUserId, 'status' => 'pending', 'amount' => $amount],
+                null,
+                ['target_id' => $studentUserId]
             );
 
             fwc_json(['success' => true, 'message' => 'Amount recorded. Awaiting the signed waiver upload.', 'status' => 'pending', 'amount' => $amount]);
@@ -193,7 +195,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
                 ['student_user_id' => $studentUserId, 'status' => 'pending'],
-                ['student_user_id' => $studentUserId, 'status' => 'posted', 'waiver_file' => $rel]
+                ['student_user_id' => $studentUserId, 'status' => 'posted', 'waiver_file' => $rel],
+                null,
+                ['target_id' => $studentUserId]
             );
 
             gjc_notify(
@@ -231,7 +235,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
                 ['student_user_id' => $studentUserId, 'status' => 'pending', 'amount' => $before['amount']],
-                ['student_user_id' => $studentUserId, 'status' => 'empty']
+                ['student_user_id' => $studentUserId, 'status' => 'empty'],
+                null,
+                ['target_id' => $studentUserId]
             );
 
             fwc_json(['success' => true, 'message' => 'Cancelled and reset.', 'status' => 'empty']);

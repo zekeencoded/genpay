@@ -265,9 +265,11 @@ try {
                 $parentUserId,
                 gjc_current_role(),
                 'TRANSACTION',
-                'e_wallet_transactions',
+                'cart_orders',
                 ['reference_no' => $order['reference_no'], 'status' => 'pending'],
-                ['reference_no' => $order['reference_no'], 'status' => 'voided', 'cancelled_by' => 'parent']
+                ['reference_no' => $order['reference_no'], 'status' => 'voided', 'cancelled_by' => 'parent'],
+                null,
+                ['target_id' => $order['reference_no']]
             );
 
             echo json_encode(['success' => true, 'message' => 'Order cancelled.']);

@@ -33,7 +33,7 @@ if (!empty($tenantCards)) {
                JOIN users act ON {$staffJoin}
                JOIN systemic_audit_trail a ON a.user_id = act.userID
                LEFT JOIN merchant_card_views v ON v.merchant_id = m.merchantID
-              WHERE a.action_type IN ('MENU_MUTATION', 'USER_ACCOUNT', 'PRODUCT_RESTRICTION')
+              WHERE a.action_type IN ('MENU_MUTATION', 'USER_ACCOUNT', 'MERCHANT_PROFILE_UPDATE', 'PRODUCT_RESTRICTION')
                 AND (v.last_viewed_at IS NULL OR a.timestamp > v.last_viewed_at)
               GROUP BY m.merchantID",
         )->fetchAll(PDO::FETCH_KEY_PAIR),

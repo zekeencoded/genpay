@@ -155,7 +155,7 @@ function sa_meeting_label(?string $dt): string
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=11">
     <style>
     /* KPI cards — thin large numbers, left-aligned flex row */
     .sa-kpi { border:1px solid #dddfd8; border-radius:12px; padding:16px 20px; background:#fff; display:flex; flex-direction:column; gap:8px; min-width:200px; }
@@ -726,41 +726,18 @@ function applicantHeader(app) {
     </div>`;
 }
 
-// Payment methods offered at the one-stop meeting. E-wallets require the
-// transaction reference number (mirrors the record_payment API validation).
-const PAY_METHODS = [
-    { value: 'cash',  label: 'Cash',  icon: 'fa-money-bill-wave' },
-    { value: 'gcash', label: 'GCash', icon: 'fa-wallet' },
-    { value: 'maya',  label: 'Maya',  icon: 'fa-mobile-screen-button' },
-];
-function pmLabel(method) {
-    return (PAY_METHODS.find(m => m.value === method) || { label: '—' }).label;
-}
+// Mirrors stall_app_payment_complete() in the API.
 function paymentComplete(app) {
-    const method = app.payment_method;
     return parseFloat(app.deposit_amount) > 0
         && parseFloat(app.advance_amount) > 0
         && !!app.rental_start_date
-        && (app.payment_schedule_day == 15 || app.payment_schedule_day == 30)
-        && PAY_METHODS.some(m => m.value === method)
-        && (method === 'cash' || String(app.payment_ref_no || '').trim() !== '');
+        && (app.payment_schedule_day == 15 || app.payment_schedule_day == 30);
 }
 
 function renderWorkspace(app) {
     const hasContract = !!app.contract_file;
     const payDone = paymentComplete(app);
     const contractUrl = hasContract ? DOC_URL + encodeURIComponent(String(app.contract_file).replace(/^\//, '')) : '';
-
-    const pmCards = PAY_METHODS.map(m => `
-        <div class="sa-pm-card ${app.payment_method === m.value ? 'selected' : ''}" data-method="${m.value}"
-             role="button" tabindex="0" aria-pressed="${app.payment_method === m.value}">
-            <div class="sa-pm-main">
-                <span class="sa-pm-icon sa-pm-icon--${m.value}"><i class="fa-solid ${m.icon}"></i></span>
-                <span class="sa-pm-name">${m.label}</span>
-                <span class="sa-pm-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-            </div>
-            ${m.value === 'cash' ? '' : '<div class="sa-pm-refslot"></div>'}
-        </div>`).join('');
 
     const stallOpts = VACANT_STALLS.map(s =>
         `<option value="${esc(s.stall_id)}" data-rate="${s.monthly_rate}" ${s.stall_id === app.preferred_stall_id ? 'selected' : ''}>${esc(s.stall_id)} — ${esc(s.label)} (${peso(s.monthly_rate)}/mo)</option>`).join('');
@@ -810,15 +787,6 @@ function renderWorkspace(app) {
                         </select>
                     </div>
                     <div class="col-12">
-                        <label class="form-label small mb-1">Payment Method</label>
-                        <div class="sa-pm-list" id="pm-${app.id}">${pmCards}</div>
-                        <div class="sa-pm-ref" id="refWrap-${app.id}" hidden>
-                            <label class="form-label small mb-1" id="refLabel-${app.id}" for="ref-${app.id}">Reference No.</label>
-                            <input type="text" class="form-control form-control-sm" id="ref-${app.id}"
-                                   maxlength="60" placeholder="e.g. 9021 456 781234" value="${esc(app.payment_ref_no ?? '')}">
-                        </div>
-                    </div>
-                    <div class="col-12">
                         <button type="button" class="btn btn-sm btn-success mt-1" id="payBtn-${app.id}"><i class="fa-solid fa-floppy-disk me-1"></i>Save Payment</button>
                     </div>
                 </div>
@@ -856,9 +824,7 @@ function renderSummary(app) {
                 <div class="d-flex justify-content-between"><span class="text-muted">2-Month Deposit</span><span class="fw-semibold">${peso(app.deposit_amount)}</span></div>
                 <div class="d-flex justify-content-between"><span class="text-muted">1-Month Advance</span><span class="fw-semibold">${peso(app.advance_amount)}</span></div>
                 <div class="d-flex justify-content-between"><span class="text-muted">Rental Start</span><span class="fw-semibold">${fmtDate(app.rental_start_date)}</span></div>
-                <div class="d-flex justify-content-between"><span class="text-muted">Recurring</span><span class="fw-semibold">Every ${esc(app.payment_schedule_day)}th</span></div>
-                <div class="d-flex justify-content-between"><span class="text-muted">Method</span><span class="fw-semibold">${pmLabel(app.payment_method)}${app.payment_ref_no ? ` · Ref ${esc(app.payment_ref_no)}` : ''}</span></div>
-            </div></div>
+                <div class="d-flex justify-content-between"><span class="text-muted">Recurring</span><span class="fw-semibold">Every ${esc(app.payment_schedule_day)}th</span></div>            </div></div>
             <div class="col-md-6"><div class="sa-section h-100"><h6>Contract</h6>
                 ${contractUrl ? `<a href="${contractUrl}" class="btn btn-sm btn-outline-success sa-doc-link" data-doc-url="${contractUrl}" data-doc-label="Signed Contract"><i class="fa-solid fa-eye me-1"></i>View signed contract</a>` : '<span class="text-muted">No contract on file.</span>'}
                 <div class="small text-muted mt-2">Merchant login: ${esc(app.email)}</div>
@@ -894,41 +860,6 @@ function wireWorkspace(app) {
     }
     if (stallSel) { stallSel.addEventListener('change', suggest); suggest(); }
 
-    // Payment method cards — single-select with a checkbox-style indicator.
-    // The shared Reference No. field docks inside the selected e-wallet card.
-    const pmList = document.getElementById(`pm-${id}`);
-    const refWrap = document.getElementById(`refWrap-${id}`);
-    const refLabel = document.getElementById(`refLabel-${id}`);
-    let pmValue = PAY_METHODS.some(m => m.value === app.payment_method) ? app.payment_method : '';
-    function selectMethod(value) {
-        pmValue = value;
-        pmList.querySelectorAll('.sa-pm-card').forEach(card => {
-            const on = card.dataset.method === value;
-            card.classList.toggle('selected', on);
-            card.setAttribute('aria-pressed', on);
-        });
-        const ewallet = value === 'gcash' || value === 'maya';
-        refWrap.hidden = !ewallet;
-        if (ewallet) {
-            const slot = pmList.querySelector(`.sa-pm-card[data-method="${value}"] .sa-pm-refslot`);
-            if (refWrap.parentElement !== slot) slot.appendChild(refWrap);
-            refLabel.textContent = `${pmLabel(value)} Reference No.`;
-        }
-    }
-    pmList.querySelectorAll('.sa-pm-card').forEach(card => {
-        // Ignore events from the docked ref field: re-selecting would move the
-        // input mid-typing, and Space must insert a space, not toggle the card.
-        card.addEventListener('click', e => {
-            if (e.target.closest('.sa-pm-refslot')) return;
-            selectMethod(card.dataset.method);
-        });
-        card.addEventListener('keydown', e => {
-            if (e.target !== card) return;
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMethod(card.dataset.method); }
-        });
-    });
-    if (pmValue) selectMethod(pmValue);
-
     document.getElementById(`contractBtn-${id}`).addEventListener('click', () => {
         const input = document.getElementById(`contractFile-${id}`);
         if (!input.files.length) { toast('Choose the signed contract file first.', false); return; }
@@ -943,19 +874,11 @@ function wireWorkspace(app) {
     });
 
     document.getElementById(`payBtn-${id}`).addEventListener('click', () => {
-        if (!pmValue) { toast('Choose a payment method — Cash, GCash, or Maya.', false); return; }
-        const refVal = document.getElementById(`ref-${id}`).value.trim();
-        if (pmValue !== 'cash' && !refVal) {
-            toast(`Enter the ${pmLabel(pmValue)} reference number for this payment.`, false);
-            return;
-        }
         post({
             action: 'record_payment', app_id: id,
             deposit_amount: dep.value, advance_amount: adv.value,
             rental_start_date: document.getElementById(`start-${id}`).value,
             payment_schedule_day: document.getElementById(`sched-${id}`).value,
-            payment_method: pmValue,
-            payment_ref_no: pmValue === 'cash' ? '' : refVal,
         }).then(res => {
             toast(res.message, res.success);
             if (res.success) {
@@ -963,8 +886,6 @@ function wireWorkspace(app) {
                 app.advance_amount = adv.value;
                 app.rental_start_date = document.getElementById(`start-${id}`).value;
                 app.payment_schedule_day = document.getElementById(`sched-${id}`).value;
-                app.payment_method = pmValue;
-                app.payment_ref_no = pmValue === 'cash' ? '' : refVal;
                 refreshApp(id);
             }
         });

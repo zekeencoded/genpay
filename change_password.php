@@ -53,7 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'PASSWORD_CHANGE',
             'users',
             ['force_password_change' => 1, 'is_first_login' => 1, 'password_changed' => 0],
-            ['force_password_change' => 0, 'is_first_login' => 0, 'password_changed' => 1]
+            ['force_password_change' => 0, 'is_first_login' => 0, 'password_changed' => 1],
+            null,
+            ['target_id' => $userId]
         );
 
         unset($_SESSION['force_change']);

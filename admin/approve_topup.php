@@ -15,6 +15,28 @@ $sessionUserId = gjc_user_id();
 $sessionRole = gjc_current_role();
 $allowedRoles = ['finance']; // gjc_current_role() only ever returns finance for staff
 if (!$sessionUserId || !in_array($sessionRole, $allowedRoles, true)) {
+    // A refused attempt to credit a wallet is worth at least as much to an
+    // auditor as a successful one. This endpoint used to answer 403 silently.
+    logAudit(
+        $db,
+        $sessionUserId,
+        $sessionRole,
+        'ACCESS_DENIED',
+        'topup_requests',
+        null,
+        [
+            'endpoint_action' => 'approve_topup',
+            'actual_role'     => $sessionRole,
+            'required_roles'  => $allowedRoles,
+            'topup_id'        => filter_input(INPUT_POST, 'topup_id', FILTER_VALIDATE_INT) ?: null,
+        ],
+        null,
+        [
+            'target_id' => filter_input(INPUT_POST, 'topup_id', FILTER_VALIDATE_INT) ?: null,
+            'outcome'   => 'denied',
+            'reason'    => 'Top-up approval attempted without the finance role.',
+        ]
+    );
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']);
     exit;
@@ -80,7 +102,9 @@ try {
             'fee_amount'       => $result['fee_amount'],
             'credited_amount'  => $result['credited_amount'],
             'reference_no'     => $result['reference'],
-        ]
+        ],
+        null,
+        ['target_id' => $topupId]
     );
 
     gjc_notify_wallet(

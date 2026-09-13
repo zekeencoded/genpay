@@ -124,7 +124,7 @@ try {
             $merchantUserId,
             gjc_current_role(),
             'TRANSACTION',
-            'e_wallet_transactions',
+            'transactions',
             [
                 'reference_no' => $original['reference_no'],
                 'status' => 'completed',
@@ -137,7 +137,9 @@ try {
                 'reason' => $reason,
                 'notes' => $notes,
                 'amount' => $amount,
-            ]
+            ],
+            null,
+            ['target_id' => $refundRefNo, 'reason' => $reason]
         );
 
         echo json_encode([

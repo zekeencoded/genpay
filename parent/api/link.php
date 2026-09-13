@@ -6,6 +6,7 @@ session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
 require_once __DIR__ . '/../../connection/app.php';
+require_once __DIR__ . '/../../connection/audit_logger.php';
 
 gjc_require_role(['parent']);
 gjc_ensure_parent_schema($db);
@@ -67,6 +68,21 @@ try {
                 "INSERT INTO parent_student_links (parent_id, student_user_id) VALUES (?, ?)"
             )->execute([$parentId, $studentUserId]);
 
+            // Linking grants a parent visibility of, and control over, a student's
+            // wallet on the strength of a school ID alone. It was never logged.
+            logAudit(
+                $db, $parentUserId, gjc_current_role(), 'PARENT_LINK', 'parent_student_links',
+                null,
+                [
+                    'parent_id'       => $parentId,
+                    'student_user_id' => $studentUserId,
+                    'school_id'       => $schoolId,
+                    'event'           => 'linked',
+                ],
+                null,
+                ['target_id' => $studentUserId]
+            );
+
             echo json_encode([
                 'success' => true,
                 'message' => $studentName . ' has been linked to your account.',
@@ -78,9 +94,22 @@ try {
             $studentUserId = (int) ($body['student_user_id'] ?? 0);
             if (!$studentUserId) throw new \InvalidArgumentException('Student ID required.');
 
-            $db->prepare(
+            $deleted = $db->prepare(
                 "DELETE FROM parent_student_links WHERE parent_id = ? AND student_user_id = ?"
-            )->execute([$parentId, $studentUserId]);
+            );
+            $deleted->execute([$parentId, $studentUserId]);
+
+            // Only record a link that actually existed — this endpoint does not
+            // check first, so a repeated call would otherwise log a phantom unlink.
+            if ($deleted->rowCount() > 0) {
+                logAudit(
+                    $db, $parentUserId, gjc_current_role(), 'PARENT_LINK', 'parent_student_links',
+                    ['parent_id' => $parentId, 'student_user_id' => $studentUserId, 'linked' => true],
+                    ['parent_id' => $parentId, 'student_user_id' => $studentUserId, 'event' => 'unlinked'],
+                    null,
+                    ['target_id' => $studentUserId]
+                );
+            }
 
             echo json_encode(['success' => true]);
             break;

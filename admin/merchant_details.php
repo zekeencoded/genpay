@@ -162,8 +162,9 @@ if ($summary) {
 
     $activityMeta = [
         'MENU_MUTATION'       => ['Product / Menu', 'bg-success'],
-        'USER_ACCOUNT'        => ['Staff / Profile', 'bg-primary'],
-        'PRODUCT_RESTRICTION' => ['Banned Item', 'bg-danger'],
+        'USER_ACCOUNT'            => ['Staff / Profile', 'bg-primary'],
+        'MERCHANT_PROFILE_UPDATE' => ['Business Profile', 'bg-primary'],
+        'PRODUCT_RESTRICTION'     => ['Banned Item', 'bg-danger'],
     ];
 
     /** A few telling scalars out of an audit row's JSON, not the raw payload. */

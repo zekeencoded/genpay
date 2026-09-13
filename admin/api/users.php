@@ -126,7 +126,9 @@ try {
                     'indefinite'      => $until === null,
                     'reason'          => $reason,
                     'suspended_by'    => $adminId,
-                ]
+                ],
+                null,
+                ['target_id' => $userId, 'reason' => $reason]
             );
 
             gjc_notify(
@@ -206,7 +208,9 @@ try {
                     'escalated_from_suspension' => $wasSuspended,
                     'reason'    => $reason,
                     'banned_by' => $adminId,
-                ]
+                ],
+                null,
+                ['target_id' => $userId, 'reason' => $reason]
             );
 
             gjc_notify(

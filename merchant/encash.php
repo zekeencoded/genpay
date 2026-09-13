@@ -65,7 +65,7 @@ $currentPage = 'encash';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=53">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
@@ -96,8 +96,8 @@ $currentPage = 'encash';
                     <p class="sd-gc-rate"><?php echo gjc_e($merchantName); ?> &middot; Digital earnings wallet</p>
                 </div>
 
-                <div class="sd-gc-badge">
-                    Ready for Request
+                <div class="sd-gc-badge encash-hero-badge">
+                    <?php echo $availableBalance > 0 ? 'Ready for Request' : 'No Balance to Encash'; ?>
                 </div>
             </section>
 
@@ -209,7 +209,7 @@ $currentPage = 'encash';
                             <?php foreach ($encashHistory as $row): ?>
                             <tr>
                                 <td><?php echo gjc_money($row["amount"]); ?></td>
-                                <td><span class="merchant-type-pill"><?php echo gjc_e(ucfirst($row["status"])); ?></span></td>
+                                <td><span class="merchant-type-pill encash-status <?php echo gjc_e(strtolower($row["status"])); ?>"><?php echo gjc_e(ucfirst($row["status"])); ?></span></td>
                                 <td><?php echo $row["released_by"] ? 'Finance Office' : 'Pending'; ?></td>
                                 <td><?php echo gjc_e(date('M d, Y h:i A', strtotime($row["created_at"]))); ?></td>
                             </tr>

@@ -406,7 +406,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'SCHOOL_YEAR_CREATED', 'school_years',
                 null,
-                ['school_year_id' => $newId, 'school_year_name' => $name]
+                ['school_year_id' => $newId, 'school_year_name' => $name],
+                null,
+                ['target_id' => $newId]
             );
 
             sy_json(['success' => true, 'message' => "School year {$name} created.", 'school_year_id' => $newId]);
@@ -497,14 +499,18 @@ try {
                         'unmatched'        => count($unmatchedNumbers),
                         'duplicates'       => $duplicateCount,
                         'rejected'         => count($rejected),
-                    ]
+                    ],
+                    null,
+                    ['target_id' => $batchId]
                 );
 
                 $db->commit();
+                gjc_audit_commit($db);
             } catch (Throwable $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
+                gjc_audit_rollback($db, $e->getMessage());
                 throw $e;
             }
 
@@ -652,14 +658,18 @@ try {
                         'school_year_name' => (string) $year['school_year_name'],
                         'applied'          => $applied,
                         'by_status'        => $counts,
-                    ]
+                    ],
+                    null,
+                    ['target_id' => $newYearId]
                 );
 
                 $db->commit();
+                gjc_audit_commit($db);
             } catch (Throwable $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
+                gjc_audit_rollback($db, $e->getMessage());
                 throw $e;
             }
 
@@ -830,7 +840,9 @@ try {
                         'enrolled_count'     => $enrolledCount,
                         'not_enrolled_count' => $notEnrolledCount,
                         'graduated_count'    => $graduatedCount,
-                    ]
+                    ],
+                    null,
+                    ['target_id' => $newYearId]
                 );
 
                 logAudit(
@@ -842,14 +854,18 @@ try {
                         'source'           => 'roster_import',
                         'staged_rows'      => $stagedTotal,
                         'promoted'         => $promotedCount,
-                    ]
+                    ],
+                    null,
+                    ['target_id' => $newYearId]
                 );
 
                 $db->commit();
+                gjc_audit_commit($db);
             } catch (Throwable $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
+                gjc_audit_rollback($db, $e->getMessage());
                 throw $e;
             }
 
@@ -900,7 +916,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'STUDENT_GRADUATED', 'student_info',
                 ['student_user_id' => $studentUserId, 'graduated_at' => null],
-                ['student_user_id' => $studentUserId, 'school_year_id' => $activeYearId, 'graduated_at' => date('Y-m-d H:i:s'), 'balance_at_graduation' => $before['balance']]
+                ['student_user_id' => $studentUserId, 'school_year_id' => $activeYearId, 'graduated_at' => date('Y-m-d H:i:s'), 'balance_at_graduation' => $before['balance']],
+                null,
+                ['target_id' => $studentUserId]
             );
 
             sy_json([
@@ -1006,20 +1024,26 @@ try {
                 logAudit(
                     $db, $adminId, $adminRole, 'ENROLLMENT_STATUS_SET', 'student_enrollments',
                     ['yr_lvl' => $yrLvl, 'status' => null],
-                    ['yr_lvl' => $yrLvl, 'school_year_id' => $activeYearId, 'status' => 'graduated', 'source' => 'manual', 'student_user_ids' => $ids]
+                    ['yr_lvl' => $yrLvl, 'school_year_id' => $activeYearId, 'status' => 'graduated', 'source' => 'manual', 'student_user_ids' => $ids],
+                    null,
+                    ['target_id' => $yrLvl]
                 );
 
                 logAudit(
                     $db, $adminId, $adminRole, 'STUDENT_GRADUATED', 'student_info',
                     ['yr_lvl' => $yrLvl, 'graduated_at' => null],
-                    ['yr_lvl' => $yrLvl, 'graduated_count' => $claimedCount, 'student_user_ids' => $ids]
+                    ['yr_lvl' => $yrLvl, 'graduated_count' => $claimedCount, 'student_user_ids' => $ids],
+                    null,
+                    ['target_id' => $yrLvl]
                 );
 
                 $db->commit();
+                gjc_audit_commit($db);
             } catch (Throwable $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
+                gjc_audit_rollback($db, $e->getMessage());
                 throw $e;
             }
 
@@ -1072,7 +1096,9 @@ try {
             logAudit(
                 $db, $adminId, $adminRole, 'SY_TXN_BACKFILL', 'transactions',
                 null,
-                ['years_mapped' => count($years), 'rows_updated' => $totalUpdated]
+                ['years_mapped' => count($years), 'rows_updated' => $totalUpdated],
+                null,
+                ['target_id' => null]
             );
 
             sy_json(['success' => true, 'message' => "Backfilled {$totalUpdated} legacy transaction(s) across " . count($years) . ' school year(s).']);
@@ -1085,10 +1111,12 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
+    gjc_audit_rollback($db, $e->getMessage());
     sy_json(['success' => false, 'message' => $e->getMessage()]);
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
+    gjc_audit_rollback($db, $e->getMessage());
     sy_json(['success' => false, 'message' => 'A server error occurred.']);
 }

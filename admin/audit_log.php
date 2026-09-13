@@ -4,38 +4,39 @@ require_once __DIR__ . "/../connection/pdo.php";
 require_once __DIR__ . "/../connection/app.php";
 require_once __DIR__ . "/../connection/audit_logger.php";
 
+// The audit trail records what every other administrator did, and its payloads
+// carry student and parent names and email addresses. "Any finance account" is
+// too wide a door for that — a cashier had the same view as the super-admin.
 gjc_require_role(["finance"]);
+if (gjc_sub_role() !== "super_admin") {
+    http_response_code(403);
+    $currentUser = gjc_current_user($db);
+    require __DIR__ . "/../includes/partials/audit_forbidden.php";
+    exit;
+}
 gjc_ensure_audit_table($db);
 $currentUser = gjc_current_user($db);
 
-$roles = ["", "Finance", "Student", "Merchant", "Vendor/Staff"];
-$actions = [
-    "",
-    "LOGIN",
-    "LOGOUT",
-    "PASSWORD_CHANGE",
-    "TRANSACTION",
-    "MENU_MUTATION",
-    "STALL_UPDATE",
-    "USER_IMPORT",
-    "MERCHANT_CREATE",
-    "USER_ACCOUNT",
-    "MERCHANT_ONBOARDING",
-    "PRODUCT_RESTRICTION",
-    "LOGIN_FAILED",
-    "FEE_WAIVER_STATUS_CHANGE",
-    "SCHOOL_YEAR_CREATED",
-    "SCHOOL_YEAR_ROLLOVER",
-    "STUDENT_GRADUATED",
-    "SY_TXN_BACKFILL",
-    "SYSTEM_SETTINGS_CHANGE",
-    "MINT_PIN_SET",
-];
+[$auditHealthOk, $auditHealthMessage] = gjc_audit_health($db);
 
-$userRole = (string) ($_GET["user_role"] ?? "");
-$actionType = (string) ($_GET["action_type"] ?? "");
-$dateFrom = trim((string) ($_GET["date_from"] ?? ""));
-$dateTo = trim((string) ($_GET["date_to"] ?? ""));
+$roles = ["", "Finance", "Student", "Merchant", "Vendor/Staff", "Parent", "System", "Anonymous", "Unknown"];
+
+// Built from the one list in audit_logger.php, legacy labels included so the
+// rows they already wrote stay reachable. This used to be a third hardcoded
+// copy that drifted: ENROLLMENT_STATUS_SET, ROSTER_UPLOADED, ROSTER_APPLIED and
+// TUITION_CREDIT all existed in the table but could not be selected here.
+$actions = array_merge([""], gjc_audit_action_types(true));
+
+$outcomes = ["", "success", "failure", "denied", "unconfirmed"];
+
+$userRole      = (string) ($_GET["user_role"] ?? "");
+$actionType    = (string) ($_GET["action_type"] ?? "");
+$outcome       = (string) ($_GET["outcome"] ?? "");
+$actorQuery    = trim((string) ($_GET["actor"] ?? ""));
+$targetQuery   = trim((string) ($_GET["target"] ?? ""));
+$correlationId = trim((string) ($_GET["correlation_id"] ?? ""));
+$dateFrom      = trim((string) ($_GET["date_from"] ?? ""));
+$dateTo        = trim((string) ($_GET["date_to"] ?? ""));
 $page = max(1, (int) ($_GET["page"] ?? 1));
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
@@ -45,6 +46,13 @@ if (!in_array($userRole, $roles, true)) {
 }
 if (!in_array($actionType, $actions, true)) {
     $actionType = "";
+}
+if (!in_array($outcome, $outcomes, true)) {
+    $outcome = "";
+}
+// A correlation id is always 32 hex characters; anything else is not one.
+if ($correlationId !== "" && !preg_match('/^[0-9a-f]{32}$/i', $correlationId)) {
+    $correlationId = "";
 }
 
 $where = [];
@@ -58,6 +66,27 @@ if ($actionType !== "") {
     $where[] = "sat.action_type = ?";
     $params[] = $actionType;
 }
+if ($outcome !== "") {
+    $where[] = "sat.outcome = ?";
+    $params[] = $outcome;
+}
+if ($correlationId !== "") {
+    $where[] = "sat.correlation_id = ?";
+    $params[] = $correlationId;
+}
+if ($actorQuery !== "") {
+    // Name, email, or a bare user id.
+    $where[] = "(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) LIKE ?"
+        . " OR u.email LIKE ? OR sat.user_id = ?)";
+    $params[] = "%" . $actorQuery . "%";
+    $params[] = "%" . $actorQuery . "%";
+    $params[] = ctype_digit($actorQuery) ? (int) $actorQuery : 0;
+}
+if ($targetQuery !== "") {
+    $where[] = "(sat.target_id LIKE ? OR sat.affected_table LIKE ?)";
+    $params[] = "%" . $targetQuery . "%";
+    $params[] = "%" . $targetQuery . "%";
+}
 if ($dateFrom !== "") {
     $where[] = "DATE(sat.timestamp) >= ?";
     $params[] = $dateFrom;
@@ -70,7 +99,9 @@ if ($dateTo !== "") {
 $whereSql = $where ? "WHERE " . implode(" AND ", $where) : "";
 
 $countStmt = $db->prepare(
-    "SELECT COUNT(*) FROM systemic_audit_trail sat {$whereSql}",
+    "SELECT COUNT(*) FROM systemic_audit_trail sat
+       LEFT JOIN users u ON u.userID = sat.user_id
+     {$whereSql}",
 );
 $countStmt->execute($params);
 $totalRows = (int) $countStmt->fetchColumn();
@@ -81,6 +112,7 @@ if ($page > $totalPages) {
 }
 
 $sql = "SELECT sat.*,
+               UNIX_TIMESTAMP(sat.timestamp) AS ts_epoch,
                TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS actor_name,
                u.email AS actor_email
           FROM systemic_audit_trail sat
@@ -316,6 +348,10 @@ unset($log);
 $queryBase = [
     "user_role" => $userRole,
     "action_type" => $actionType,
+    "outcome" => $outcome,
+    "actor" => $actorQuery,
+    "target" => $targetQuery,
+    "correlation_id" => $correlationId,
     "date_from" => $dateFrom,
     "date_to" => $dateTo,
 ];
@@ -330,35 +366,53 @@ function audit_render_row(array $log): string
     $rowClass = $log["action_type"] === "LOGIN" ? "audit-row-login" : "";
     $rowClass = $log["action_type"] === "PASSWORD_CHANGE" ? "audit-row-password" : $rowClass;
     $rowClass = $log["action_type"] === "LOGIN_FAILED" ? "audit-row-login-failed" : $rowClass;
-    $actor = trim(
-        (string) ($log["actor_name"] ?:
-        $log["actor_email"] ?:
-        "User #" . $log["user_id"]),
-    );
+
+    $outcome = (string) ($log["outcome"] ?? "success");
+    if ($outcome !== "success") {
+        $rowClass .= " audit-row-" . $outcome;
+    }
+
+    // A NULL actor is a real value now, not missing data: pre-auth attempts and
+    // CLI/system events have no user to point at.
+    $actorId = $log["user_id"];
+    $actor = trim((string) ($log["actor_name"] ?: $log["actor_email"] ?: ""));
+    if ($actor === "") {
+        $actor = $actorId === null
+            ? (($log["user_role"] ?? "") === "System" ? "System" : "Anonymous")
+            : "User #" . $actorId;
+    }
+
+    $isLegacy = gjc_audit_is_legacy_row($log);
+    $target = trim((string) ($log["target_id"] ?? ""));
 
     ob_start();
     ?>
-    <tr class="<?= $rowClass ?>">
-        <td><?= audit_e(
-            date(
-                "M j, Y g:i A",
-                strtotime((string) $log["timestamp"]),
-            ),
-        ) ?></td>
+    <tr class="<?= audit_e(trim($rowClass)) ?>">
+        <td><?= audit_e(gjc_audit_manila(
+            isset($log["ts_epoch"]) ? (int) $log["ts_epoch"] : null,
+        )) ?></td>
         <td>
             <strong><?= audit_e($actor) ?></strong><br>
-            <small><?= audit_e(
-                (string) ($log["actor_email"] ?? ""),
-            ) ?></small>
+            <small><?= audit_e((string) ($log["actor_email"] ?? "")) ?></small>
         </td>
-        <td><?= audit_e($log["user_role"]) ?></td>
-        <td><span class="audit-pill <?= audit_e(
-            $log["action_type"],
-        ) ?>"><?= audit_e(
-    $log["action_type"],
-) ?></span></td>
-        <td><?= audit_e($log["affected_table"]) ?></td>
         <td>
+            <?= audit_e($log["user_role"]) ?>
+            <?php if (!empty($log["sub_role"])): ?>
+            <br><small><?= audit_e($log["sub_role"]) ?></small>
+            <?php endif; ?>
+        </td>
+        <td><span class="audit-pill <?= audit_e($log["action_type"]) ?>"><?= audit_e($log["action_type"]) ?></span></td>
+        <td><span class="audit-outcome is-<?= audit_e($outcome) ?>"><?= audit_e($outcome) ?></span></td>
+        <td>
+            <?= audit_e(gjc_audit_table_label($log["affected_table"])) ?>
+            <?php if ($target !== ""): ?>
+            <br><small class="audit-target"><?= audit_e($target) ?></small>
+            <?php endif; ?>
+        </td>
+        <td>
+            <?php if ($isLegacy): ?>
+            <span class="audit-legacy" title="Written before the hash chain existed — this entry cannot be cryptographically verified.">legacy (unchained)</span>
+            <?php endif; ?>
             <a class="details-btn"
                 href="<?= audit_e(ADMIN_URL) ?>/view_audit.php?token=<?= urlencode(gjc_make_view_token((int) $log["log_id"], "audit")) ?>">
                 <i class="fa-solid fa-eye"></i> View
@@ -396,13 +450,21 @@ function audit_render_pagination(int $page, int $totalPages, int $totalRows, arr
     return ob_get_clean();
 }
 
+// "Verify chain" button. Recomputes every chained entry's hash and reports the
+// first that does not add up — see gjc_audit_verify_chain().
+if (($_GET["verify"] ?? "") === "1") {
+    header("Content-Type: application/json");
+    echo json_encode(gjc_audit_verify_chain());
+    exit;
+}
+
 if (($_GET["ajax"] ?? "") === "1") {
     header("Content-Type: application/json");
     echo json_encode([
         "success" => true,
         "rows_html" => $logs
             ? implode("", array_map("audit_render_row", $logs))
-            : '<tr><td colspan="6" class="text-center py-4">No audit records matched the selected filters.</td></tr>',
+            : '<tr><td colspan="7" class="text-center py-4">No audit records matched the selected filters.</td></tr>',
         "pagination_html" => audit_render_pagination($page, $totalPages, $totalRows, $queryBase),
         "total_rows" => $totalRows,
     ]);
@@ -424,7 +486,7 @@ $currentPage = "audit_log";
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/audit_log.css?v=8">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/audit_log.css?v=9">
 </head>
 <body class="gp-theme">
     <div class="admin-layout">
@@ -442,6 +504,31 @@ $currentPage = "audit_log";
                     <div class="avatar"><i class="fa-solid fa-user-tie"></i></div>
                 </div>
             </header>
+
+            <?php if (!$auditHealthOk): ?>
+            <div class="audit-banner is-danger">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>
+                    <strong>Audit logging is not healthy.</strong>
+                    <span><?= audit_e($auditHealthMessage) ?></span>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <section class="audit-panel mb-4">
+                <div class="audit-chain-bar">
+                    <div>
+                        <strong>Tamper check</strong>
+                        <span class="audit-chain-hint">Recomputes the hash of every chained entry and reports the first that does not match.</span>
+                    </div>
+                    <div class="audit-chain-actions">
+                        <span id="chainResult" class="audit-chain-result"></span>
+                        <button type="button" class="audit-filter-btn" id="verifyChainBtn">
+                            <i class="fa-solid fa-shield-halved"></i> Verify chain
+                        </button>
+                    </div>
+                </div>
+            </section>
 
             <section class="audit-panel mb-4">
                 <form method="GET" action="<?= audit_e(
@@ -478,6 +565,31 @@ $currentPage = "audit_log";
                         </select>
                     </div>
                     <div class="audit-field">
+                        <label>Outcome</label>
+                        <select name="outcome">
+                            <?php foreach ($outcomes as $outcomeOption): ?>
+                            <option value="<?= audit_e($outcomeOption) ?>" <?= $outcome === $outcomeOption ? "selected" : "" ?>>
+                                <?= $outcomeOption === "" ? "All outcomes" : audit_e(ucfirst($outcomeOption)) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="audit-field">
+                        <label>Actor</label>
+                        <input type="text" name="actor" placeholder="Name, email, or user ID"
+                               value="<?= audit_e($actorQuery) ?>">
+                    </div>
+                    <div class="audit-field">
+                        <label>Target</label>
+                        <input type="text" name="target" placeholder="Record ID or table"
+                               value="<?= audit_e($targetQuery) ?>">
+                    </div>
+                    <div class="audit-field">
+                        <label>Correlation ID</label>
+                        <input type="text" name="correlation_id" placeholder="Groups one action's entries"
+                               value="<?= audit_e($correlationId) ?>">
+                    </div>
+                    <div class="audit-field">
                         <label>Date From</label>
                         <input type="date" name="date_from" value="<?= audit_e(
                             $dateFrom,
@@ -508,13 +620,14 @@ $currentPage = "audit_log";
                                 <th>Actor</th>
                                 <th>Role</th>
                                 <th>Action</th>
-                                <th>Table</th>
+                                <th>Outcome</th>
+                                <th>Table / Target</th>
                                 <th>Details</th>
                             </tr>
                         </thead>
                         <tbody id="auditLogBody">
                             <?php if (!$logs): ?>
-                            <tr><td colspan="6" class="text-center py-4">No audit records matched the selected filters.</td></tr>
+                            <tr><td colspan="7" class="text-center py-4">No audit records matched the selected filters.</td></tr>
                             <?php else: foreach ($logs as $log): echo audit_render_row($log);
                             endforeach;
                             endif; ?>
@@ -586,6 +699,36 @@ $currentPage = "audit_log";
             // Keep showing the last known rows on a transient network error.
         }
     }
+
+    // ── Tamper check ───────────────────────────────────────────────────────────
+    const verifyChainBtn = document.getElementById("verifyChainBtn");
+    const chainResult = document.getElementById("chainResult");
+
+    verifyChainBtn.addEventListener("click", async () => {
+        verifyChainBtn.disabled = true;
+        chainResult.className = "audit-chain-result is-checking";
+        chainResult.textContent = "Checking\u2026";
+        try {
+            const res = await fetch(window.location.pathname + "?verify=1");
+            const data = await res.json();
+            if (data.ok) {
+                chainResult.className = "audit-chain-result is-ok";
+                chainResult.textContent = data.checked === 0
+                    ? "No chained entries yet \u2014 every row predates the hash chain."
+                    : "Intact \u2014 " + data.checked + " entr" + (data.checked === 1 ? "y" : "ies") +
+                      " verified (#" + data.first_log_id + "\u2013#" + data.last_log_id + ").";
+            } else {
+                chainResult.className = "audit-chain-result is-bad";
+                chainResult.textContent = (data.broken_log_id ? "Entry #" + data.broken_log_id + ": " : "") +
+                    (data.reason || "Verification failed.");
+            }
+        } catch (error) {
+            chainResult.className = "audit-chain-result is-bad";
+            chainResult.textContent = "Could not run the check.";
+        } finally {
+            verifyChainBtn.disabled = false;
+        }
+    });
 
     lastAuditTotalRows = <?= (int) $totalRows ?>;
     setInterval(refreshAuditLog, 5000);

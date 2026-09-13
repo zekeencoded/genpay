@@ -44,3 +44,32 @@
 .audit-pagination .disabled { opacity:.4; pointer-events:none; }
 
 @media (max-width:1100px) { .audit-filter-grid { grid-template-columns:1fr 1fr; } }
+
+/* ── Audit hardening: health banner, tamper check, outcome + target ──────── */
+
+.audit-banner { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border-radius:var(--gjc-radius); margin-bottom:16px; font-size:13px; line-height:1.6; }
+.audit-banner.is-danger { background:var(--gp-danger-bg); border:1px solid var(--gp-danger); color:var(--gp-danger); }
+.audit-banner i { font-size:16px; margin-top:2px; }
+.audit-banner strong { display:block; }
+.audit-banner span { color:var(--gp-ink); }
+
+.audit-chain-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.audit-chain-hint { display:block; color:var(--gp-muted); font-size:12px; margin-top:2px; }
+.audit-chain-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.audit-chain-result { font-size:12px; font-weight:700; }
+.audit-chain-result.is-checking { color:var(--gp-muted); }
+.audit-chain-result.is-ok { color:var(--gp-success); }
+.audit-chain-result.is-bad { color:var(--gp-danger); }
+
+.audit-outcome { display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:capitalize; }
+.audit-outcome.is-success { background:var(--gp-success-bg); color:var(--gp-success); }
+.audit-outcome.is-failure { background:var(--gp-danger-bg); color:var(--gp-danger); }
+.audit-outcome.is-denied { background:var(--gp-warning-bg); color:var(--gp-warning); }
+.audit-outcome.is-unconfirmed { background:var(--gp-info-bg); color:var(--gp-info); }
+
+.audit-target { color:var(--gp-muted); font-family:var(--gp-mono, ui-monospace, monospace); word-break:break-all; }
+
+.audit-legacy { display:inline-block; margin-right:8px; padding:2px 8px; border-radius:999px; background:var(--gp-cream); color:var(--gp-muted); border:1px dashed var(--gp-line); font-size:10px; font-weight:700; white-space:nowrap; }
+
+.audit-row-failure td, .audit-row-denied td { background:color-mix(in srgb, var(--gp-danger-bg) 45%, transparent); }
+.audit-row-unconfirmed td { background:color-mix(in srgb, var(--gp-info-bg) 45%, transparent); }

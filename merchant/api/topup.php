@@ -90,7 +90,9 @@ try {
                     'credited_amount'  => $result['credited_amount'],
                     'merchant_wallet'  => $merchantWalletId,
                     'student_wallet'   => $studentWalletId,
-                ]
+                ],
+                null,
+                ['target_id' => $result['reference']]
             );
 
             gjc_notify_wallet(
@@ -184,7 +186,9 @@ try {
                     'credited_amount'  => $result['credited_amount'],
                     'merchant_wallet'  => $merchantWalletId,
                     'parent_wallet'    => $parentWallet['id'],
-                ]
+                ],
+                null,
+                ['target_id' => $result['reference']]
             );
 
             $parentUserIdStmt = $db->prepare("SELECT user_id FROM parents WHERE id = ?");

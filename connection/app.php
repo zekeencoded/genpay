@@ -1,6 +1,13 @@
 <?php
 
 require_once __DIR__ . "/config.php";
+// Pulled in unconditionally so logAudit() is available everywhere app.php is —
+// which is every page. gjc_require_role() below records a signed-in user being
+// turned away from another role's area, and without this that would only be
+// logged on the handful of pages that happened to require audit_logger.php for
+// their own reasons. The file defines functions and constants only; including
+// it has no side effects and it requires nothing back, so there is no cycle.
+require_once __DIR__ . "/audit_logger.php";
 
 if (PHP_SAPI !== "cli" && session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -569,7 +576,9 @@ function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reas
                     'strikes' => $count,
                     'suspended_days' => $suspendDays,
                     'suspended_until' => $untilLabel,
-                ]
+                ],
+                null,
+                ['target_id' => $merchantUserId, 'reason' => $reason]
             );
         }
 
@@ -996,7 +1005,9 @@ function gjc_clear_account_lockout(PDO $db, int $userId, string $fromStatus, ?in
                 'status' => $restored,
                 'lifted_by' => $liftedBy,
                 'wallet_unfrozen' => (int) ($row['suspension_froze_wallet'] ?? 0) === 1,
-            ]
+            ],
+            null,
+            ['target_id' => $userId, 'reason' => (string) ($row['suspension_reason'] ?? '')]
         );
     }
 
@@ -1257,8 +1268,8 @@ function gjc_ensure_stall_application_workflow_schema(PDO $db): void
         "advance_amount" => "DECIMAL(10,2) NULL",      // 1 month advance
         "rental_start_date" => "DATE NULL",
         "payment_schedule_day" => "TINYINT UNSIGNED NULL", // 15 or 30
-        "payment_method" => "VARCHAR(20) NULL",        // cash | gcash | maya
-        "payment_ref_no" => "VARCHAR(60) NULL",        // e-wallet reference number
+        "payment_method" => "VARCHAR(20) NULL",        // always 'cash'; no longer shown or chosen in the UI
+        "payment_ref_no" => "VARCHAR(60) NULL",        // unused: held GCash/Maya reference numbers
         "awarded_by" => "INT UNSIGNED NULL",
         "awarded_at" => "DATETIME NULL",
         "cancelled_by" => "INT UNSIGNED NULL",
@@ -1378,6 +1389,8 @@ function gjc_expire_overdue_stall_applications(PDO $db, int $triggeredBy = 0): i
             "stall_applications",
             ["id" => $app["id"], "status" => "pending_verification", "meetup_scheduled_at" => $app["meetup_scheduled_at"]],
             ["id" => $app["id"], "status" => "expired", "event" => "auto_expired_no_show"],
+            null,
+            ['target_id' => $app['id'], 'reason' => $reason]
         );
 
         gjc_send_stall_application_termination_email(
@@ -1965,6 +1978,32 @@ function gjc_require_role(array $roles): void
 
     $role = gjc_current_role();
     if (!in_array($role, $roles, true)) {
+        // Record only a SIGNED-IN user being turned away from another role's
+        // area — that is someone with a real session reaching for something
+        // they may not have, and it left no trace anywhere before. An
+        // anonymous visitor bounced to the login page is just a redirect and
+        // would bury the real signal under noise from every logged-out hit.
+        $deniedUserId = gjc_user_id();
+        if ($deniedUserId > 0 && $db instanceof PDO && function_exists('logAudit')) {
+            logAudit(
+                $db,
+                $deniedUserId,
+                $role,
+                'ACCESS_DENIED',
+                'users',
+                null,
+                [
+                    'actual_role'    => $role,
+                    'required_roles' => $roles,
+                ],
+                null,
+                [
+                    'target_id' => $deniedUserId,
+                    'outcome'   => 'denied',
+                    'reason'    => 'Role ' . $role . ' cannot open a page restricted to: ' . implode(', ', $roles) . '.',
+                ]
+            );
+        }
         header("Location: " . BASE_URL . "/login.php");
         exit();
     }
@@ -4828,7 +4867,9 @@ function gjc_set_enrollment_status(
                 'status'          => $status,
                 'source'          => $source,
                 'yr_lvl'          => $yrLvl,
-            ]
+            ],
+            null,
+            ['target_id' => $studentUserId]
         );
     }
 

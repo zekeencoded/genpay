@@ -219,7 +219,10 @@ $currentPage = 'transactions';
                                 <td><?php echo gjc_e($transaction['time_label']); ?></td>
 
                                 <td>
-                                    <a href="<?= ADMIN_URL ?>/view_transaction.php?source=<?php echo gjc_e($transaction['source']); ?>&ref=<?php echo urlencode($transaction['ref']); ?>&id=<?php echo (int) $transaction['id']; ?>"
+                                    <!-- The row id is signed and scoped to its source, so the
+                                         address bar can't be edited into another record; the
+                                         reference number is no longer a lookup key. -->
+                                    <a href="<?= ADMIN_URL ?>/view_transaction.php?source=<?php echo gjc_e($transaction['source']); ?>&token=<?php echo urlencode(gjc_make_view_token((int) $transaction['id'], 'admin_txn_' . $transaction['source'])); ?>"
                                         class="details-btn">View</a>
                                 </td>
                             </tr>

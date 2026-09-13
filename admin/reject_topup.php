@@ -50,7 +50,9 @@ try {
         'TRANSACTION',
         'topup_requests',
         ['id' => $topupId, 'status' => 'pending'],
-        ['id' => $topupId, 'status' => 'rejected', 'rejected_by' => $sessionUserId]
+        ['id' => $topupId, 'status' => 'rejected', 'rejected_by' => $sessionUserId],
+        null,
+        ['target_id' => $topupId]
     );
 
     echo json_encode(['success' => true, 'message' => 'Top-up request rejected.']);

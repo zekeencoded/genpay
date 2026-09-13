@@ -72,10 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $idCol) {
         } else {
             $db->prepare("UPDATE users SET password = ? WHERE {$idCol} = ?")
                ->execute([password_hash($new, PASSWORD_DEFAULT), $currentUser['id']]);
+            // No before-state: see the note in student/security.php.
             logAudit($db, (int)$currentUser['id'], gjc_current_role(),
                 'PASSWORD_CHANGE', 'users',
-                ['password' => 'changed_by_parent_profile'],
-                ['password' => 'changed_by_parent_profile']);
+                null,
+                ['password_changed' => true, 'changed_via' => 'parent_profile'],
+                null,
+                ['target_id' => (int)$currentUser['id']]);
             $notice = 'Password updated successfully!';
         }
     }

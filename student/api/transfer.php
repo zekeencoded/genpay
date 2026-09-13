@@ -237,7 +237,7 @@ try {
                 $currentUserId,
                 gjc_current_role(),
                 'TRANSACTION',
-                'e_wallet_transactions',
+                'transactions',
                 null,
                 [
                     'reference_no' => $refNo,
@@ -248,7 +248,9 @@ try {
                     'from_wallet_id' => $senderWallet['id'],
                     'to_wallet_id' => $recipientWallet['id'],
                     'status' => 'completed',
-                ]
+                ],
+                null,
+                ['target_id' => $refNo]
             );
 
             $senderName = gjc_user_label($db, $currentUserId);

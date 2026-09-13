@@ -175,7 +175,7 @@ try {
             logAudit($db, $adminId, $adminRole, 'STALL_UPDATE', 'merchant_leases', null, [
                 'lease_id' => $newId, 'merchant_user_id' => $merchantUserId, 'stall_name' => $stallName,
                 'monthly_rent' => $monthlyRent, 'status' => $status,
-            ], $stallNumber);
+            ], $stallNumber, ['target_id' => $newId]);
 
             echo json_encode([
                 'success' => true,
@@ -214,7 +214,14 @@ try {
                 gjc_lease_json_fail('Lease end date must be after lease start date.');
             }
 
-            $chk = $db->prepare("SELECT * FROM merchant_leases WHERE id = ? LIMIT 1");
+            // Named columns rather than SELECT *: this row goes into the audit
+            // log as old_value, and a whole-row dump quietly logs whatever gets
+            // added to the table later.
+            $chk = $db->prepare(
+                "SELECT id, stall_number, stall_name, monthly_rent, deposit_amount,
+                        lease_start, lease_end, status, contract_notes
+                   FROM merchant_leases WHERE id = ? LIMIT 1"
+            );
             $chk->execute([$leaseId]);
             $old = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$old) {
@@ -260,7 +267,7 @@ try {
             logAudit($db, $adminId, $adminRole, 'STALL_UPDATE', 'merchant_leases', $old, [
                 'lease_id' => $leaseId, 'monthly_rent' => $monthlyRent, 'status' => $status,
                 'lease_start' => $leaseStart, 'lease_end' => $leaseEnd,
-            ], $stallNumber);
+            ], $stallNumber, ['target_id' => $leaseId]);
 
             echo json_encode(['success' => true, 'message' => 'Contract updated.'] + gjc_lease_state($directory, $leaseId));
             break;
@@ -324,7 +331,7 @@ try {
             logAudit($db, $adminId, $adminRole, 'TRANSACTION', 'merchant_rent_payments', null, [
                 'lease_id' => $leaseId, 'amount_paid' => $amountPaid, 'period_covered' => $period,
                 'payment_method' => $method, 'reference_no' => $refNo,
-            ], $leaseId);
+            ], $leaseId, ['target_id' => $refNo, 'reason' => $notes ?: null]);
 
             $state = gjc_lease_state($directory, $leaseId);
             $monthRow = null;
@@ -388,11 +395,17 @@ try {
                 (string) $removed['reference_no']
             );
 
-            logAudit($db, $adminId, $adminRole, 'TRANSACTION', 'merchant_rent_payments', $removed, [
+            logAudit($db, $adminId, $adminRole, 'TRANSACTION', 'merchant_rent_payments', [
+                'payment_id' => $paymentId, 'lease_id' => $leaseId,
+                'amount_paid' => $removed['amount_paid'], 'period_covered' => $removed['period_covered'],
+                'payment_date' => $removed['payment_date'] ?? null,
+                'payment_method' => $removed['payment_method'] ?? null,
+                'reference_no' => $removed['reference_no'], 'status' => 'recorded',
+            ], [
                 'voided_payment_id' => $paymentId, 'lease_id' => $leaseId,
                 'amount_paid' => $removed['amount_paid'], 'period_covered' => $removed['period_covered'],
-                'reference_no' => $removed['reference_no'],
-            ], $leaseId);
+                'reference_no' => $removed['reference_no'], 'status' => 'voided',
+            ], $leaseId, ['target_id' => $removed['reference_no']]);
 
             echo json_encode([
                 'success' => true,

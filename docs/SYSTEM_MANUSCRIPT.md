@@ -51,15 +51,27 @@ Because every step is a no-op when already applied, calling them on every page l
 
 ### 2.4 `audit_logger.php` — the append-only audit trail
 
-`logAudit()` writes every significant action (LOGIN, TRANSACTION, STALL_UPDATE, PRODUCT_RESTRICTION, …) into `systemic_audit_trail` with the actor, role, before/after values as JSON, IP, and user agent. Two design decisions matter:
-- It uses a **separate PDO connection** (designed so a restricted, INSERT-only DB user can own it in production).
-- Every call is wrapped in a swallow-all `try/catch` — **an audit failure must never break the workflow it's auditing.**
+`logAudit()` writes every significant action (LOGIN, TRANSACTION, MINT_ATTEMPT, ACCESS_DENIED, DOCUMENT_VIEW, …) into `systemic_audit_trail` with the actor and their sub-role, the target record, the outcome, a reason, the before/after values as JSON, the originating endpoint and method, IP, user agent, and a per-request correlation ID that ties together the several entries one action can produce.
 
-The admin's Audit Log page is a read-only viewer over this table.
+`AUDIT_ACTION_TYPES` in this file is the **single** list of valid action types — the column is a `VARCHAR`, and `admin/audit_log.php` builds its filter from the same constant. An unrecognised type is refused and named, with the calling `file:line`, in the PHP error log. It used to be three hand-maintained lists that drifted apart, and a type missing from the PHP one meant the entry was silently never written.
+
+Four design decisions matter:
+- It uses a **separate PDO connection** owned by `gjc_audit_writer`, a database account with `INSERT` and `SELECT` on this one table and nothing else. There is **no fallback to the app connection** — if the audit credentials are missing, logging stops and says so, rather than quietly downgrading to an account that could rewrite what it writes. Credentials come from the gitignored `connection/audit_config.php`.
+- The table is **append-only in the database**, not by convention: `BEFORE UPDATE` and `BEFORE DELETE` triggers `SIGNAL` an error. Each entry also carries `prev_hash`/`entry_hash`, a chain that `gjc_audit_verify_chain()` walks to find the first entry that no longer matches its own contents or its predecessor. That makes interference **detectable**, not impossible — a DBA with root can still drop the triggers, but not without breaking the chain.
+- Failures are **logged, never silent, never fatal**. The `try/catch` around every call now writes the action type, actor and error to the PHP error log. An audit failure still must never break the workflow it's auditing — but it must never be invisible either.
+- Entries raised **inside an open transaction are queued**, not written. The audit connection autocommits, so an entry written mid-transaction survives a rollback — which is how you get an audit record of a mint that never happened. `gjc_audit_commit()` releases the queue as-is; `gjc_audit_rollback()` releases it marked `failure`; a shutdown handler flushes anything left as `unconfirmed`.
+
+Payloads are redacted on write: any key matching `password|pass|pwd|pin|otp|token|secret|remember|api_key` is replaced with `[REDACTED]` unless the value is flag-shaped (a boolean, or 0/1 — `force_password_change: 1` carries no secret and redacting it would throw away the entry's only signal). Payloads over 16 KB are truncated with a marker rather than overflowing the column and losing the entry.
+
+Schema changes are the exclusive job of `database/migrations/audit_hardening.php`, which runs as root from the CLI. Nothing in the request path issues DDL any more — `gjc_ensure_audit_table()` is a cached read-only check that shouts into the error log if the migration hasn't been run.
+
+The admin's Audit Log page is a read-only viewer over this table, restricted to the **super-admin** sub-role: it records what every other administrator did, and its payloads carry student and guardian personal details.
 
 ### 2.5 `mailer.php` + `mail_worker.php` — asynchronous email
 
 All email goes through `gjc_queue_email()`: the message is written as a JSON file into `storage/mail_spool/` (~1 ms) and a detached background PHP worker is spawned to actually send it via Gmail SMTP. The worker holds a lock file (single instance), reuses **one** SMTP connection for a whole batch, retries failures 3 times 15 seconds apart, parks permanent failures in `failed/`, and logs to `mail.log`. If the spool can't be written, the code falls back to a synchronous send so no email is lost. This is why Submit/Award/Reject respond instantly instead of hanging 2–5 seconds on the SMTP handshake.
+
+The Gmail address and its App Password come from the gitignored `connection/mail_config.php` (template: `mail_config.example.php`), or from the `MAIL_USER` / `MAIL_PASS` environment variables. If neither is set, `gjc_mailer()` throws before the worker claims any spool file, so queued emails wait in `storage/mail_spool/` and go out once the credentials are added, rather than using up their retries on login failures.
 
 ---
 
@@ -112,7 +124,7 @@ The **circulation widget** (`includes/circulation_widget.php`), embedded in the 
 - File uploads validated three ways: size cap (5 MB), extension whitelist, and a **server-side MIME sniff** via `finfo` (a renamed `.exe` fails the sniff).
 - `admin/doc.php` — a document proxy so uploaded files are never linked directly: it requires a finance session, strips traversal (`..`), forces the path to resolve inside `uploads/` via `realpath`, and serves with safe headers (images get wrapped in a fit-to-screen HTML shell for the iframe viewers).
 
-*Honest caveats a reviewer would flag:* `gjc_e()` is named like an HTML escaper but currently just casts to string (output escaping relies on `htmlspecialchars` where used explicitly); the legacy plaintext-password fallback in login should eventually be removed; and DB/SMTP credentials are hardcoded in `pdo.php`/`mailer.php` rather than environment variables.
+*Honest caveats a reviewer would flag:* `gjc_e()` is named like an HTML escaper but currently just casts to string (output escaping relies on `htmlspecialchars` where used explicitly); the legacy plaintext-password fallback in login should eventually be removed; and the database credentials are still hardcoded in `pdo.php` rather than read from a gitignored config file or environment variables, the way the audit and SMTP credentials now are.
 
 ---
 

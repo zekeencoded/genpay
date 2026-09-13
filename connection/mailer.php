@@ -24,18 +24,53 @@ require_once __DIR__ . '/../PHPMailer-master/src/Exception.php';
 require_once __DIR__ . '/../PHPMailer-master/src/PHPMailer.php';
 require_once __DIR__ . '/../PHPMailer-master/src/SMTP.php';
 
+/**
+ * SMTP credentials, in precedence order: the MAIL_USER / MAIL_PASS environment
+ * variables, then connection/mail_config.php (gitignored).
+ *
+ * Throws when neither supplies them. The worker calls gjc_mailer() before it
+ * claims any spool file, so a missing config leaves queued emails in place to
+ * be sent once it is fixed, instead of burning their retries on auth failures.
+ *
+ * @return array{user:string,pass:string}
+ */
+function gjc_mail_credentials(): array
+{
+    $file = [];
+    $path = __DIR__ . '/mail_config.php';
+    if (is_file($path)) {
+        $loaded = require $path;
+        if (is_array($loaded)) {
+            $file = $loaded;
+        }
+    }
+
+    $user = getenv('MAIL_USER') ?: (string) ($file['user'] ?? '');
+    $pass = getenv('MAIL_PASS') ?: (string) ($file['pass'] ?? '');
+
+    if ($user === '' || $pass === '' || $pass === 'REPLACE_WITH_THE_APP_PASSWORD') {
+        $msg = 'no SMTP credentials — copy connection/mail_config.example.php to connection/mail_config.php';
+        error_log('[mailer] ' . $msg);
+        throw new RuntimeException($msg);
+    }
+
+    return ['user' => $user, 'pass' => $pass];
+}
+
 function gjc_mailer(): PHPMailer
 {
+    $creds = gjc_mail_credentials();
+
     $mail = new PHPMailer(true);
     $mail->isSMTP();
     $mail->Host       = 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = 'daitodump@gmail.com';
-    $mail->Password   = 'ogfj biau oeyr ntab';
+    $mail->Username   = $creds['user'];
+    $mail->Password   = $creds['pass'];
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port       = 587;
     $mail->Timeout    = 10;
-    $mail->setFrom('daitodump@gmail.com', 'GenPay');
+    $mail->setFrom($creds['user'], 'GenPay');
     $mail->isHTML(true);
     $mail->CharSet = 'UTF-8';
     return $mail;

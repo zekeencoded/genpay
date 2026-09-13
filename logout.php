@@ -14,7 +14,9 @@ if ($logoutUserId > 0) {
         'LOGOUT',
         'users',
         ['session' => 'active'],
-        ['session' => 'destroyed']
+        ['session' => 'destroyed'],
+        null,
+        ['target_id' => $logoutUserId]
     );
 }
 

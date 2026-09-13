@@ -187,7 +187,17 @@ The school bans certain products (energy drinks, etc.). Merchants physically can
 
 - **Leases:** every awarded stall's lease with monthly rent, next due date, and recorded rent payments per month.
 - **Settings:** the default meeting location and the **holiday calendar** — dates added here are automatically skipped by the meeting auto-scheduler.
-- **Audit Log:** the tamper-evident record of every significant action (logins, transactions, product-ban hits, account creations) with who, when, from which IP, and the before/after values.
+- **Audit Log:** *(super-admin only)* the record of every significant action — logins and refused logins, transactions, minting attempts, product-ban hits, account changes, document views and data exports — with who did it, when, from which IP and endpoint, the outcome (success, failure, denied, unconfirmed), the record affected, and the before/after values.
+
+  **What the log actually guarantees.** Being precise about this matters, because an audit trail is only worth what its weakest guarantee is worth:
+
+  - **Append-only.** Database triggers reject any `UPDATE` or `DELETE` on the audit table, and the application writes through a dedicated database account (`gjc_audit_writer`) that holds only `INSERT` and `SELECT` on that one table. The application cannot rewrite its own history even if it is compromised.
+  - **Tamper-evident, not tamper-proof.** Each entry is hashed together with the hash of the entry before it. Editing an entry, or removing one from the middle, breaks the chain, and **Verify chain** on the Audit Log page finds the first entry that no longer adds up. This *detects* interference after the fact; it does not *prevent* someone with direct database-administrator access from making it. A determined DBA can still drop the triggers — they cannot do so without leaving the chain broken.
+  - **Entries written before this protection existed are marked `legacy (unchained)`.** They are unverifiable rather than untrustworthy: the chain simply did not exist when they were written.
+  - **Best-effort, never blocking.** A failure to write an audit entry is logged to the PHP error log and never interrupts the action being audited. If audit logging is misconfigured, a red banner appears at the top of the Audit Log page.
+  - **Credentials are never recorded.** Passwords, hashes, PINs, OTPs, session and remember-me tokens and API keys are stripped from every payload before it is stored.
+
+  **Retention.** Audit entries are **kept indefinitely — there is no purge, archive or cleanup job.** The table grows without bound and nothing trims it. If a retention policy is ever adopted, deleting entries will require dropping the append-only triggers, which will itself break the hash chain from that point backwards — so decide the policy deliberately rather than by running a delete.
 
 > 📷 **[SCREENSHOT 19]** *Suggested caption: Lease and rent-payment tracking.*
 > **Capture:** The Leases page with an active lease row expanded or its payments visible.

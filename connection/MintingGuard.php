@@ -16,6 +16,46 @@ class MintingGuard
     {
         $this->engine = new CirculationEngine($db);
     }
+
+    /**
+     * Record one minting attempt, allowed or refused.
+     *
+     * Every refusal in this class used to be a bare exception: a wrong Mint PIN
+     * reached error_log and nothing else, and a non-super-admin hitting the
+     * ceiling left no trace at all. Creating GenCoin is the most sensitive thing
+     * the system can do, so the attempts matter as much as the successes.
+     *
+     * $detail never carries the PIN, or anything derived from it.
+     */
+    private function logMintAttempt(
+        int $userId,
+        string $outcome,
+        string $reason,
+        array $detail = []
+    ): void {
+        if (!function_exists('logAudit')) {
+            return;
+        }
+
+        logAudit(
+            $this->db,
+            $userId,
+            $userId > 0 ? gjc_audit_role_from_user($this->db, $userId) : '',
+            'MINT_ATTEMPT',
+            'system_settings',
+            null,
+            $detail + [
+                'soft_limit' => self::SOFT_LIMIT,
+                'hard_limit' => self::HARD_LIMIT,
+            ],
+            null,
+            [
+                'target_id' => $userId,
+                'outcome'   => $outcome,
+                'reason'    => $reason,
+            ]
+        );
+    }
     
     public function attemptMint(
         int $superAdminId,
@@ -36,6 +76,15 @@ class MintingGuard
         $projectedTotal  = $mintedSoFar + $amount;
 
         if ($projectedTotal > self::HARD_LIMIT) {
+            $this->logMintAttempt($superAdminId, 'denied',
+                'Hard monthly minting ceiling would be exceeded.',
+                [
+                    'event'             => 'hard_limit_exceeded',
+                    'requested_amount'  => $amount,
+                    'minted_this_month' => $mintedSoFar,
+                    'projected_total'   => $projectedTotal,
+                    'justification'     => $reason,
+                ]);
             throw new RuntimeException(sprintf(
                 'HARD_LIMIT_EXCEEDED: Monthly minting of Php %s would exceed the absolute ceiling ' .
                 'of Php %s/month (already minted Php %s this month). ' .
@@ -52,6 +101,18 @@ class MintingGuard
         }
 
         $result = $this->engine->increaseCirculationCap($amount, $superAdminId, $reason);
+
+        $this->logMintAttempt($superAdminId, 'success',
+            $reason,
+            [
+                'event'               => 'minted',
+                'amount'              => $amount,
+                'minted_this_month'   => $projectedTotal,
+                'soft_limit_exceeded' => $softLimitExceeded,
+                'reference'           => $result['reference'] ?? null,
+                'old_cap'             => $result['old_cap'] ?? null,
+                'new_cap'             => $result['new_cap'] ?? null,
+            ]);
 
         return array_merge($result, [
             'success'               => true,
@@ -132,6 +193,13 @@ class MintingGuard
         $stmt->execute([$userId]);
         $subRole = $stmt->fetchColumn();
         if ($subRole !== 'super_admin') {
+            $this->logMintAttempt($userId, 'denied',
+                'Minting attempted without the super-admin sub-role.',
+                [
+                    'event'           => 'access_denied',
+                    'actual_sub_role' => is_string($subRole) ? $subRole : null,
+                    'required'        => 'super_admin',
+                ]);
             throw new RuntimeException('ACCESS_DENIED: Only Super-Admins can mint points.');
         }
     }
@@ -161,6 +229,13 @@ class MintingGuard
     private function verifyMintPin(int $adminId, ?string $pin, float $minted, float $requested): void
     {
         if ($pin === null || trim($pin) === '') {
+            $this->logMintAttempt($adminId, 'denied',
+                'Soft monthly limit crossed and no Mint PIN was supplied.',
+                [
+                    'event'             => 'pin_required',
+                    'requested_amount'  => $requested,
+                    'minted_this_month' => $minted,
+                ]);
             throw new RuntimeException(sprintf(
                 'PIN_REQUIRED: Monthly minting has reached Php %s. ' .
                 'Your requested Php %s would exceed the soft limit of Php %s/month. ' .
@@ -176,6 +251,13 @@ class MintingGuard
         $hash = $stmt->fetchColumn();
 
         if (!$hash) {
+            $this->logMintAttempt($adminId, 'denied',
+                'No Mint PIN is configured on this account.',
+                [
+                    'event'             => 'no_mint_pin_set',
+                    'requested_amount'  => $requested,
+                    'minted_this_month' => $minted,
+                ]);
             throw new RuntimeException(
                 'NO_MINT_PIN_SET: You have not configured a Mint PIN yet. ' .
                 'Set one in Super-Admin Settings before minting above the monthly limit.'
@@ -183,7 +265,16 @@ class MintingGuard
         }
 
         if (!password_verify($pin, $hash)) {
-            
+            // Was error_log only, which meant a repeated wrong-PIN attack on the
+            // money supply was invisible to anyone reading the audit trail.
+            // The PIN itself is never recorded — only that one was wrong.
+            $this->logMintAttempt($adminId, 'failure',
+                'Incorrect Mint PIN.',
+                [
+                    'event'             => 'mint_pin_invalid',
+                    'requested_amount'  => $requested,
+                    'minted_this_month' => $minted,
+                ]);
             error_log("[MintingGuard] Failed PIN attempt by admin #{$adminId} at " . date('Y-m-d H:i:s'));
             throw new RuntimeException('MINT_PIN_INVALID: The Mint PIN you entered is incorrect.');
         }

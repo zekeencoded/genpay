@@ -70,14 +70,10 @@ function stall_app_fetch(PDO $db, int $appId): ?array
 /** True when the payment section is fully recorded for an application row. */
 function stall_app_payment_complete(array $app): bool
 {
-    $method = (string) ($app['payment_method'] ?? '');
     return (float) ($app['deposit_amount'] ?? 0) > 0
         && (float) ($app['advance_amount'] ?? 0) > 0
         && !empty($app['rental_start_date'])
-        && in_array((int) ($app['payment_schedule_day'] ?? 0), [15, 30], true)
-        && in_array($method, ['cash', 'gcash', 'maya'], true)
-        // E-wallet payments must carry the transaction reference number.
-        && ($method === 'cash' || trim((string) ($app['payment_ref_no'] ?? '')) !== '');
+        && in_array((int) ($app['payment_schedule_day'] ?? 0), [15, 30], true);
 }
 
 /** First occurrence of the recurring day (15/30) on or after the start date. */
@@ -149,18 +145,33 @@ try {
                   WHERE id = ?"
             )->execute([$rel, $adminId, $appId]);
 
+            // The signed contract is the document the award is justified by.
+            // Uploading (or silently replacing) one was not recorded anywhere.
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stall_applications',
+                ['id' => $appId, 'contract_file' => $app['contract_file'] ?: null],
+                [
+                    'id'            => $appId,
+                    'event'         => empty($app['contract_file']) ? 'contract_uploaded' : 'contract_replaced',
+                    'contract_file' => $rel,
+                    'uploaded_by'   => $adminId,
+                ],
+                $app['stall_id'] ?? null,
+                ['target_id' => $appId]
+            );
+
             stall_app_json(['success' => true, 'message' => 'Signed contract uploaded.', 'contract_file' => $rel]);
         }
 
         // ── Record payment: 2mo deposit + 1mo advance + schedule ─
+        // Always paid in cash at the meeting — there is no method to choose, so
+        // the column is written as 'cash' and no reference number is stored.
         case 'record_payment': {
             $appId       = (int) ($_POST['app_id'] ?? 0);
             $deposit     = round((float) ($_POST['deposit_amount'] ?? 0), 2);
             $advance     = round((float) ($_POST['advance_amount'] ?? 0), 2);
             $startDate   = trim((string) ($_POST['rental_start_date'] ?? ''));
             $scheduleDay = (int) ($_POST['payment_schedule_day'] ?? 0);
-            $method      = strtolower(trim((string) ($_POST['payment_method'] ?? '')));
-            $refNo       = trim((string) ($_POST['payment_ref_no'] ?? ''));
 
             $app = $appId ? stall_app_fetch($db, $appId) : null;
             if (!$app || $app['status'] !== 'pending_verification') {
@@ -176,24 +187,36 @@ try {
             if (!in_array($scheduleDay, [15, 30], true)) {
                 stall_app_json(['success' => false, 'message' => 'Choose a payment schedule — every 15th or every 30th.']);
             }
-            if (!in_array($method, ['cash', 'gcash', 'maya'], true)) {
-                stall_app_json(['success' => false, 'message' => 'Choose a payment method — Cash, GCash, or Maya.']);
-            }
-            if ($method === 'cash') {
-                $refNo = ''; // cash carries no e-wallet reference
-            } elseif ($refNo === '') {
-                $label = $method === 'gcash' ? 'GCash' : 'Maya';
-                stall_app_json(['success' => false, 'message' => "Enter the {$label} reference number for this payment."]);
-            } elseif (!preg_match('/^[A-Za-z0-9 \-]{4,60}$/', $refNo)) {
-                stall_app_json(['success' => false, 'message' => 'The reference number can only contain letters, numbers, spaces, or dashes (4–60 characters).']);
-            }
 
             $db->prepare(
                 "UPDATE stall_applications
                     SET deposit_amount = ?, advance_amount = ?, rental_start_date = ?, payment_schedule_day = ?,
-                        payment_method = ?, payment_ref_no = ?
+                        payment_method = 'cash', payment_ref_no = NULL
                   WHERE id = ?"
-            )->execute([$deposit, $advance, $startDate, $scheduleDay, $method, $refNo !== '' ? $refNo : null, $appId]);
+            )->execute([$deposit, $advance, $startDate, $scheduleDay, $appId]);
+
+            // Money the applicant handed over at the counter. Recording it moved
+            // the application forward and left no audit entry at all.
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'TRANSACTION', 'stall_applications',
+                [
+                    'id'             => $appId,
+                    'deposit_amount' => $app['deposit_amount'] ?? null,
+                    'advance_amount' => $app['advance_amount'] ?? null,
+                ],
+                [
+                    'id'                   => $appId,
+                    'event'                => 'payment_recorded',
+                    'deposit_amount'       => $deposit,
+                    'advance_amount'       => $advance,
+                    'rental_start_date'    => $startDate,
+                    'payment_schedule_day' => $scheduleDay,
+                    'payment_method'       => 'cash',
+                    'recorded_by'          => $adminId,
+                ],
+                $app['stall_id'] ?? null,
+                ['target_id' => $appId]
+            );
 
             stall_app_json(['success' => true, 'message' => 'Payment recorded.']);
         }
@@ -235,7 +258,13 @@ try {
 
             $db->beginTransaction();
             try {
-                $stallStmt = $db->prepare("SELECT * FROM stalls WHERE stall_id = ? FOR UPDATE");
+                // Named columns, not SELECT * — this row is written to the audit
+                // log as old_value/new_value, and a whole-row dump silently logs
+                // any column added to `stalls` later.
+                $stallStmt = $db->prepare(
+                    "SELECT stall_id, label, status, merchant_id, monthly_rate, pending_expires_at
+                       FROM stalls WHERE stall_id = ? FOR UPDATE"
+                );
                 $stallStmt->execute([$stallId]);
                 $oldStall = $stallStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$oldStall) {
@@ -283,6 +312,7 @@ try {
                 $monthlyRent = (float) ($oldStall['monthly_rate'] ?? 0);
                 $scheduleDay = (int) $app['payment_schedule_day'];
                 $nextDue = stall_app_next_due_date($app['rental_start_date'], $scheduleDay);
+                $newLeaseId = null;
                 if (gjc_table_exists($db, 'merchant_leases')) {
                     $db->prepare(
                         "INSERT INTO merchant_leases
@@ -295,6 +325,9 @@ try {
                         'Payment every ' . $scheduleDay . 'th. 2-month deposit + 1-month advance collected on award.',
                         $adminId,
                     ]);
+                    // Captured so the MERCHANT_ONBOARDING entry below can name the
+                    // lease this award created, not just the user and merchant.
+                    $newLeaseId = (int) $db->lastInsertId();
                 }
 
                 $db->prepare(
@@ -329,7 +362,41 @@ try {
                 stall_app_json(['success' => false, 'message' => $msg]);
             }
 
-            logAudit($db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stalls', $oldStall, $newStall, $stallId);
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stalls',
+                $oldStall, $newStall, $stallId,
+                ['target_id' => $stallId, 'reason' => 'Stall awarded from application #' . $appId . '.']
+            );
+
+            // The award also creates a user account, a merchant business row, a
+            // wallet and a lease. That is an account coming into existence, not a
+            // stall changing status, and none of it was logged — MERCHANT_ONBOARDING
+            // existed in the enum for exactly this and had no callers anywhere.
+            // Shares this request's correlation_id with the STALL_UPDATE above, so
+            // the two read back as one action.
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'MERCHANT_ONBOARDING', 'users',
+                null,
+                [
+                    'event'                  => 'awarded',
+                    'application_id'         => $appId,
+                    'new_user_id'            => $newUserId,
+                    'merchant_id'            => $newMerchantId,
+                    'stall_id'               => $stallId,
+                    'business_name'          => $app['business_name'] ?? null,
+                    'proprietor_name'        => $app['proprietor_name'] ?? null,
+                    'email'                  => $app['email'] ?? null,
+                    'monthly_rent'           => $monthlyRent ?? null,
+                    'lease_id'               => $newLeaseId ?? null,
+                    'roleID'                 => 2,
+                    'forced_password_change' => true,
+                ],
+                $stallId,
+                [
+                    'target_id' => $newUserId,
+                    'reason'    => 'Merchant account created by award of stall ' . $stallId . '.',
+                ]
+            );
 
             $body = '
                 <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f0fdf6;padding:28px;border-radius:14px">
@@ -382,6 +449,20 @@ try {
                     SET status = 'rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW()
                   WHERE id = ?"
             )->execute([$reason, $adminId, $appId]);
+
+            // The rejection reason was already required, shown to the applicant
+            // and emailed to them — but never written to the audit trail.
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stall_applications',
+                ['id' => $appId, 'status' => 'pending_verification'],
+                [
+                    'id'          => $appId,
+                    'status'      => 'rejected',
+                    'reviewed_by' => $adminId,
+                ],
+                $app['stall_id'] ?? null,
+                ['target_id' => $appId, 'outcome' => 'success', 'reason' => $reason]
+            );
 
             gjc_send_stall_application_termination_email(
                 $app,
@@ -494,7 +575,7 @@ try {
                 'id' => $appId, 'meetup_scheduled_at' => $app['meetup_scheduled_at'],
             ], [
                 'id' => $appId, 'meetup_scheduled_at' => $newScheduledAt,
-            ], $app['stall_id'] ?? null);
+            ], $app['stall_id'] ?? null, ['target_id' => $appId]);
 
             $mail = gjc_send_stall_meeting_reschedule_email(
                 $app['email'],

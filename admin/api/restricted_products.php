@@ -68,7 +68,9 @@ try {
                     'match_type' => $matchType,
                     'reason' => $reason,
                     'existing_disabled' => $disabled,
-                ]
+                ],
+                null,
+                ['target_id' => $newProductId, 'reason' => $reason]
             );
 
             $msg = $disabled > 0
@@ -101,7 +103,9 @@ try {
                 'PRODUCT_RESTRICTION',
                 'restricted_products',
                 $prevActive === false ? null : ['id' => $id, 'is_active' => (int) $prevActive],
-                ['event' => 'status_changed', 'id' => $id, 'is_active' => $isActive]
+                ['event' => 'status_changed', 'id' => $id, 'is_active' => $isActive],
+                null,
+                ['target_id' => $id]
             );
 
             echo json_encode(['success' => true, 'message' => 'Status updated.']);
@@ -121,7 +125,10 @@ try {
             $db->prepare("DELETE FROM restricted_products WHERE id = ?")->execute([$id]);
 
             logAudit($db, $adminId, gjc_current_role(), 'PRODUCT_RESTRICTION', 'restricted_products',
-                ['id' => $id, 'product_name' => $prevName], ['event' => 'deleted', 'id' => $id]);
+                ['id' => $id, 'product_name' => $prevName], ['event' => 'deleted', 'id' => $id],
+                null,
+                ['target_id' => $id]
+);
 
             echo json_encode(['success' => true, 'message' => 'Restriction removed.']);
             break;
@@ -146,7 +153,9 @@ try {
                 $db, $adminId, gjc_current_role(),
                 'PRODUCT_RESTRICTION', 'users',
                 ['userID' => $userId, 'restricted_suspended_until' => $until],
-                ['event' => 'suspension_lifted', 'merchant_user_id' => $userId, 'lifted_by' => $adminId]
+                ['event' => 'suspension_lifted', 'merchant_user_id' => $userId, 'lifted_by' => $adminId],
+                null,
+                ['target_id' => $userId]
             );
 
             gjc_notify(

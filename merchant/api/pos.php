@@ -408,8 +408,17 @@ try {
 
         $table = $source === 'cart_pending' ? 'cart_orders' : 'merchant_qr_orders';
 
+        // Named columns, not SELECT *. merchant_qr_orders.token is a live payment
+        // authorisation, and the whole row used to be handed to logAudit() — which
+        // wrote the token into the audit log in cleartext for any finance account
+        // to read. Both tables carry these seven; only the human-facing reference
+        // differs between them.
+        $auditColumns = $table === 'cart_orders'
+            ? 'id, reference_no AS reference, merchant_user_id, merchant_wallet_id, amount, status, description, created_at'
+            : 'id, short_code AS reference, merchant_user_id, merchant_wallet_id, amount, status, description, created_at';
+
         $own = $db->prepare(
-            "SELECT * FROM {$table} WHERE id = ? AND merchant_user_id = ? AND status = 'pending'"
+            "SELECT {$auditColumns} FROM {$table} WHERE id = ? AND merchant_user_id = ? AND status = 'pending'"
         );
         $own->execute([$orderId, $ownerMerchId]);
         $order = $own->fetch(PDO::FETCH_ASSOC);
@@ -419,7 +428,17 @@ try {
         }
 
         $db->prepare("UPDATE {$table} SET status = 'voided' WHERE id = ?")->execute([$orderId]);
-        logAudit($db, $merchantUserId, gjc_current_role(), 'TRANSACTION', $table, $order, ['status' => 'voided']);
+        logAudit(
+            $db,
+            $merchantUserId,
+            gjc_current_role(),
+            'TRANSACTION',
+            $table,
+            $order,
+            ['status' => 'voided'],
+            null,
+            ['target_id' => $orderId]
+        );
 
         echo json_encode(['success' => true, 'message' => 'Order voided.']);
         exit;
@@ -601,7 +620,7 @@ try {
                 $merchantUserId,
                 gjc_current_role(),
                 'TRANSACTION',
-                'e_wallet_transactions',
+                'transactions',
                 null,
                 [
                     'reference_no' => $refNo,
@@ -611,7 +630,9 @@ try {
                     'merchant_wallet_id' => $merchantWallet['id'],
                     'items' => $items,
                     'status' => 'completed',
-                ]
+                ],
+                null,
+                ['target_id' => $refNo]
             );
 
             gjc_notify_wallet(

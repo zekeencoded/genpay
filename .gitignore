@@ -31,3 +31,12 @@ screenshots/
 # of live data is not — it contains every user row.
 /database/ewallet_*.sql
 *.dump.sql
+
+# Audit-trail database credentials. connection/audit_config.example.php is the
+# tracked template; the real file holds the gjc_audit_writer password and is
+# written by database/migrations/audit_hardening.php at install time.
+/connection/audit_config.php
+
+# Gmail SMTP credentials. connection/mail_config.example.php is the tracked
+# template; the real file holds the Google App Password.
+/connection/mail_config.php

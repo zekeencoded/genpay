@@ -702,7 +702,7 @@ class MerchantTenantDirectory
             : 'a.user_id = ?';
         $params = $actorSql === 'a.user_id = ?' ? [$merchantUserId] : [$merchantUserId, $merchantUserId];
 
-        $whereSql = "{$actorSql} AND a.action_type IN ('MENU_MUTATION', 'USER_ACCOUNT', 'PRODUCT_RESTRICTION')";
+        $whereSql = "{$actorSql} AND a.action_type IN ('MENU_MUTATION', 'USER_ACCOUNT', 'MERCHANT_PROFILE_UPDATE', 'PRODUCT_RESTRICTION')";
 
         $countStmt = $this->db->prepare("SELECT COUNT(*) FROM systemic_audit_trail a WHERE {$whereSql}");
         $countStmt->execute($params);

@@ -241,3 +241,33 @@
     .uv-item { flex-wrap: wrap; row-gap: 6px; }
     .uv-item-qty { flex: 0 0 34px; }
 }
+
+/* ── Audit entry: before/after diff + outcome and legacy badges ──────────── */
+
+.uv-diff tr.uv-diff-changed th, .uv-diff tr.uv-diff-changed td { background:var(--gp-warning-bg); }
+.uv-diff tr.uv-diff-changed th { border-left:3px solid var(--gp-warning); }
+.uv-diff tr.uv-diff-added th, .uv-diff tr.uv-diff-added td { background:var(--gp-success-bg); }
+.uv-diff tr.uv-diff-added th { border-left:3px solid var(--gp-success); }
+.uv-diff tr.uv-diff-removed th, .uv-diff tr.uv-diff-removed td { background:var(--gp-danger-bg); }
+.uv-diff tr.uv-diff-removed th { border-left:3px solid var(--gp-danger); }
+
+.audit-outcome { display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:800; text-transform:capitalize; }
+.audit-outcome.is-success { background:var(--gp-success-bg); color:var(--gp-success); }
+.audit-outcome.is-failure { background:var(--gp-danger-bg); color:var(--gp-danger); }
+.audit-outcome.is-denied { background:var(--gp-warning-bg); color:var(--gp-warning); }
+.audit-outcome.is-unconfirmed { background:var(--gp-info-bg); color:var(--gp-info); }
+
+.audit-legacy { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--gp-cream); color:var(--gp-muted); border:1px dashed var(--gp-line); font-size:10px; font-weight:700; white-space:nowrap; }
+
+/* Related entries: the other rows one request wrote, listed like receipt lines. */
+.uv-related-list { margin-top: 18px; border-top: 1px solid var(--gp-line); }
+.uv-related-list .uv-item { align-items: center; }
+.uv-related-list .uv-item-qty { flex-basis: 52px; }
+.uv-related-side { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
+.uv-related-link { font-size: 13px; font-weight: 800; color: var(--gp-green-700); text-decoration: none; white-space: nowrap; }
+.uv-related-link:hover { color: var(--gp-green-950); text-decoration: underline; }
+.uv-related-actions { margin-top: 18px; }
+
+@media (max-width: 560px) {
+    .uv-related-side { width: 100%; padding-left: 66px; }
+}

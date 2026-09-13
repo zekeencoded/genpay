@@ -43,8 +43,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             gjc_current_role(),
             'PASSWORD_CHANGE',
             'users',
-            ['password' => 'changed_by_student_profile'],
-            ['password' => 'changed_by_student_profile']
+            // There is no before-state worth recording for a password: the old
+            // hash must never go in the log, and the previous value of a secret
+            // is not something an auditor should be able to read. This used to
+            // write the same placeholder string to both sides, which carried no
+            // information at all.
+            null,
+            ['password_changed' => true, 'changed_via' => 'student_profile'],
+            null,
+            ['target_id' => (int) $currentUser['id']]
         );
         header('Location: ' . STUDENT_URL . '/profile.php?password_updated=1');
         exit;

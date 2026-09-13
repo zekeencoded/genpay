@@ -10,6 +10,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
+require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['finance', 'student', 'parent']);
 $docRole = gjc_current_role();
@@ -78,6 +79,27 @@ if (strpos($absPath, $baseUploads . DIRECTORY_SEPARATOR) !== 0) {
     http_response_code(403);
     exit('Access denied.');
 }
+
+// Every check has passed and the file exists, so this is a document actually
+// being read. Uploads here are permits, clearances and signed fee-waiver
+// evidence — real people's documents — and nothing recorded who opened them.
+// The reference is logged, never the contents.
+logAudit(
+    $db,
+    gjc_user_id(),
+    $docRole,
+    'DOCUMENT_VIEW',
+    'uploads',
+    null,
+    [
+        'file'       => $relPath,
+        'bytes'      => filesize($absPath) ?: null,
+        'via'        => 'admin/doc.php',
+        'viewer_role' => $docRole,
+    ],
+    null,
+    ['target_id' => basename($absPath)]
+);
 
 // Detect MIME
 $ext  = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));

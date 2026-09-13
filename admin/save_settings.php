@@ -104,7 +104,9 @@ try {
             'SYSTEM_SETTINGS_CHANGE',
             'app_settings',
             array_map(static fn(array $c): float => $c['from'], $changed),
-            array_map(static fn(array $c): float => $c['to'], $changed)
+            array_map(static fn(array $c): float => $c['to'], $changed),
+            null,
+            ['target_id' => null]
         );
 
         settings_redirect('success', count($changed) === 1
@@ -198,7 +200,9 @@ try {
             'SYSTEM_SETTINGS_CHANGE',
             'app_settings',
             array_map(static fn(array $c): float => $c['from'], $changed),
-            array_map(static fn(array $c): float => $c['to'], $changed)
+            array_map(static fn(array $c): float => $c['to'], $changed),
+            null,
+            ['target_id' => null]
         );
 
         settings_redirect('success', count($changed) === 1
@@ -228,7 +232,7 @@ try {
         $guard->setMintPin($userId, $newPin, $currentPassword);
 
         // Never log the PIN or the password — only that a change happened.
-        logAudit($db, $userId, 'finance', 'MINT_PIN_SET', 'users', null, ['user_id' => $userId]);
+        logAudit($db, $userId, 'finance', 'MINT_PIN_SET', 'users', null, ['user_id' => $userId], null, ['target_id' => $userId]);
 
         settings_redirect('success', 'Mint PIN saved. You can now authorize mints above the monthly soft limit.', 'mintpin');
     }
