@@ -146,9 +146,11 @@ $currentPage = 'users';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/users.css?v=11">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
@@ -172,7 +174,7 @@ $currentPage = 'users';
                 </div>
 
                 <div class="admin-user">
-                    <span>Admin</span>
+                    <span><?= htmlspecialchars(gjc_current_user($db)['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
                     <div class="avatar">
                         <i class="fa-solid fa-user-tie"></i>
                     </div>
@@ -225,13 +227,14 @@ $currentPage = 'users';
                 </form>
 
                 <div class="table-responsive">
-                    <table class="table users-table align-middle js-datatable" id="usersTable" data-page-length="10" data-hide-filter="true">
+                    <table class="table users-table align-middle js-datatable" id="usersTable" data-page-length="10" data-hide-filter="true"
+                           data-empty-message="No accounts match these filters. Clear the search, role and status above to see everyone.">
                         <thead>
                             <tr>
-                                <th>Name</th>
+                                <th data-card="title">Name</th>
                                 <th>Role</th>
-                                <th>School ID</th>
-                                <th>Email</th>
+                                <th data-card="hide">School ID</th>
+                                <th data-card="hide">Email</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -243,24 +246,24 @@ $currentPage = 'users';
                                 <td>
                                     <div class="user-cell">
                                         <div class="user-avatar">
-                                            <?php echo strtoupper(substr($u['name'], 0, 1)); ?>
+                                            <?php echo htmlspecialchars(strtoupper(substr((string) $u['name'], 0, 1)), ENT_QUOTES, 'UTF-8'); ?>
                                         </div>
                                         <div>
-                                            <strong><?php echo $u['name']; ?></strong>
-                                            <small><?php echo $u['role']; ?> Account</small>
+                                            <strong><?php echo htmlspecialchars((string) $u['name'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                            <small><?php echo htmlspecialchars((string) $u['role'], ENT_QUOTES, 'UTF-8'); ?> Account</small>
                                         </div>
                                     </div>
                                 </td>
 
                                 <td>
                                     <span class="role-pill">
-                                        <?php echo $u['role']; ?>
+                                        <?php echo htmlspecialchars((string) $u['role'], ENT_QUOTES, 'UTF-8'); ?>
                                     </span>
                                 </td>
 
-                                <td><?php echo $u['school_id']; ?></td>
+                                <td><?php echo htmlspecialchars((string) $u['school_id'], ENT_QUOTES, 'UTF-8'); ?></td>
 
-                                <td><?php echo $u['email']; ?></td>
+                                <td><?php echo htmlspecialchars((string) $u['email'], ENT_QUOTES, 'UTF-8'); ?></td>
 
                                 <td>
                                     <?php
@@ -456,6 +459,8 @@ $currentPage = 'users';
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
+    <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 
     <script>
     function toggleSidebar() {
@@ -508,15 +513,13 @@ $currentPage = 'users';
 
         const liftBanBtn = e.target.closest(".js-lift-ban");
         if (liftBanBtn) {
-            liftLockout(liftBanBtn, "lift_ban",
-                "Lift the ban on NAME? They will be able to sign in and transact again immediately.");
+            liftLockout(liftBanBtn, "lift_ban", "Lift this ban?");
             return;
         }
 
         const liftBtn = e.target.closest(".js-lift-suspension");
         if (liftBtn) {
-            liftLockout(liftBtn, "lift_suspension",
-                "Lift the suspension on NAME? They will be able to sign in and transact again immediately.");
+            liftLockout(liftBtn, "lift_suspension", "Lift this suspension?");
         }
     });
 
@@ -576,26 +579,29 @@ $currentPage = 'users';
     // Both lifts are the same round trip against the same endpoint — only the
     // action name and the confirm wording differ, so they share one function
     // rather than two copies that could drift apart.
-    async function liftLockout(btn, action, promptTemplate) {
-        if (!confirm(promptTemplate.replace("NAME", btn.dataset.userName))) {
+    async function liftLockout(btn, action, title) {
+        const ok = await gpConfirm({
+            title: title,
+            body: 'They will be able to sign in and transact again immediately.',
+            detail: [['Account', btn.dataset.userName]],
+            confirmLabel: 'Lift now',
+        });
+        if (!ok) return;
+
+        if (!gpBusy(btn, 'Lifting…')) return;
+
+        const data = await gpFetchJson(USERS_API, {
+            action: action,
+            user_id: btn.dataset.userId,
+        });
+
+        if (data.success) {
+            gpToast(action === 'lift_ban' ? 'Ban lifted.' : 'Suspension lifted.');
+            setTimeout(() => location.reload(), 900);
             return;
         }
-        btn.disabled = true;
-        const body = new FormData();
-        body.append("action", action);
-        body.append("user_id", btn.dataset.userId);
-        try {
-            const resp = await fetch(USERS_API, { method: "POST", body: body });
-            const data = await resp.json();
-            if (data.success) {
-                location.reload();
-                return;
-            }
-            alert(data.message);
-        } catch (err) {
-            alert("Could not reach the server. Try again.");
-        }
-        btn.disabled = false;
+        gpToast(data.message || 'The account could not be updated.', false);
+        gpBusyDone(btn);
     }
     </script>
 

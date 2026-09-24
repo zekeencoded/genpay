@@ -84,5 +84,5 @@ try {
         'transactions' => $transactions,
     ]);
 } catch (\Throwable $e) {
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/wallet_summary', 'Server error. Please try again.')]);
 }

@@ -93,6 +93,7 @@ if ($txnId !== null && ($walletIds || $parentWalletId > 0) && gjc_table_exists($
         }
 
         $record = [
+            'type_raw' => $type,
             'icon' => $meta['icon'],
             'incoming' => $meta['incoming'],
             'type_label' => $meta['label'],
@@ -115,6 +116,11 @@ if ($txnId !== null && ($walletIds || $parentWalletId > 0) && gjc_table_exists($
 if (!$record) {
     http_response_code(404);
 }
+
+// Maintenance fee charged on this payment/transfer (tuition-only, so a line on
+// the record rather than part of the wallet amount). The transaction itself was
+// already scope-checked above, so its reference is safe to look up.
+$maintFee = $record ? gjc_maintenance_fee_for_reference($db, (string) $record['ref']) : null;
 
 // Local escaper — the shared gjc_e() only casts to string, and this page
 // renders student names, merchant names and free-text notes.
@@ -139,10 +145,10 @@ if ($record) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $record ? 'Activity Details' : 'Content Not Available' ?> | GenPay</title>
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=11">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=20">
 </head>
 
 <body class="gp-theme">
@@ -212,6 +218,10 @@ if ($record) {
                         <div class="uv-field-value"><?= gjc_money($record['amount']) ?> &middot; <?= gjc_gc_amount($record['amount']) ?> GC</div>
                     </div>
                 </div>
+                <?php
+                $ftFee = $maintFee; $ftAmount = $record['amount']; $ftShowAmount = false; $ftMerchant = false;
+                require __DIR__ . '/../includes/partials/detail_fee_fields.php';
+                ?>
                 <div class="uv-field">
                     <div class="uv-field-ic"><i class="fa-regular fa-clock"></i></div>
                     <div>

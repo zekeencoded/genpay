@@ -303,6 +303,7 @@ const AUDIT_ACTION_TYPES = [
 
     // Finance and academic administration
     'FEE_WAIVER_STATUS_CHANGE',
+    'MAINTENANCE_FEE_COLLECTED',
     'SYSTEM_SETTINGS_CHANGE',
     'SCHOOL_YEAR_CREATED',
     'SCHOOL_YEAR_ROLLOVER',

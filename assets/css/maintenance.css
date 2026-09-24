@@ -75,7 +75,7 @@
 .merchant-bypass-form input:focus,
 .merchant-bypass-form textarea:focus,
 .merchant-bypass-form select:focus {
-    border-color: var(--gp-gold);
+    border-color: var(--gp-focus-border);
     box-shadow: var(--gp-focus-ring);
 }
 .merchant-bypass-form select {
@@ -189,6 +189,41 @@
     .maintenance-grid          { grid-template-columns: 1fr; }
     .import-summary-grid       { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .maintenance-form-grid     { grid-template-columns: 1fr; }
+}
+
+/* ── Fee Waiver Import panel (inline, inside the Fee Waiver Credits table section) ── */
+.fwc-import-panel {
+    background: var(--gjc-soft-2);
+    border: 1px solid var(--gp-line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+.fwc-import-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    margin-bottom: 10px;
+}
+.fwc-import-panel-head strong {
+    color: var(--gp-ink);
+    font-size: 13px;
+}
+.fwc-import-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.fwc-import-form input[type="file"] {
+    flex: 1 1 260px;
+    min-width: 200px;
+    border: 1px solid var(--gp-line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 7px 10px;
+    font-size: 13px;
 }
 
 /* ── Prohibited Products ───────────────────────────────────────────── */

@@ -42,7 +42,6 @@ try {
         $fields = [
             'transfer_daily_limit'     => ['Daily transfer limit',            1.00, 1000000.00],
             'transfer_min_amount'      => ['Minimum transfer amount',         0.01, 100000.00],
-            'withdraw_min_amount'      => ['Minimum withdrawal amount',       0.01, 100000.00],
             'topup_max_per_request'    => ['Max top-up per request',          1.00, 1000000.00],
             'wallet_default_spend_cap' => ['Default daily spend cap',         0.00, 1000000.00],
         ];
@@ -118,8 +117,14 @@ try {
     // ── Panel 4: Fee waiver cap ──────────────────────────────────────────
     // Both are plain numeric groups, so they share one validator; the two forms
     // differ only in which keys they submit.
-    if ($action === 'save_merchant_policy' || $action === 'save_fee_waiver') {
+    if (in_array($action, ['save_merchant_policy', 'save_fee_waiver', 'save_maintenance_fee'], true)) {
         $groups = [
+            'save_maintenance_fee' => [
+                'anchor' => 'maintenance',
+                'fields' => [
+                    'maintenance_fee_rate_pct' => ['Maintenance fee rate (%)', 0.00, 10.00, false],
+                ],
+            ],
             'save_merchant_policy' => [
                 'anchor' => 'merchant',
                 'fields' => [
@@ -249,7 +254,8 @@ try {
         'set_mint_pin'          => 'mintpin',
         'save_merchant_policy'  => 'merchant',
         'save_fee_waiver'       => 'waiver',
-        default                 => 'limits',
+        'save_maintenance_fee'  => 'maintenance',
+        default                => 'limits',
     });
 } catch (Throwable $e) {
     error_log('[save_settings.php] ' . $e->getMessage());

@@ -28,6 +28,10 @@ $currentPage = $currentPage ?? '';
             <i class="fa-solid fa-boxes-stacked"></i>
             <span>Inventory Stock</span>
         </a>
+        <a href="<?= MERCHANT_URL ?>/profile.php" class="<?= $currentPage === 'profile' ? 'active' : '' ?>">
+            <i class="fa-solid fa-user"></i>
+            <span>My Profile</span>
+        </a>
     </nav>
 
     <a href="<?= BASE_URL ?>/logout.php" class="sd-logout" onclick="openLogoutModal(event);">

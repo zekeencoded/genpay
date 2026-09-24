@@ -172,5 +172,6 @@ try {
             echo json_encode(['success' => false, 'message' => 'Unknown action.']);
     }
 } catch (\Throwable $e) {
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    error_log('[admin/api/restricted_products.php] ' . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'A server error occurred. Nothing was changed.']);
 }

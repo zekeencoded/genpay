@@ -10,7 +10,7 @@
    clear of the per-page listing skins.
 
    Direction: a record, not an app widget. The hero is a flat forest
-   slab under a gold keyline (no gradient), containers sit at a 4px
+   slab (no gradient, no keyline), containers sit at a 4px
    radius, and inline tags at 2px. Status is the one element allowed
    to carry colour, and it does so as a filing tab.
 
@@ -30,12 +30,11 @@
 }
 .uv-back:hover { color: var(--gp-green-850); }
 /* --- Identity hero: a flat record header, not a floating balance card.
-   One solid forest field under a gold keyline; the drop shadow is pulled
+   One solid forest field; the drop shadow is pulled
    back to a hairline so the slab sits on the page instead of hovering. --- */
 .uv-hero {
     position: relative; overflow: hidden;
     border-radius: var(--gp-radius); background: var(--gp-green-950);
-    border-top: 2px solid var(--gp-gold);
     color: #fff; box-shadow: 0 1px 3px rgba(13, 36, 24, .14);
     padding: 30px 32px; display: flex; align-items: center; gap: 26px;
     flex-wrap: wrap; row-gap: 20px;

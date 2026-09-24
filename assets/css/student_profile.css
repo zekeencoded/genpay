@@ -1,5 +1,5 @@
 /* Shared pf-* form primitives (alerts, fields, buttons, pills, notes) for the
-   sd-* forest-green shell — used by student/profile.php, student/topup_request.php,
+   sd-* forest-green shell — used by student/profile.php,
    and future form pages. Hero styles at the bottom are profile-specific. */
 
 /* ===== ALERTS ===== */
@@ -199,7 +199,7 @@
 .pf-field select:focus,
 .pf-field input:focus {
   outline: none;
-  border-color: var(--sd-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring);
 }
 
@@ -532,4 +532,26 @@
   letter-spacing: .06em !important;
   text-transform: uppercase;
   color: var(--sd-muted);
+}
+
+/* Two-column layout for long profile hubs (merchant staff): keeps the page
+   short on desktop instead of one tall stack. Single column on mobile. */
+.pf-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.pf-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+@media (min-width: 992px) {
+  .pf-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

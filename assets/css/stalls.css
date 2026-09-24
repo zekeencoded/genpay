@@ -1,37 +1,30 @@
-@import url("theme.css?v=12");
+@import url("theme.css?v=14");
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Local token names kept as-is; only the genuine brand-accent tokens now
-   alias the shared gp-* palette. --gold/--gold-light is the confirmed
-   fix for the audit's headline finding — this file's own comment calls
-   it out as "the one gold thing on the page," i.e. the real primary CTA
-   color, previously an independently-invented #d4a017 unrelated to
-   gp-gold or apply.css's own (green) CTA color. The vacant/occupied/
-   pending stall-status system (green-500/400/100, red-*, amber-*, and
-   their paired gradient/border/shadow hex below) is left untouched on
-   purpose — it's a rich, internally self-consistent status visualization
-   in the same spirit as the admin economy widget and merchant Kanban
-   pipeline, not a brand-accent inconsistency. */
+/* Page-local names over the shared gp-* palette. Chrome (navbar, hero,
+   footer) comes from gjc-clear.css + public_shell.css so this page matches
+   index.php; this file only styles the stall directory itself. The
+   vacant/occupied/pending colours are the app's standard status tokens. */
 :root {
-    --green-900: var(--gp-green-950);
+    --green-950: var(--gp-green-950);
     --green-800: var(--gp-green-850);
-    --green-700: var(--gp-success);
-    --green-500: #22c55e;
-    --green-400: #4ade80;
-    --green-100: #dcfce9;
-    --gold:      var(--gp-gold);
-    --gold-light:var(--gp-gold-light);
-    --cream:     var(--gp-cream);
-    --red-500:   #ef4444;
-    --amber-500: #f59e0b;
-    --amber-100: #fef3c7;
-    --gray-200:  #e5e7eb;
-    --gray-600:  #4b5563;
-    --gray-800:  #1f2937;
+    --green-700: var(--gp-green-700);
+    --ok:        var(--gp-success);
+    --ok-bg:     var(--gp-success-bg);
+    --ok-line:   #a8dcbe;
+    --bad:       var(--gp-danger);
+    --bad-bg:    var(--gp-danger-bg);
+    --bad-line:  #f0b8b2;
+    --warn:      var(--gp-warning);
+    --warn-bg:   var(--gp-warning-bg);
+    --warn-line: #ecd29a;
+    --gray-200:  var(--gp-line);
+    --gray-600:  var(--gp-muted);
+    --gray-800:  var(--gp-ink);
     --white:     #ffffff;
-    --radius:    16px;
-    --shadow-lg: 0 20px 60px rgba(0,0,0,.18);
+    --radius:    var(--gp-radius);
+    --shadow-lg: var(--gp-shadow-overlay);
 }
 
 body {
@@ -41,77 +34,20 @@ body {
     min-height: 100vh;
 }
 
-/* ── NAVBAR ── */
-.navbar {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 40px;
-    background: rgba(253,251,246,.92);
-    backdrop-filter: blur(14px);
-    box-shadow: 0 2px 20px rgba(0,0,0,.06);
-}
-.navbar-brand {
-    display: flex; align-items: center; gap: 10px;
-    font-weight: 800; font-size: 20px; color: var(--green-800);
-    text-decoration: none;
-}
-.navbar-brand img { width: 40px; height: 40px; object-fit: contain; }
-.navbar-links { display: flex; align-items: center; gap: 16px; }
-.btn-nav {
-    padding: 9px 22px; border-radius: 50px; font-weight: 700;
-    font-size: 14px; text-decoration: none; transition: all .2s;
-}
-.btn-nav--outline {
-    border: 2px solid var(--green-800); color: var(--green-800);
-    background: transparent;
-}
-.btn-nav--outline:hover { background: var(--green-800); color: #fff; }
-.btn-nav--solid {
-    background: linear-gradient(135deg, var(--green-400), var(--green-500));
-    color: var(--green-900); border: none;
-    box-shadow: 0 4px 15px rgba(34,197,94,.3);
-}
-.btn-nav--solid:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(34,197,94,.4); }
-
-/* ── HERO ── */
+/* ── HERO (colours/photo from gjc-clear.css, type from public_shell.css) ── */
 .hero {
-    margin-top: 72px;
-    padding: 64px 40px 48px;
-    background: linear-gradient(135deg, var(--green-900) 0%, #0a5c2e 60%, #0d7a3e 100%);
-    text-align: center; color: #fff; position: relative; overflow: hidden;
+    padding: 132px 20px 56px;
+    min-height: 360px;
 }
-.hero::before {
-    content: ''; position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 70% 50%, rgba(74,222,128,.12) 0%, transparent 60%);
-}
+.hero-content { max-width: 760px; }
 .hero-tag {
     display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.12);
     border-radius: 50px; padding: 5px 16px; font-size: 13px;
-    font-weight: 600; color: var(--green-400); margin-bottom: 18px;
-    position: relative; z-index: 1;
+    font-weight: 700; color: var(--gp-gold-light); margin-bottom: 18px;
 }
-.hero h1 { font-size: 42px; font-weight: 800; line-height: 1.15; margin-bottom: 14px; position: relative; z-index: 1; }
-.hero h1 span { color: var(--green-400); }
-.hero p { font-size: 16px; color: rgba(255,255,255,.78); max-width: 480px; margin: 0 auto 32px; position: relative; z-index: 1; }
-
-/* The one gold thing on the page: there is exactly one action here. */
-.btn-apply-now {
-    display: inline-flex; align-items: center; gap: 10px;
-    padding: 16px 38px; border-radius: 50px;
-    background: linear-gradient(135deg, var(--gold-light), var(--gold));
-    color: var(--green-900); border: none;
-    font-size: 16px; font-weight: 800; text-decoration: none;
-    box-shadow: 0 8px 28px rgba(212,160,23,.4);
-    transition: transform .2s, box-shadow .2s;
-    position: relative; z-index: 1;
-}
-.btn-apply-now:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 34px rgba(212,160,23,.5);
-    color: var(--green-900);
-}
-.btn-apply-now svg { width: 18px; height: 18px; flex-shrink: 0; }
+.hero h1 { font-size: 44px; margin-bottom: 16px; }
+.hero p  { font-size: 18px; max-width: 560px; margin-bottom: 32px; }
 
 /* ── LEGEND ── */
 .legend {
@@ -127,9 +63,9 @@ body {
 .legend-dot {
     width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
-.legend-dot--vacant  { background: var(--green-500); }
-.legend-dot--occupied { background: var(--red-500); }
-.legend-dot--pending  { background: var(--amber-500); }
+.legend-dot--vacant  { background: var(--ok); }
+.legend-dot--occupied { background: var(--bad); }
+.legend-dot--pending  { background: var(--warn); }
 
 /* ── MAIN CONTENT ── */
 .content {
@@ -172,16 +108,16 @@ body {
 .stall:hover { transform: translateY(-4px); }
 
 .stall--vacant {
-    background: linear-gradient(145deg, #f0fdf6, #dcfce9);
-    border-color: #86efb2;
-    box-shadow: 0 4px 16px rgba(34,197,94,.15);
+    background: var(--ok-bg);
+    border-color: var(--ok-line);
+    box-shadow: var(--gp-shadow-card);
 }
-.stall--vacant:hover { box-shadow: 0 10px 30px rgba(34,197,94,.28); }
+.stall--vacant:hover { box-shadow: var(--gp-shadow-overlay); }
 
 .stall--occupied {
-    background: linear-gradient(145deg, #fff1f2, #fee2e2);
-    border-color: #fca5a5;
-    box-shadow: 0 4px 16px rgba(239,68,68,.12);
+    background: var(--bad-bg);
+    border-color: var(--bad-line);
+    box-shadow: var(--gp-shadow-card);
     cursor: default;
 }
 
@@ -206,18 +142,18 @@ body {
 }
 
 .stall--pending {
-    background: linear-gradient(145deg, #fffbeb, #fef3c7);
-    border-color: #fcd34d;
-    box-shadow: 0 4px 16px rgba(245,158,11,.15);
+    background: var(--warn-bg);
+    border-color: var(--warn-line);
+    box-shadow: var(--gp-shadow-card);
     cursor: default;
 }
 
 .stall-id-badge {
     font-size: 20px; font-weight: 800; line-height: 1;
 }
-.stall--vacant  .stall-id-badge { color: var(--green-700); }
-.stall--occupied .stall-id-badge { color: #b91c1c; }
-.stall--pending  .stall-id-badge { color: #92400e; }
+.stall--vacant  .stall-id-badge { color: var(--ok); }
+.stall--occupied .stall-id-badge { color: var(--bad); }
+.stall--pending  .stall-id-badge { color: var(--warn); }
 
 /* Occupied cards use the merchant logo as the card background; the
    stall ID sits on top inside a circular badge, like a sticker. */
@@ -225,7 +161,7 @@ body {
     width: 48px; height: 48px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     background: rgba(255,255,255,.95);
-    color: #b91c1c; font-size: 17px;
+    color: var(--bad); font-size: 17px;
     border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.25);
 }
 
@@ -233,18 +169,18 @@ body {
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .08em !important; padding: 3px 10px; border-radius: 50px;
 }
-.stall--vacant  .stall-status-badge { background: var(--green-500); color: #fff; }
-.stall--pending  .stall-status-badge { background: var(--amber-500); color: #fff; }
+.stall--vacant  .stall-status-badge { background: var(--ok); color: #fff; }
+.stall--pending  .stall-status-badge { background: var(--warn); color: #fff; }
 
 .stall-name {
-    font-size: 11px; font-weight: 600; color: #374151;
+    font-size: 11px; font-weight: 600; color: var(--gray-800);
     max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .stall--occupied.stall--has-logo .stall-name {
     color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6);
 }
 .stall--occupied:not(.stall--has-logo) .stall-id-badge--circle {
-    background: linear-gradient(135deg, var(--green-800), var(--green-700));
+    background: var(--green-800);
     color: #fff;
 }
 
@@ -254,14 +190,13 @@ body {
 }
 
 .stall-apply-hint {
-    font-size: 11px; font-weight: 600; color: var(--green-700);
-    opacity: .7;
+    font-size: 11px; font-weight: 600; color: var(--ok);
 }
 
 /* ── PEEK MODAL ── */
 .modal-overlay {
     display: none; position: fixed; inset: 0; z-index: 2000;
-    background: rgba(5,46,22,.55); backdrop-filter: blur(6px);
+    background: rgba(6,55,29,.55);
     align-items: center; justify-content: center; padding: 20px;
 }
 .modal-overlay.is-open { display: flex; animation: fadeIn .2s ease; }
@@ -270,7 +205,7 @@ body {
 @keyframes slideUp { from { transform: translateY(28px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .modal-card {
-    background: var(--white); border-radius: 24px;
+    background: var(--white); border-radius: var(--radius);
     width: 100%; max-width: 440px;
     box-shadow: var(--shadow-lg);
     animation: slideUp .25s ease;
@@ -293,8 +228,8 @@ body {
     font-size: 12px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .07em !important;
 }
-.chip--vacant   { background: var(--green-100); color: var(--green-700); }
-.chip--pending  { background: var(--amber-100); color: #92400e; }
+.chip--vacant   { background: var(--ok-bg); color: var(--ok); }
+.chip--pending  { background: var(--warn-bg); color: var(--warn); }
 
 .modal-body { padding: 24px 28px; }
 
@@ -309,39 +244,33 @@ body {
 .spec-value { font-size: 16px; font-weight: 700; color: var(--gray-800); }
 
 .modal-merchant-block {
-    background: var(--green-100); border-radius: 12px;
+    background: var(--ok-bg); border-radius: var(--radius);
     padding: 14px 16px; margin-bottom: 18px;
     display: flex; align-items: center; gap: 12px;
 }
 .modal-merchant-avatar {
     width: 48px; height: 48px; border-radius: 50%;
-    background: var(--green-700); color: #fff;
+    background: var(--green-800); color: #fff;
     display: flex; align-items: center; justify-content: center;
     font-size: 20px; font-weight: 800; flex-shrink: 0;
     object-fit: cover; overflow: hidden;
 }
 .modal-merchant-name { font-weight: 700; font-size: 15px; color: var(--green-800); }
-.modal-merchant-sub  { font-size: 12px; color: var(--green-700); }
+.modal-merchant-sub  { font-size: 12px; color: var(--ok); }
 
 .modal-pending-block {
-    background: var(--amber-100); border-radius: 12px;
+    background: var(--warn-bg); border-radius: var(--radius);
     padding: 14px 16px; margin-bottom: 18px; text-align: center;
 }
-.modal-pending-text { font-size: 13px; font-weight: 600; color: #92400e; }
-.modal-pending-timer { font-size: 22px; font-weight: 800; color: var(--gp-warning); margin-top: 4px; }
-
-/* ── FOOTER ── */
-footer {
-    background: var(--green-900); color: rgba(255,255,255,.7);
-    text-align: center; padding: 24px 20px; font-size: 13px;
-}
+.modal-pending-text { font-size: 13px; font-weight: 600; color: var(--warn); }
+.modal-pending-timer { font-size: 22px; font-weight: 800; color: var(--warn); margin-top: 4px; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 640px) {
     .stall-row { grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .navbar { padding: 12px 20px; }
-    .hero { padding: 48px 20px 32px; }
-    .hero h1 { font-size: 28px; }
+    .hero { padding: 150px 20px 40px; min-height: 0; }
+    .hero h1 { font-size: 30px; }
+    .hero p  { font-size: 16px; }
     .content { padding: 28px 16px 60px; }
 }
 @media (max-width: 420px) {

@@ -42,35 +42,24 @@ function statusLabel(string $status): string
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Available Stalls | GenPay</title>
     <meta name="description" content="Browse available stalls at General de Jesus College. View real-time occupancy and apply online for a stall slot.">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/stalls.css?v=14">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/stalls.css?v=17">
 </head>
 <body>
 
-<!-- NAVBAR -->
-<nav class="navbar">
-    <a href="<?= BASE_URL ?>" class="navbar-brand">
-        <img src="<?= ICONS_URL ?>/gp_logo.png" alt="GenPay Logo">
-        GenPay
-    </a>
-    <div class="navbar-links">
-        <a href="<?= BASE_URL ?>/stalls" class="btn-nav btn-nav--outline">View Stalls</a>
-        <a href="<?= BASE_URL ?>/login.php" class="btn-nav btn-nav--solid">Portal Login</a>
-    </div>
-</nav>
+<?php $publicNavCurrent = 'stalls'; include __DIR__ . '/includes/partials/public_navbar.php'; ?>
 
 <!-- HERO -->
 <div class="hero">
-    <div class="hero-tag">
-        Now Leasing &middot; Live Occupancy
+    <div class="hero-content">
+        <div class="hero-tag">Now Leasing &middot; Live Occupancy</div>
+        <h1>General De Jesus College <span>Stall Directory</span></h1>
+        <p>See what's open below. Apply once and we'll assign your stall during review &mdash; no need to pick one here.</p>
+        <a href="<?= BASE_URL ?>/apply" class="btn-primary-custom">Apply Now</a>
     </div>
-    <h1>General De Jesus College <span>Stall Directory</span></h1>
-    <p>See what's open below. Apply once and we'll assign your stall during review &mdash; no need to pick one here.</p>
-    <a href="<?= BASE_URL ?>/apply" class="btn-apply-now">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-        Apply Now
-    </a>
 </div>
 
 <!-- LEGEND -->
@@ -221,18 +210,14 @@ function statusLabel(string $status): string
             <div class="modal-pending-block" id="modal-pending-block" style="display:none">
                 <div class="modal-pending-text">⏳ An application is being processed</div>
                 <div class="modal-pending-timer" id="modal-pending-timer">--:--</div>
-                <div style="font-size:11px;color:#b45309;margin-top:4px;">Stall will reopen if not submitted in time</div>
+                <div style="font-size:11px;color:var(--gp-warning);margin-top:4px;">Stall will reopen if not submitted in time</div>
             </div>
 
         </div>
     </div>
 </div>
 
-<footer>
-    &copy; <?= date(
-        "Y",
-    ) ?> General de Jesus College &mdash; GenPay Stall Management
-</footer>
+<?php include __DIR__ . '/includes/partials/public_footer.php'; ?>
 
 <script>
 const BASE_URL = '<?= BASE_URL ?>';
@@ -258,7 +243,7 @@ function openModal(el) {
     document.getElementById('modal-location').textContent = 'Row ' + data.row_label + ', Slot ' + data.col_number;
 
     // Conditional blocks - this modal is informational only. Applying
-    // happens exactly one way on this page: the gold button in the hero.
+    // happens exactly one way on this page: the Apply Now button in the hero.
     const merchantBlock = document.getElementById('modal-merchant-block');
     const pendingBlock  = document.getElementById('modal-pending-block');
 

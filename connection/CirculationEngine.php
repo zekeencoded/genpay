@@ -13,6 +13,7 @@ class CirculationEngine
     const TXN_STUDENT_WITHDRAW = "student_withdraw";
     const TXN_CAP_INCREASE = "cap_increase";
     const TXN_ALLOWANCE = "allowance";
+    const TXN_FEE_WAIVER_CLAIM = "fee_waiver_claim";
 
     // Read-only history. The visitor voucher feature was removed, so nothing
     // writes these any more, but rows carrying them stay in the ledger forever
@@ -787,77 +788,6 @@ class CirculationEngine
         }
     }
 
-    /**
-     * Release a student cash-out (withdrawal). Debits the student wallet and
-     * returns the points to the vault — the mirror of merchantSettle(). Called
-     * by the cashier/finance office when they hand over physical cash.
-     */
-    public function studentSettle(
-        int $studentWalletId,
-        float $amount,
-        int $initiatedBy,
-    ): array {
-        $this->assertPositive($amount);
-
-        $this->db->beginTransaction();
-        try {
-            $settings = $this->lockSettings();
-
-            $student = $this->db->prepare(
-                "SELECT balance FROM student_wallets WHERE id = ? FOR UPDATE",
-            );
-            $student->execute([$studentWalletId]);
-            $studentRow = $student->fetch();
-
-            if (!$studentRow || $studentRow["balance"] < $amount) {
-                throw new RuntimeException(
-                    "STUDENT_INSUFFICIENT_BALANCE: Cannot settle Php " .
-                        number_format($amount, 2) .
-                        ".",
-                );
-            }
-
-            $this->db
-                ->prepare(
-                    "UPDATE student_wallets SET balance = balance - ? WHERE id = ?",
-                )
-                ->execute([$amount, $studentWalletId]);
-
-            $this->db
-                ->prepare(
-                    "UPDATE system_settings
-                    SET cashier_vault_points = cashier_vault_points + ?
-                  WHERE id = 1",
-                )
-                ->execute([$amount]);
-
-            $vaultAfter = $settings["cashier_vault_points"] + $amount;
-
-            $this->validateCirculation($settings["total_circulation_cap"]);
-
-            $ref = $this->logTransaction(
-                self::TXN_STUDENT_WITHDRAW,
-                $initiatedBy,
-                $amount,
-                $settings["cashier_vault_points"],
-                $vaultAfter,
-                studentWalletId: $studentWalletId,
-            );
-
-            $this->db->commit();
-            gjc_audit_commit($this->db);
-            return [
-                "success" => true,
-                "reference" => $ref,
-                "vault_after" => $vaultAfter,
-            ];
-        } catch (\Throwable $e) {
-            $this->db->rollBack();
-            gjc_audit_rollback($this->db, $e->getMessage());
-            throw $e;
-        }
-    }
-
     public function increaseCirculationCap(
         float $increaseBy,
         int $superAdminId,
@@ -937,6 +867,96 @@ class CirculationEngine
                 "old_cap" => $oldCap,
                 "new_cap" => $newCap,
                 "vault_after" => $vaultAfter,
+                "reference" => $ref,
+            ];
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            gjc_audit_rollback($this->db, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Mints a Fee Waiver Credit straight into a student's wallet: raises
+     * total_circulation_cap and credits student_wallets directly, vault
+     * untouched — money that was never sitting in the vault in the first
+     * place (the school forgave/credited it outside GenPay). Same shape as
+     * increaseCirculationCap(), except the new coins land in one student's
+     * wallet instead of the vault.
+     *
+     * Caller (gjc_claim_fee_waiver_credit()) is responsible for the
+     * claim-before-mint race guard on fee_waiver_credits.status and for
+     * widening the transactions.transaction_type / cap_increase_log.source
+     * enums before this runs — both are DDL and must happen before any
+     * beginTransaction().
+     */
+    public function feeWaiverClaim(int $studentWalletId, float $amount, int $initiatedBy, int $creditId): array
+    {
+        $this->assertPositive($amount);
+
+        $this->db->beginTransaction();
+        try {
+            $settings = $this->lockSettings();
+            $oldCap = $settings["total_circulation_cap"];
+            $newCap = $oldCap + $amount;
+
+            $this->db
+                ->prepare(
+                    "UPDATE system_settings
+                    SET total_circulation_cap = ?
+                  WHERE id = 1",
+                )
+                ->execute([$newCap]);
+
+            $this->db
+                ->prepare(
+                    "UPDATE student_wallets SET balance = balance + ? WHERE id = ?",
+                )
+                ->execute([$amount, $studentWalletId]);
+
+            $this->db
+                ->prepare(
+                    "INSERT INTO cap_increase_log
+                    (super_admin_id, old_cap, new_cap, amount_added, reason, source, source_ref_id)
+                 VALUES (?, ?, ?, ?, ?, 'fee_waiver_claim', ?)",
+                )
+                ->execute([
+                    $initiatedBy,
+                    $oldCap,
+                    $newCap,
+                    $amount,
+                    "Fee Waiver Credit #{$creditId} claimed to student wallet.",
+                    $creditId,
+                ]);
+
+            $this->validateCirculation($newCap);
+
+            $ref = $this->logTransaction(
+                self::TXN_FEE_WAIVER_CLAIM,
+                $initiatedBy,
+                $amount,
+                $settings["cashier_vault_points"],
+                $settings["cashier_vault_points"],
+                studentWalletId: $studentWalletId,
+                notes: "Fee Waiver Credit #{$creditId} claimed into wallet. Cap raised from Php {$oldCap} to Php {$newCap}.",
+                audit: [
+                    "old" => [
+                        "total_circulation_cap" => $oldCap,
+                    ],
+                    "new" => [
+                        "total_circulation_cap" => $newCap,
+                        "fee_waiver_credit_id" => $creditId,
+                        "claimed_by" => $initiatedBy,
+                    ],
+                ],
+            );
+
+            $this->db->commit();
+            gjc_audit_commit($this->db);
+            return [
+                "success" => true,
+                "old_cap" => $oldCap,
+                "new_cap" => $newCap,
                 "reference" => $ref,
             ];
         } catch (\Throwable $e) {

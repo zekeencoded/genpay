@@ -110,13 +110,13 @@ try {
 
     echo json_encode([
         'success' => true,
-        'message' => 'PHP ' . number_format($requestAmount, 2) . ' settled. Points returned to vault.',
+        'message' => gjc_money_plain($requestAmount) . ' settled. Points returned to vault.',
         'reference' => $result['reference'],
         'vault_after' => $result['vault_after'],
     ]);
 } catch (RuntimeException $e) {
     http_response_code(422);
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'admin/release_encashment')]);
 } catch (\Throwable $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'A server error occurred.']);

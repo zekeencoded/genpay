@@ -40,3 +40,7 @@ screenshots/
 # Gmail SMTP credentials. connection/mail_config.example.php is the tracked
 # template; the real file holds the Google App Password.
 /connection/mail_config.php
+
+# Application database login + view-token signing key. connection/local_config.example.php
+# is the tracked template; the real file holds the live root password.
+/connection/local_config.php

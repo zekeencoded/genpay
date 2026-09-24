@@ -220,11 +220,11 @@ try {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'parent/api/checkout', 'Something went wrong. Please try again.')]);
     }
 } catch (\Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'parent/api/checkout', 'Server error. Please try again.')]);
 }

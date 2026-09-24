@@ -390,13 +390,9 @@ Order from your phone, then pay when you pick it up — the stall starts seeing 
 > 📷 **[SCREENSHOT 41]** *Suggested caption: Sending money to a classmate.*
 > **Capture:** The transfer form after the ID lookup, showing the recipient's confirmed name and an amount entered.
 
-### 4.6 Withdrawing cash
+### 4.6 Leaving school (graduation or transfer)
 
-1. Open **Withdraw**, enter the amount, and submit the request.
-2. Go to the finance office with your ID. When the cashier hands you the cash, they release the request — only then is your wallet debited.
-
-> 📷 **[SCREENSHOT 42]** *Suggested caption: Requesting a cash withdrawal.*
-> **Capture:** The Withdraw page with an amount entered and past requests listed.
+There is no in-app withdrawal. When you graduate or transfer out, your wallet is locked and the dashboard tells you so — visit the finance office to collect your remaining balance as a cheque.
 
 ### 4.7 History and profile
 

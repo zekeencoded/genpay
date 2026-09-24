@@ -251,7 +251,7 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    users_json(['success' => false, 'message' => $e->getMessage()]);
+    users_json(['success' => false, 'message' => gjc_safe_error($e, 'admin/api/users')]);
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();

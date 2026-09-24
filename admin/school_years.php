@@ -83,10 +83,11 @@ $currentPage = 'school_years';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
     <style>
         .sy-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .sy-stat-card { background: #fff; border-radius: 16px; padding: 18px 20px; box-shadow: var(--gjc-shadow-sm, 0 1px 4px rgba(0,0,0,.06)); }
@@ -341,8 +342,8 @@ $currentPage = 'school_years';
                             <option value="on_leave">On Leave</option>
                             <option value="not_enrolled">Not Enrolled</option>
                         </select>
-                        <button type="button" class="sy-btn ghost" onclick="syApplyBulk()">Apply to All</button>
-                        <button type="button" class="sy-btn ghost" onclick="syFillAll()">Fill Dropdowns Only</button>
+                        <button type="button" class="sy-btn ghost" onclick="syApplyBulk()" title="Set every not-returning student to the status chosen on the left, in one step.">Apply to All</button>
+                        <button type="button" class="sy-btn ghost" onclick="syFillAll()" title="Pre-select that status in each row below without saving, so you can adjust individuals first.">Fill Dropdowns Only</button>
                     </div>
 
                     <div class="table-responsive">
@@ -450,6 +451,7 @@ $currentPage = 'school_years';
     </div>
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+    <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
     <script>
     function toggleSidebar() {
         document.getElementById("sidebar").classList.toggle("collapsed");
@@ -463,8 +465,7 @@ $currentPage = 'school_years';
         const form = new FormData();
         form.append("action", action);
         Object.entries(params || {}).forEach(([k, v]) => form.append(k, v));
-        const res = await fetch(SY_API, { method: "POST", body: form });
-        return res.json();
+        return gpFetchJson(SY_API, form);
     }
 
     function syShowMsg(elId, message, ok) {
@@ -480,7 +481,7 @@ $currentPage = 'school_years';
     }
 
     function syPeso(value) {
-        return "₱" + Number(value || 0).toFixed(2);
+        return gpMoney(value);
     }
 
     // ── Create school year ──────────────────────────────────────────────
@@ -670,7 +671,12 @@ $currentPage = 'school_years';
             syShowMsg("syApplyMsg", "There is nobody in the not-returning list.", false);
             return;
         }
-        if (!confirm(`Set all ${total} not-returning student(s) to "${status}"? No money moves — balances stay in their wallets.`)) return;
+        if (!await gpConfirm({
+                title: 'Set every not-returning student to "' + status + '"?',
+                body: 'This records an enrolment status. No money moves — balances stay in their wallets.',
+                detail: [['Students affected', total]],
+                confirmLabel: 'Set all ' + total,
+            })) return;
 
         // apply_all lets the server recompute the bucket, so this covers every
         // not-returning student including any past the display cap.
@@ -696,7 +702,12 @@ $currentPage = 'school_years';
             syShowMsg("syApplyMsg", "No statuses selected.", false);
             return;
         }
-        if (!confirm(`Record ${statuses.length} status change(s)? No money moves — balances stay in their wallets.`)) return;
+        if (!await gpConfirm({
+                title: 'Record these status changes?',
+                body: 'This records enrolment statuses. No money moves — balances stay in their wallets.',
+                detail: [['Changes to record', statuses.length]],
+                confirmLabel: 'Record changes',
+            })) return;
 
         const data = await syPost("apply_statuses", {
             school_year_id: syDiff.school_year_id,
@@ -763,13 +774,13 @@ $currentPage = 'school_years';
         });
 
         if (data.success) {
-            alert(data.message);
-            window.location.reload();
-        } else {
-            alert(data.message || "Rollover failed.");
-            btn.disabled = false;
-            btn.textContent = "Confirm Rollover";
+            gpToast(data.message || 'School year rolled over.');
+            setTimeout(() => window.location.reload(), 1200);
+            return;
         }
+        gpToast(data.message || 'The rollover did not complete.', false);
+        btn.disabled = false;
+        btn.textContent = "Confirm Rollover";
     }
 
     // ── Manual overrides ─────────────────────────────────────────────────
@@ -808,7 +819,13 @@ $currentPage = 'school_years';
 
     async function syMarkGraduate() {
         if (!syLookedUpStudent) return;
-        if (!confirm(`Mark ${syLookedUpStudent.name || "this student"} as graduated and freeze their wallet?`)) return;
+        if (!await gpConfirm({
+                title: 'Mark this student as graduated?',
+                body: 'Their wallet is frozen, so no further spending or transfers are possible.',
+                detail: [['Student', syLookedUpStudent.name || 'This student']],
+                note: 'Any remaining balance stays in the wallet. Use Un-graduate to reverse this.',
+                confirmLabel: 'Mark graduated',
+            })) return;
 
         const data = await syPost("mark_graduate", { student_user_id: syLookedUpStudent.student_user_id });
         syShowMsg("syGradMsg", data.message, data.success);
@@ -820,7 +837,12 @@ $currentPage = 'school_years';
 
     async function syUnmarkGraduate() {
         if (!syLookedUpStudent) return;
-        if (!confirm(`Reverse the graduation for ${syLookedUpStudent.name || "this student"}? Their wallet will be unfrozen and they will be enrolled for the active school year.`)) return;
+        if (!await gpConfirm({
+                title: 'Reverse this graduation?',
+                body: 'The wallet is unfrozen and the student is enrolled for the active school year.',
+                detail: [['Student', syLookedUpStudent.name || 'This student']],
+                confirmLabel: 'Reverse graduation',
+            })) return;
 
         const data = await syPost("unmark_graduate", { student_user_id: syLookedUpStudent.student_user_id });
         syShowMsg("syGradMsg", data.message, data.success);
@@ -835,7 +857,15 @@ $currentPage = 'school_years';
             syShowMsg("syBulkMsg", "Select a year level.", false);
             return;
         }
-        if (!confirm(`Mark ALL non-graduated students at year level ${yrLvl} as graduated?`)) return;
+        if (!await gpConfirm({
+                title: 'Graduate a whole year level?',
+                body: 'Every non-graduated student at this year level is marked graduated and their wallets frozen.',
+                detail: [['Year level', yrLvl]],
+                note: 'This affects many students at once. Balances are kept, but each wallet is frozen.',
+                confirmLabel: 'Graduate year ' + yrLvl,
+                danger: true,
+                typeToConfirm: 'GRADUATE',
+            })) return;
 
         const data = await syPost("mark_graduate_bulk_year", { yr_lvl: yrLvl });
         syShowMsg("syBulkMsg", data.message, data.success);
@@ -852,7 +882,11 @@ $currentPage = 'school_years';
 
     // ── Legacy backfill ──────────────────────────────────────────────────
     async function syBackfill() {
-        if (!confirm("Run the one-time legacy transaction backfill?")) return;
+        if (!await gpConfirm({
+                title: 'Run the legacy transaction backfill?',
+                body: 'This stamps historical transactions with the school year they belong to. It is designed to run once.',
+                confirmLabel: 'Run backfill',
+            })) return;
         const data = await syPost("backfill_legacy", {});
         syShowMsg("syBackfillMsg", data.message, data.success);
     }

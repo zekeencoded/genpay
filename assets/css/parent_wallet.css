@@ -22,15 +22,15 @@
 
 .pf-field select.tu-select:focus {
     outline: none;
-    border-color: var(--sd-gold);
+    border-color: var(--gp-focus-border);
     box-shadow: var(--gp-focus-ring);
 }
 
 /* ===== ACTIVITY: whose wallet a row belongs to =====
    Parents shop from their own wallet now, so the trail mixes their purchases
    with their children's. The rows stay in one table — a single chronology is
-   easier to read than two — but the parent's own carry a badge, a cream tint
-   and a gold keyline, and the Wallet filter can isolate either side. */
+   easier to read than two — but the parent's own carry a YOU badge and a
+   cream tint, and the Wallet filter can isolate either side. */
 .pa-wallet-cell {
     white-space: nowrap;
 }
@@ -58,6 +58,3 @@ body.gp-theme .table tbody tr.pa-own-row:hover td {
     background: var(--gp-row-hover);
 }
 
-body.gp-theme .table tbody tr.pa-own-row td:first-child {
-    box-shadow: inset 3px 0 0 var(--gp-gold);
-}

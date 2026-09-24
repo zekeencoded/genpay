@@ -188,7 +188,8 @@ try {
                 $db->rollBack();
                 @unlink($tmpDir . '/' . $fname);
                 @rmdir($tmpDir);
-                fwc_json(['success' => false, 'message' => $e->getMessage()]);
+                error_log('[admin/api/fee_waiver_credits.php] upload_waiver: ' . $e->getMessage());
+                fwc_json(['success' => false, 'message' => 'The signed waiver could not be saved. Nothing was changed.']);
             }
 
             fwc_log($db, $creditId, 'pending', 'posted', (float) $before['amount'], $adminId, $adminRole);

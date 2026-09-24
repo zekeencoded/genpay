@@ -685,9 +685,10 @@ class MerchantTenantDirectory
      * same action set the dashboard notification badge counts: product/menu
      * changes, staff and profile changes, and banned-item attempts, by the
      * stall owner or their staff. Routine sales are excluded on purpose,
-     * matching the stall detail view's revenue-privacy rule.
+     * matching the stall detail view's revenue-privacy rule. $since limits it
+     * to entries after that timestamp — what the badge was counting.
      */
-    public function pagedActivity(int $merchantUserId, int $page, int $perPage): array
+    public function pagedActivity(int $merchantUserId, int $page, int $perPage, ?string $since = null): array
     {
         if (!gjc_table_exists($this->db, 'systemic_audit_trail')) {
             return ['rows' => [], 'page' => 1, 'per_page' => $perPage, 'total' => 0, 'total_pages' => 1];
@@ -703,6 +704,10 @@ class MerchantTenantDirectory
         $params = $actorSql === 'a.user_id = ?' ? [$merchantUserId] : [$merchantUserId, $merchantUserId];
 
         $whereSql = "{$actorSql} AND a.action_type IN ('MENU_MUTATION', 'USER_ACCOUNT', 'MERCHANT_PROFILE_UPDATE', 'PRODUCT_RESTRICTION')";
+        if ($since !== null) {
+            $whereSql .= ' AND a.timestamp > ?';
+            $params[] = $since;
+        }
 
         $countStmt = $this->db->prepare("SELECT COUNT(*) FROM systemic_audit_trail a WHERE {$whereSql}");
         $countStmt->execute($params);
@@ -721,7 +726,7 @@ class MerchantTenantDirectory
 
         $i = 1;
         foreach ($params as $param) {
-            $dataStmt->bindValue($i++, $param, PDO::PARAM_INT);
+            $dataStmt->bindValue($i++, $param, is_int($param) ? PDO::PARAM_INT : PDO::PARAM_STR);
         }
         $dataStmt->bindValue($i++, $perPage, PDO::PARAM_INT);
         $dataStmt->bindValue($i, $offset, PDO::PARAM_INT);

@@ -354,10 +354,11 @@ try {
                 $db->commit();
             } catch (Throwable $e) {
                 $db->rollBack();
+                error_log('[admin/api/stall_applications.php] award: ' . $e->getMessage());
                 $msg = match ($e->getMessage()) {
                     'STALL_NOT_FOUND' => 'The selected stall does not exist.',
                     'STALL_TAKEN'     => 'The selected stall was just taken. Please choose a different stall.',
-                    default           => 'Award failed: ' . $e->getMessage(),
+                    default           => 'The stall could not be awarded. Nothing was changed.',
                 };
                 stall_app_json(['success' => false, 'message' => $msg]);
             }
@@ -615,5 +616,6 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    stall_app_json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    error_log('[admin/api/stall_applications.php] ' . $e->getMessage());
+    stall_app_json(['success' => false, 'message' => 'A server error occurred. Nothing was changed.']);
 }

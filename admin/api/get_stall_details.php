@@ -67,8 +67,9 @@ try {
             gjc_json_fail('Unknown action.');
     }
 } catch (Throwable $e) {
+    error_log('[admin/api/get_stall_details.php] ' . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'message' => 'Server error: ' . $e->getMessage(),
+        'message' => 'A server error occurred. Nothing was changed.',
     ]);
 }

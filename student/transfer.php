@@ -45,10 +45,10 @@ $csrfToken = gjc_csrf_token();
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=9">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=13">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_topup.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_topup.css?v=8">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_send.css?v=7">
 </head>
 
@@ -78,9 +78,6 @@ $csrfToken = gjc_csrf_token();
                         <div class="sd-gc-row">
                             <span class="sd-gc-badge">&#8776; &#8369;<span id="sdBalancePhp"><?= number_format($balance, 2) ?></span></span>
                             <span class="sd-gc-rate">&#8369;10 = 1 GC</span>
-                        </div>
-                        <div class="sd-balance-actions">
-                            <a class="sd-btn-ghost" href="<?= STUDENT_URL ?>/withdraw.php"><i class="fa-solid fa-money-bill-wave"></i>Withdraw</a>
                         </div>
                     </div>
                     <div class="sd-balance-holder">

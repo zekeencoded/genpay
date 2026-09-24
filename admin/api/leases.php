@@ -321,7 +321,8 @@ try {
                 $db->commit();
             } catch (\Throwable $e) {
                 $db->rollBack();
-                echo json_encode(['success' => false, 'message' => 'Could not save the payment: ' . $e->getMessage()]);
+                error_log('[admin/api/leases.php] record_payment: ' . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'The payment could not be saved. Check the period and amount, then try again — nothing was recorded.']);
                 break;
             }
 
@@ -419,5 +420,6 @@ try {
             echo json_encode(['success' => false, 'message' => 'Unknown action: ' . htmlspecialchars($action)]);
     }
 } catch (\Throwable $e) {
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    error_log('[admin/api/leases.php] ' . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'A server error occurred. Nothing was changed.']);
 }

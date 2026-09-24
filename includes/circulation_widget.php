@@ -386,7 +386,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                 </button>
             </form>
         </div>
-        <?php else: ?>
+        <?php endif; ?>
 
         <div class="ce-flow-guide">
             <div class="ce-flow-guide-title">How Money Moves</div>
@@ -425,7 +425,6 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                 </div>
             </div>
         </div>
-        <?php endif; ?>
 
     </div>
 
@@ -527,6 +526,8 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
             });
     });
 
+    const CE_VAULT_NOW = <?= json_encode((float) ($snap['vault'] ?? 0)) ?>;
+
     const amtInput = document.getElementById('ce-amount');
     if (amtInput) {
         amtInput.addEventListener('input', function () {
@@ -543,42 +544,61 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
             e.preventDefault();
             const btn     = document.getElementById('ce-mint-btn');
             const alertEl = document.getElementById('ce-mint-alert');
-            btn.disabled  = true;
-            btn.innerHTML = '<span class="ce-spinner"></span> Processing...';
             alertEl.innerHTML = '';
 
-            const payload = {
-                amount: parseFloat(document.getElementById('ce-amount').value),
-                reason: document.getElementById('ce-reason').value,
-                pin:    document.getElementById('ce-pin')?.value || null,
-            };
+            const amount = parseFloat(document.getElementById('ce-amount').value);
+            const reason = document.getElementById('ce-reason').value.trim();
 
-            try {
-                const res  = await fetch('<?= ADMIN_URL ?>/api/mint.php', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify(payload),
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    alertEl.innerHTML = `
-                        <div class="ce-alert ce-alert-ok">
-                            Minted <strong>&#8369;${payload.amount.toLocaleString('en-PH',{minimumFractionDigits:2})}</strong>.
-                            New Cap: <strong>&#8369;${parseFloat(data.new_cap).toLocaleString('en-PH',{minimumFractionDigits:2})}</strong>.
-                            New Vault: <strong>&#8369;${parseFloat(data.new_vault).toLocaleString('en-PH',{minimumFractionDigits:2})}</strong>.
-                            <a href="" onclick="location.reload();return false">Refresh</a>
-                        </div>`;
-                    form.reset();
-                } else {
-                    alertEl.innerHTML = `<div class="ce-alert ce-alert-err">${data.error}</div>`;
-                }
-            } catch (err) {
-                alertEl.innerHTML = `<div class="ce-alert ce-alert-err">Network error: ${err.message}</div>`;
+            if (!(amount > 0)) {
+                gpToast('Enter an amount greater than zero.', false);
+                return;
             }
 
-            btn.disabled  = false;
-            btn.innerHTML = `<span class="ce-mint-btn-content"><i class="fa-solid fa-coins"></i><span>Add Money to System</span></span>`;
+            /* Minting is the only irreversible act in a closed-loop economy and
+               it had no confirmation at all, while banning a single account
+               asks you to type the word BAN. One stray zero multiplies the
+               money supply by ten, so the amount is echoed back in full and the
+               resulting vault total is shown before anything is committed. */
+            const ok = await gpConfirm({
+                title: 'Add money to the system?',
+                body: 'This creates new GenCoin and raises the circulation cap. It cannot be undone or reversed.',
+                detail: [
+                    ['Amount to add', gpMoney(amount)],
+                    ['Vault after this', gpMoney(CE_VAULT_NOW + amount)],
+                    ['Reason', reason || 'Not given'],
+                ],
+                note: 'Check the amount digit by digit before you continue.',
+                confirmLabel: 'Add ' + gpMoney(amount),
+                danger: true,
+                typeToConfirm: 'ADD',
+            });
+            if (!ok) return;
+
+            if (!gpBusy(btn, 'Adding…')) return;
+
+            const data = await gpFetchJson('<?= ADMIN_URL ?>/api/mint.php', {
+                json: {
+                    amount: amount,
+                    reason: reason,
+                    pin: document.getElementById('ce-pin')?.value || null,
+                },
+            });
+
+            if (data.success) {
+                /* Reload rather than print a Refresh link: the vault, cap and
+                   pool cards sitting directly above this form are now stale,
+                   and a success message beside stale figures is worse than a
+                   brief wait. */
+                gpToast('Added ' + gpMoney(amount) + ' to the vault.');
+                setTimeout(() => location.reload(), 1200);
+                return;
+            }
+
+            /* data.error was being injected as unescaped innerHTML; gpToast
+               sets textContent. mint.php answers with .error where the rest of
+               admin/api answers with .message, so read both. */
+            gpToast(data.error || data.message || 'The amount could not be added.', false);
+            gpBusyDone(btn);
         });
     }
 

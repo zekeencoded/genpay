@@ -1,7 +1,9 @@
 <?php
 
-
-
+// PHP's own default (often UTC) is wrong for every timestamp in this app —
+// remittance times, receipts, audit logs — since the school operates on
+// Philippine time. Set once, globally, rather than per-page.
+date_default_timezone_set('Asia/Manila');
 
 define('BASE_PATH', dirname(__DIR__));
 define('GJC_APP_VERSION', '1.0.0');
@@ -51,3 +53,26 @@ define('CONNECTION_PATH', BASE_PATH . '/connection');
 
 define('DASHBOARD_URL',  BASE_URL . '/dashboard.php');
 define('DASHBOARD_PATH', BASE_PATH . '/dashboard.php');
+
+/**
+ * Read one machine-local setting: environment variable first, then
+ * connection/local_config.php. There is no built-in default — see
+ * local_config.example.php.
+ */
+function gjc_local_config(string $key, string $envName): string
+{
+    static $file = null;
+    $env = getenv($envName);
+    if ($env !== false && $env !== '') {
+        return $env;
+    }
+    if ($file === null) {
+        $path = __DIR__ . '/local_config.php';
+        $file = is_file($path) ? (array) require $path : [];
+    }
+    if (!isset($file[$key]) || $file[$key] === '') {
+        error_log("[config] '$key' is not set — copy connection/local_config.example.php to local_config.php");
+        throw new RuntimeException('Server is not configured.');
+    }
+    return (string) $file[$key];
+}

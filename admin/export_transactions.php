@@ -12,7 +12,9 @@ $filters = [
     'status' => trim((string) ($_GET['status'] ?? '')),
 ];
 
-$transactions = gjc_fetch_admin_transactions($db, $filters, 0);
+// sqlCap 0: no cap on any source. This file is the reconciliation
+// export - a short CSV that looks complete is the worst outcome.
+$transactions = gjc_fetch_admin_transactions($db, $filters, 0, 0);
 
 // Bulk extraction of the whole ledger — every reference, amount, sender and
 // receiver — leaving the system as a file. It was completely unlogged: there

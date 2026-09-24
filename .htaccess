@@ -53,6 +53,15 @@ RewriteRule ^includes(/.*)?$ - [F,L]
 # /uploads — vendor application documents (served through PHP only)
 RewriteRule ^uploads(/.*)?$ - [F,L]
 
+# /storage — queued email spool and mail log (temp passwords, recipient addresses)
+RewriteRule ^storage(/.*)?$ - [F,L]
+
+# /docs, /screenshots — internal manuscripts and UI captures (private data on screen)
+RewriteRule ^(docs|screenshots)(/.*)?$ - [F,L]
+
+# /PHPMailer-master — vendored library source; only ever required server-side
+RewriteRule ^PHPMailer-master(/.*)?$ - [F,L]
+
 # /admin/api, /student/api, /merchant/api — internal API endpoints
 # (still callable via server-side; blocked from direct browser access)
 # Comment out the lines below if your frontend JS calls these directly.
@@ -69,7 +78,7 @@ RewriteRule ^uploads(/.*)?$ - [F,L]
 # Block by EXTENSION, not by name. The rule above used to name "ewallet.sql"
 # exactly, but the dump on disk was ewallet_0722.sql — one character of drift
 # and a 473KB database dump was serving with a 200. Never list dumps by name.
-<FilesMatch "\.(sql|bak|old|orig|log|dist|ini|docx)$">
+<FilesMatch "\.(sql|bak|old|orig|log|dist|ini|docx|md|csv)$">
     Order Allow,Deny
     Deny from all
 </FilesMatch>

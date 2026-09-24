@@ -167,10 +167,10 @@ try {
 
 } catch (\InvalidArgumentException $e) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => gjc_safe_error($e, 'parent/api/controls')]);
 } catch (\RuntimeException $e) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => gjc_safe_error($e, 'parent/api/controls')]);
 } catch (\Throwable $e) {
     http_response_code(500);
     error_log('[parent/api/controls.php] ' . $e->getMessage());

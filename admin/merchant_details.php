@@ -38,10 +38,13 @@ function md_e($value): string
 function md_field(string $icon, string $label, ?string $value, bool $mono = false): void
 {
     $value = trim((string) $value);
-    echo '<div class="gp-field"><div class="gp-field-ic"><i class="' . md_e($icon) . '"></i></div><div>'
-        . '<div class="gp-field-label">' . md_e($label) . '</div>'
-        . '<div class="gp-field-value' . ($mono ? ' is-mono' : '') . '">' . ($value !== '' ? md_e($value) : '&mdash;') . '</div>'
-        . '</div></div>';
+    // $icon is no longer drawn — one icon box per field made the page read
+    // as a wall of cards. Kept in the signature so call sites stay unchanged.
+    echo '<div class="gp-field">'
+        . '<dt class="gp-field-label">' . md_e($label) . '</dt>'
+        . '<dd class="gp-field-value' . ($mono ? ' is-mono' : '') . ($value === '' ? ' is-empty' : '') . '">'
+        . ($value !== '' ? md_e($value) : '&mdash;') . '</dd>'
+        . '</div>';
 }
 
 $perPage = 10;
@@ -53,6 +56,14 @@ if ($summary) {
     // so the dashboard badge clears for every finance admin. This used to live
     // in the API's `details` action, which the page no longer calls.
     gjc_ensure_merchant_card_views_schema($db);
+
+    // Read the old stamp first: whatever landed after it is what the badge was
+    // counting, and it gets listed at the top of the page before it clears.
+    $seenStmt = $db->prepare("SELECT last_viewed_at FROM merchant_card_views WHERE merchant_id = ? LIMIT 1");
+    $seenStmt->execute([$merchantId]);
+    $lastViewedAt = $seenStmt->fetchColumn() ?: null;
+    $unseen = $directory->pagedActivity($merchantUserId, 1, 10, $lastViewedAt ?? '1970-01-01 00:00:00');
+
     $db->prepare(
         "INSERT INTO merchant_card_views (merchant_id, last_viewed_at, viewed_by)
          VALUES (?, NOW(), ?)
@@ -243,7 +254,7 @@ if ($summary) {
     <title><?= $summary ? md_e($summary['stall_name']) . ' — Stall' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=42">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -300,52 +311,78 @@ if ($summary) {
             <div id="merchantAlert"></div>
 
             <!-- ── Standing at a glance ─────────────────────────────────── -->
-            <section class="row g-3 mb-4">
-                <div class="col-6 col-md-3">
-                    <div class="detail-stat h-100">
-                        <span>Operating status</span>
-                        <strong class="gp-stat-plain">
-                            <span class="badge <?= $statusClass ?>">
-                                <?= md_e(ucwords(str_replace('_', ' ', $summary['operational_status']))) ?>
-                            </span>
-                        </strong>
-                    </div>
+            <section class="md-summary mb-2" aria-label="Stall standing">
+                <div class="md-summary-tags">
+                    <span class="badge <?= $statusClass ?>">
+                        <?= md_e(ucwords(str_replace('_', ' ', $summary['operational_status']))) ?>
+                    </span>
+                    <span class="gp-rent-badge <?= md_e($leaseClass) ?>">
+                        <?= md_e($account['state_label'] ?? 'No lease') ?>
+                    </span>
                 </div>
-                <div class="col-6 col-md-3">
-                    <div class="detail-stat h-100">
-                        <span>Rent standing</span>
-                        <strong class="gp-stat-plain">
-                            <span class="gp-rent-badge <?= md_e($leaseClass) ?>">
-                                <?= md_e($account['state_label'] ?? 'No lease') ?>
-                            </span>
-                        </strong>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="detail-stat h-100">
-                        <span>Products listed</span>
-                        <strong><?= $productTotal ?></strong>
-                        <small>in the stall menu</small>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="detail-stat h-100">
-                        <span>Staff logins</span>
-                        <strong><?= count($staff) ?></strong>
-                        <small><?= count($staff) === 1 ? 'account under this stall' : 'accounts under this stall' ?></small>
-                    </div>
-                </div>
+                <ul class="md-summary-meta">
+                    <li><strong><?= $productTotal ?></strong> <?= $productTotal === 1 ? 'product' : 'products' ?> listed</li>
+                    <li><strong><?= count($staff) ?></strong> staff <?= count($staff) === 1 ? 'login' : 'logins' ?></li>
+                </ul>
             </section>
-
-            <div class="gp-notice is-note mb-4">
+            <p class="md-privacy mb-4">
                 <i class="fa-solid fa-shield-halved"></i>
-                <div>
-                    <strong>Revenue privacy enforced.</strong>
-                    Sales figures, POS history and the merchant wallet are deliberately excluded
-                    from this view &mdash; rent collection appears under Lease &amp; rent, what the
-                    stall earns does not.
+                Revenue privacy: sales, POS history and the merchant wallet are not shown here.
+            </p>
+
+            <?php if ((int) $unseen['total'] > 0): ?>
+            <!-- ── What the dashboard badge was counting ────────────────── -->
+            <section class="premium-panel mb-4" id="newActivity">
+                <div class="panel-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h3>New since last check</h3>
+                        <p>
+                            <?= (int) $unseen['total'] ?> merchant action<?= (int) $unseen['total'] === 1 ? '' : 's' ?>
+                            <?= $lastViewedAt
+                                ? 'since this stall was last opened on ' . md_e(date('M j, Y · g:i A', strtotime((string) $lastViewedAt)))
+                                : 'recorded — this stall had not been opened before' ?>.
+                            This list clears once you leave the page.
+                        </p>
+                    </div>
+                    <?php if ($tab !== 'activity'): ?>
+                        <a class="view-btn" href="<?= $selfUrl(['tab' => 'activity', 'apage' => '']) ?>">Full activity log</a>
+                    <?php endif; ?>
                 </div>
-            </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>By</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($unseen['rows'] as $row): ?>
+                            <?php [$label, $cls] = $activityMeta[$row['action_type']] ?? [$row['action_type'], 'bg-secondary']; ?>
+                            <tr>
+                                <td class="text-nowrap"><?= md_e(date('M j, Y · g:i A', strtotime((string) $row['timestamp']))) ?></td>
+                                <td>
+                                    <strong><?= md_e(trim((string) $row['actor_name']) !== '' ? $row['actor_name'] : 'Unknown user') ?></strong>
+                                    <div class="gp-cell-note"><?= md_e($row['user_role'] ?? '') ?></div>
+                                </td>
+                                <td><span class="badge <?= md_e($cls) ?>"><?= md_e($label) ?></span></td>
+                                <td><small><?= md_e($activitySummary($row['new_value'])) ?></small></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php if ((int) $unseen['total'] > count($unseen['rows'])): ?>
+                    <p class="text-muted small mt-2 mb-0">
+                        Showing the latest <?= count($unseen['rows']) ?> of <?= (int) $unseen['total'] ?> — the rest are in the activity log.
+                    </p>
+                <?php endif; ?>
+            </section>
+            <?php endif; ?>
 
             <!-- ── Section switcher ─────────────────────────────────────── -->
             <nav class="gp-tabs mb-4" aria-label="Stall sections">
@@ -384,64 +421,56 @@ if ($summary) {
                         </div>
                     </div>
                 <?php else: ?>
-                    <div class="gp-ledger-summary <?= md_e($leaseClass) ?>">
-                        <span class="gp-rent-badge <?= md_e($leaseClass) ?>"><?= md_e($account['state_label']) ?></span>
-                        <p><?= md_e($account['summary']) ?></p>
-                    </div>
+                    <p class="md-standing"><?= md_e($account['summary']) ?></p>
 
-                    <div class="row g-3">
-                        <div class="col-6 col-md-3">
-                            <div class="detail-stat h-100">
-                                <span>Monthly rent</span>
-                                <strong><?= gjc_money($lease['monthly_rent']) ?></strong>
-                                <small>every <?= md_e(date('jS', strtotime($lease['lease_start']))) ?> of the month</small>
-                            </div>
+                    <div class="md-figures">
+                        <div>
+                            <span>Monthly rent</span>
+                            <strong><?= gjc_money($lease['monthly_rent']) ?></strong>
+                            <small>due every <?= md_e(date('jS', strtotime($lease['lease_start']))) ?></small>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="detail-stat h-100">
-                                <span>Unpaid rent</span>
-                                <?php if ($account['outstanding'] > 0.005): ?>
-                                    <strong class="gp-amount-due"><?= gjc_money($account['outstanding']) ?></strong>
-                                <?php elseif ($account['advance'] > 0.005): ?>
-                                    <strong class="gp-amount-credit"><?= gjc_money($account['advance']) ?> ahead</strong>
-                                <?php else: ?>
-                                    <strong>Nothing owed</strong>
-                                <?php endif; ?>
-                            </div>
+                        <div>
+                            <span>Unpaid rent</span>
+                            <?php if ($account['outstanding'] > 0.005): ?>
+                                <strong class="gp-amount-due"><?= gjc_money($account['outstanding']) ?></strong>
+                            <?php elseif ($account['advance'] > 0.005): ?>
+                                <strong class="gp-amount-credit"><?= gjc_money($account['advance']) ?></strong>
+                                <small>paid ahead</small>
+                            <?php else: ?>
+                                <strong>Nothing owed</strong>
+                            <?php endif; ?>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="detail-stat h-100">
-                                <span>Next charge due</span>
-                                <strong><?= $account['next_due_date']
-                                    ? md_e(date('M j, Y', strtotime($account['next_due_date'])))
-                                    : 'Nothing left to bill' ?></strong>
-                            </div>
+                        <div>
+                            <span>Next charge due</span>
+                            <strong><?= $account['next_due_date']
+                                ? md_e(date('M j, Y', strtotime($account['next_due_date'])))
+                                : 'Nothing left to bill' ?></strong>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="detail-stat h-100">
-                                <span>Contract term</span>
-                                <strong><?= (int) $account['term_months'] ?> months</strong>
-                                <small><?= md_e(date('M j, Y', strtotime($lease['lease_start']))) ?>
-                                    &ndash; <?= md_e(date('M j, Y', strtotime($lease['lease_end']))) ?></small>
-                            </div>
+                        <div>
+                            <span>Contract term</span>
+                            <strong><?= (int) $account['term_months'] ?> months</strong>
+                            <small><?= md_e(date('M j, Y', strtotime($lease['lease_start']))) ?>
+                                &ndash; <?= md_e(date('M j, Y', strtotime($lease['lease_end']))) ?></small>
                         </div>
                     </div>
 
-                    <div class="gp-fields mt-3">
+                    <h6 class="gp-subhead">Contract</h6>
+                    <dl class="gp-fields">
                         <?php
                         md_field('fa-solid fa-file-signature', 'Contract status', ucfirst((string) $lease['status']));
                         md_field('fa-solid fa-vault', 'Security deposit', gjc_money_plain((float) $lease['deposit_amount']));
                         md_field('fa-solid fa-money-bill-wave', 'Collected to date', gjc_money_plain((float) $account['collected']));
                         md_field('fa-solid fa-note-sticky', 'Contract notes', (string) $lease['contract_notes']);
                         ?>
-                    </div>
+                    </dl>
                 <?php endif; ?>
             </section>
             <?php endif; ?>
 
             <?php if ($tab === 'overview'): ?>
+            <section class="premium-panel mb-4">
             <!-- ── Proprietor ───────────────────────────────────────────── -->
-            <section class="premium-panel mb-4" id="proprietor">
+            <div class="md-section" id="proprietor">
                 <div class="panel-header d-flex justify-content-between align-items-start flex-wrap gap-2">
                     <div>
                         <h3>Proprietor</h3>
@@ -457,7 +486,7 @@ if ($summary) {
                 <?php if (!$owner): ?>
                     <p class="text-muted mb-0">No user account is linked to this stall.</p>
                 <?php else: ?>
-                    <div class="gp-fields">
+                    <dl class="gp-fields">
                         <?php
                         $ownerName = trim(implode(' ', array_filter([
                             $owner['first_name'] ?? '', $owner['middle_name'] ?? '',
@@ -479,7 +508,7 @@ if ($summary) {
                             : '');
                         md_field('fa-solid fa-fingerprint', 'User ID', (string) $merchantUserId, true);
                         ?>
-                    </div>
+                    </dl>
 
                     <?php if (!empty($owner['suspended_until']) || !empty($owner['suspension_reason'])): ?>
                         <div class="gp-notice is-warning mt-3">
@@ -494,10 +523,10 @@ if ($summary) {
                         </div>
                     <?php endif; ?>
                 <?php endif; ?>
-            </section>
+            </div>
 
             <!-- ── Physical stall ───────────────────────────────────────── -->
-            <section class="premium-panel mb-4" id="stall">
+            <div class="md-section" id="stall">
                 <div class="panel-header">
                     <div>
                         <h3>Stall record</h3>
@@ -505,7 +534,7 @@ if ($summary) {
                     </div>
                 </div>
 
-                <div class="gp-fields">
+                <dl class="gp-fields">
                     <?php
                     md_field('fa-solid fa-store', 'Trading name', (string) $summary['stall_name']);
                     md_field('fa-solid fa-hashtag', 'Stall code', (string) ($merchantRow['stall_id'] ?? ''), true);
@@ -525,7 +554,7 @@ if ($summary) {
                         : '');
                     md_field('fa-solid fa-note-sticky', 'Merchant notes', (string) ($merchantRow['notes'] ?? ''));
                     ?>
-                </div>
+                </dl>
 
                 <?php if (!$stall): ?>
                     <p class="gp-pane-hint mt-3 mb-0">
@@ -533,6 +562,7 @@ if ($summary) {
                         pinned to a physical unit.
                     </p>
                 <?php endif; ?>
+            </div>
             </section>
             <?php endif; ?>
 
@@ -552,7 +582,7 @@ if ($summary) {
                         than through <a href="<?= ADMIN_URL ?>/stall_applications.php">Stall Applications</a>.
                     </p>
                 <?php else: ?>
-                    <div class="gp-fields">
+                    <dl class="gp-fields">
                         <?php
                         md_field('fa-solid fa-briefcase', 'Business name', (string) $application['business_name']);
                         md_field('fa-solid fa-circle-check', 'Application status', ucwords(str_replace('_', ' ', (string) $application['status'])));
@@ -575,7 +605,7 @@ if ($summary) {
                         md_field('fa-solid fa-calendar-day', 'Rental start on contract', !empty($application['rental_start_date'])
                             ? date('M j, Y', strtotime((string) $application['rental_start_date'])) : '');
                         ?>
-                    </div>
+                    </dl>
 
                     <?php
                     $docs = array_filter([

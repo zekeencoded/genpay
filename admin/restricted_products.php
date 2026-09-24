@@ -55,7 +55,7 @@ if (gjc_table_exists($db, 'restricted_products')) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -224,7 +224,7 @@ if (gjc_table_exists($db, 'restricted_products')) {
                             </td>
                             <td>
                                 <button class="btn btn-sm <?= $p['is_active'] ? 'btn-outline-danger' : 'btn-outline-success' ?>"
-                                    onclick="toggleRestriction(<?= (int)$p['id'] ?>, <?= $p['is_active'] ? 0 : 1 ?>)">
+                                    onclick="toggleRestriction(this, <?= (int)$p['id'] ?>, <?= $p['is_active'] ? 0 : 1 ?>, <?= htmlspecialchars(json_encode($p['product_name'] ?? $p['keyword'] ?? 'this item'), ENT_QUOTES, 'UTF-8') ?>)">
                                     <?= $p['is_active'] ? 'Deactivate' : 'Reactivate' ?>
                                 </button>
                             </td>
@@ -288,6 +288,7 @@ if (gjc_table_exists($db, 'restricted_products')) {
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
+<?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
 <script>
 document.getElementById('restrictForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -307,27 +308,59 @@ document.getElementById('restrictForm').addEventListener('submit', async functio
     }
 });
 
-async function toggleRestriction(id, newStatus) {
-    const f = new FormData();
-    f.append('action', 'toggle_restriction');
-    f.append('id', id);
-    f.append('is_active', newStatus);
-    const resp = await fetch('<?= ADMIN_URL ?>/api/restricted_products.php', { method: 'POST', body: f });
-    const data = await resp.json();
-    if (data.success) location.reload();
-    else alert('Error: ' + data.message);
+async function toggleRestriction(btn, id, newStatus, productName) {
+    const activating = Number(newStatus) === 1;
+
+    const ok = await gpConfirm({
+        title: activating ? 'Block this product again?' : 'Stop blocking this product?',
+        body: activating
+            ? 'Merchants will be stopped from listing it, and each attempt adds a strike toward suspending the stall.'
+            : 'Merchants will be free to list it again. Existing strikes are not removed.',
+        detail: [['Product', productName]],
+        confirmLabel: activating ? 'Block product' : 'Stop blocking',
+        danger: activating,
+    });
+    if (!ok) return;
+
+    if (!gpBusy(btn, activating ? 'Blocking…' : 'Updating…')) return;
+
+    const data = await gpFetchJson('<?= ADMIN_URL ?>/api/restricted_products.php', {
+        action: 'toggle_restriction',
+        id: id,
+        is_active: newStatus,
+    });
+
+    if (data.success) {
+        gpToast(activating ? 'Product blocked.' : 'Product unblocked.');
+        setTimeout(() => location.reload(), 900);
+        return;
+    }
+    gpToast(data.message || 'The restriction could not be updated.', false);
+    gpBusyDone(btn);
 }
 
 async function liftSuspension(userId, btn) {
-    if (!confirm('Lift this merchant\'s suspension early? They and their staff will be able to log in and sell again immediately.')) return;
-    btn.disabled = true;
-    const f = new FormData();
-    f.append('action', 'lift_suspension');
-    f.append('user_id', userId);
-    const resp = await fetch('<?= ADMIN_URL ?>/api/restricted_products.php', { method: 'POST', body: f });
-    const data = await resp.json();
-    if (data.success) location.reload();
-    else { alert('Error: ' + data.message); btn.disabled = false; }
+    const ok = await gpConfirm({
+        title: 'Lift this suspension early?',
+        body: 'The merchant and their staff can log in and sell again immediately.',
+        confirmLabel: 'Lift suspension',
+    });
+    if (!ok) return;
+
+    if (!gpBusy(btn, 'Lifting…')) return;
+
+    const data = await gpFetchJson('<?= ADMIN_URL ?>/api/restricted_products.php', {
+        action: 'lift_suspension',
+        user_id: userId,
+    });
+
+    if (data.success) {
+        gpToast('Suspension lifted.');
+        setTimeout(() => location.reload(), 900);
+        return;
+    }
+    gpToast(data.message || 'The suspension could not be lifted.', false);
+    gpBusyDone(btn);
 }
 </script>
 </body>

@@ -157,7 +157,7 @@ if ($log) {
         'USER_IMPORT' => 'fa-file-import', 'MERCHANT_CREATE' => 'fa-store',
         'USER_ACCOUNT' => 'fa-user-gear', 'MERCHANT_ONBOARDING' => 'fa-store',
         'PRODUCT_RESTRICTION' => 'fa-ban', 'LOGIN_FAILED' => 'fa-triangle-exclamation',
-        'TUITION_CREDIT' => 'fa-hand-holding-dollar', 'FEE_WAIVER_STATUS_CHANGE' => 'fa-hand-holding-dollar',
+        'TUITION_CREDIT' => 'fa-hand-holding-dollar', 'FEE_WAIVER_STATUS_CHANGE' => 'fa-hand-holding-dollar', 'MAINTENANCE_FEE_COLLECTED' => 'fa-wallet',
         'SCHOOL_YEAR_CREATED' => 'fa-calendar-plus', 'SCHOOL_YEAR_ROLLOVER' => 'fa-calendar-check',
         'STUDENT_GRADUATED' => 'fa-user-graduate', 'SY_TXN_BACKFILL' => 'fa-database',
         'SYSTEM_SETTINGS_CHANGE' => 'fa-sliders', 'MINT_PIN_SET' => 'fa-lock',
@@ -209,11 +209,11 @@ if ($log) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $log ? 'Audit Entry' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=13">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=15">
 </head>
 
 <body class="gp-theme">

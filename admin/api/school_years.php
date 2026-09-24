@@ -1112,7 +1112,7 @@ try {
         $db->rollBack();
     }
     gjc_audit_rollback($db, $e->getMessage());
-    sy_json(['success' => false, 'message' => $e->getMessage()]);
+    sy_json(['success' => false, 'message' => gjc_safe_error($e, 'admin/api/school_years')]);
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();

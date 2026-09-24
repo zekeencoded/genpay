@@ -23,6 +23,10 @@ $__bnavIsStaff = function_exists('gjc_is_merchant_staff') && gjc_is_merchant_sta
         <i class="fa-solid fa-boxes-stacked"></i>
         <span>Inventory</span>
     </a>
+    <a href="<?= MERCHANT_URL ?>/profile.php" class="<?= $currentPage === 'profile' ? 'active' : '' ?>">
+        <i class="fa-solid fa-user"></i>
+        <span>Profile</span>
+    </a>
     <?php else: ?>
     <a href="<?= MERCHANT_URL ?>/inventory.php" class="<?= $currentPage === 'inventory' ? 'active' : '' ?>">
         <i class="fa-solid fa-boxes-stacked"></i>

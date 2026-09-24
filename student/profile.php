@@ -54,12 +54,15 @@ $accountStatus = $isFrozen ? 'Frozen' : ucfirst((string) ($rawUser['status'] ?? 
 $transactionsEnabled = $wallet['id'] > 0 && !$isFrozen;
 
 $waiverCredit = gjc_student_waiver_credit($db, (int) $currentUser['id']);
-$waiverPill = ['posted' => 'green', 'pending' => 'gold'][$waiverCredit['status']] ?? 'gray';
-$waiverLabel = $waiverCredit['status'] === 'posted'
+$waiverPill = ['posted' => 'green', 'pending' => 'gold', 'claimed' => 'green'][$waiverCredit['status']] ?? 'gray';
+$waiverLabel = in_array($waiverCredit['status'], ['posted', 'claimed'], true)
     ? gjc_money($waiverCredit['amount'])
     : ($waiverCredit['status'] === 'pending' ? 'Pending' : 'None');
 
+$maintFees = gjc_student_maintenance_fees($db, (int) $currentUser['id']);
+
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$csrfToken = gjc_csrf_token();
 $currentPage = 'profile';
 ?>
 <!DOCTYPE html>
@@ -76,8 +79,8 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=13">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
 </head>
 
 <body class="sd-body">
@@ -172,15 +175,30 @@ $currentPage = 'profile';
 
                         <div>
                             <span>Fee Waiver Credit</span>
-                            <?php if ($waiverCredit['status'] === 'posted' && $waiverCredit['waiver_file']): ?>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                            <?php if (in_array($waiverCredit['status'], ['posted', 'claimed'], true) && $waiverCredit['waiver_file']): ?>
                                 <button type="button" class="pf-pill <?= $waiverPill ?>" style="border:none;cursor:pointer;" onclick="gjcViewWaiver('<?= ADMIN_URL ?>/doc.php?f=<?= urlencode($waiverCredit['waiver_file']) ?>')">
-                                    <?= $waiverLabel ?>
+                                    <?= $waiverLabel ?><?= $waiverCredit['status'] === 'claimed' ? ' &middot; Claimed' : '' ?>
                                 </button>
                             <?php else: ?>
                                 <strong class="pf-pill <?= $waiverPill ?>" <?= $waiverCredit['status'] === 'pending' ? 'title="Awaiting signed waiver upload by finance."' : '' ?>>
                                     <?= $waiverLabel ?>
                                 </strong>
                             <?php endif; ?>
+                            <?php if ($waiverCredit['status'] === 'posted'): ?>
+                                <button type="button" class="pf-pill green" id="fwcClaimOpen" style="border:none;cursor:pointer;" data-amount="<?= (float) $waiverCredit['amount'] ?>">
+                                    <i class="fa-solid fa-wallet me-1"></i>Add to My Wallet
+                                </button>
+                            <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span>Maintenance Fees</span>
+                            <strong class="pf-pill <?= $maintFees['accrued'] > 0 ? 'gold' : 'gray' ?>"
+                                    title="<?= $e($maintFees['rate_pct'] > 0 ? gjc_fee_rate_label($maintFees['rate_pct']) . ' of each payment or transfer (min ₱0.01), billed with your tuition — never taken from your wallet.' : 'No maintenance fee is currently charged.') ?>">
+                                <?= $maintFees['accrued'] > 0 ? gjc_money($maintFees['accrued']) . ' due' : 'None due' ?>
+                            </strong>
                         </div>
                     </div>
 
@@ -378,6 +396,34 @@ $currentPage = 'profile';
         </div>
     </div>
 
+    <!-- Fee Waiver Credit claim confirmation -->
+    <div class="modal fade" id="fwcClaimModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+            <div class="modal-content" style="border-radius:16px;border:none;">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" style="font-size:15px">Add to My Wallet</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <p style="font-size:13px;color:var(--sd-muted);margin-bottom:16px;">
+                        Your posted Fee Waiver Credit will be added to your GenPay wallet as GenCoin.
+                    </p>
+                    <div style="text-align:center;margin-bottom:16px;">
+                        <strong id="fwcClaimAmount" style="font-size:22px;color:var(--gp-success);">--</strong>
+                    </div>
+                    <div class="pf-note" id="fwcClaimError" style="display:none;color:var(--gp-danger);"></div>
+                    <p style="font-size:12px;color:var(--sd-muted);text-align:center;margin:0 0 16px;">
+                        This is final and cannot be undone.
+                    </p>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="pf-btn" id="fwcClaimConfirm">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 
     <script>
@@ -390,6 +436,62 @@ $currentPage = 'profile';
     document.getElementById('gjcWaiverModal').addEventListener('hidden.bs.modal', function () {
         document.getElementById('gjcWaiverFrame').src = '';
     });
+    </script>
+
+    <script>
+    /* ── Fee Waiver Credit claim ──────────────────────────────── */
+    (function() {
+        const openBtn = document.getElementById('fwcClaimOpen');
+        if (!openBtn) return;
+
+        const CSRF = <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?>;
+        const modalEl = document.getElementById('fwcClaimModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const amountEl = document.getElementById('fwcClaimAmount');
+        const errorEl = document.getElementById('fwcClaimError');
+        const confirmBtn = document.getElementById('fwcClaimConfirm');
+
+        function fmt(n) {
+            return '₱' + (+n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        openBtn.addEventListener('click', () => {
+            amountEl.textContent = fmt(openBtn.dataset.amount || 0);
+            errorEl.style.display = 'none';
+            errorEl.textContent = '';
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
+            modal.show();
+        });
+
+        confirmBtn.addEventListener('click', async () => {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Adding…';
+            errorEl.style.display = 'none';
+
+            try {
+                const res = await fetch('<?= STUDENT_URL ?>/api/fee_waiver_claim.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'claim', csrf_token: CSRF }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    errorEl.textContent = data.error || 'Could not add the credit to your wallet.';
+                    errorEl.style.display = 'block';
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm';
+                }
+            } catch (e) {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.style.display = 'block';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm';
+            }
+        });
+    })();
     </script>
 
     <script>

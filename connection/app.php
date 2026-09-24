@@ -35,6 +35,50 @@ function gjc_money_plain($amount): string
     return '₱' . number_format((float) $amount, 2);
 }
 
+/**
+ * The two date formats the UI is allowed to show.
+ *
+ * The admin side had eight display formats for the same kind of value, and six
+ * of those printed no year at all — on Top-ups and Encashments specifically, so
+ * a finance officer could not tell a 2024 record from a 2026 one. These two are
+ * simply the formats that were already dominant (`M j, Y` appeared 17 times),
+ * promoted to the only ones.
+ *
+ * Both are null-safe and return an em dash for an empty or unparseable value,
+ * because a blank cell reads as a rendering bug while a dash reads as "none".
+ *
+ * Machine formats (`Y-m-d` in query strings, `Ymd-His` in filenames) are not
+ * display and keep using date() directly. print_fee_waiver.php keeps its
+ * `F j, Y` — it is a legal form, not a screen.
+ */
+function gjc_date($value): string
+{
+    $ts = gjc_timestamp($value);
+    return $ts === null ? '—' : date('M j, Y', $ts);
+}
+
+function gjc_datetime($value): string
+{
+    $ts = gjc_timestamp($value);
+    return $ts === null ? '—' : date('M j, Y · g:i A', $ts);
+}
+
+/** Shared parse step: accepts a timestamp, a DateTimeInterface, or a date string. */
+function gjc_timestamp($value): ?int
+{
+    if ($value === null || $value === '' || $value === '0000-00-00 00:00:00') {
+        return null;
+    }
+    if ($value instanceof DateTimeInterface) {
+        return $value->getTimestamp();
+    }
+    if (is_int($value)) {
+        return $value;
+    }
+    $ts = strtotime((string) $value);
+    return $ts === false ? null : $ts;
+}
+
 // GenCoin conversion rate: ₱10 = 1 GC (same rate the POS wallet-load flow uses).
 define('GJC_PESOS_PER_GC', 10);
 
@@ -55,7 +99,7 @@ define('GJC_VIOLATION_SUSPEND_DAYS', 3);
 // row — it only proves a token was minted by the app. Rotating it simply
 // invalidates any outstanding view links.
 if (!defined('GJC_VIEW_TOKEN_SECRET')) {
-    define('GJC_VIEW_TOKEN_SECRET', 'gjc-view-token::7f3a9c1e5b8d24061a0e9f2c4d6b8a13::v1');
+    define('GJC_VIEW_TOKEN_SECRET', gjc_local_config('view_token_secret', 'GJC_VIEW_TOKEN_SECRET'));
 }
 
 /**
@@ -138,6 +182,23 @@ function gjc_role_name($role): string
     }
 
     return strtolower((string) $role);
+}
+
+/**
+ * Message that is safe to show a client for a caught exception.
+ *
+ * Business rules in this app are thrown as RuntimeException / InvalidArgumentException
+ * with text written for the user, so those pass through. Anything else — and
+ * PDOException, which extends RuntimeException but carries SQLSTATE text with
+ * table and column names — is logged in full and replaced by $generic.
+ */
+function gjc_safe_error(Throwable $e, string $context, string $generic = 'Something went wrong. Please try again.'): string
+{
+    if (($e instanceof RuntimeException || $e instanceof InvalidArgumentException) && !($e instanceof PDOException)) {
+        return $e->getMessage();
+    }
+    error_log('[' . $context . '] ' . get_class($e) . ': ' . $e->getMessage());
+    return $generic;
 }
 
 function gjc_user_id(): int
@@ -1594,6 +1655,13 @@ function gjc_ensure_staff_position_schema(PDO $db): void
     if (!in_array("position", $columns, true)) {
         $db->exec("ALTER TABLE users ADD COLUMN position VARCHAR(60) NULL DEFAULT NULL AFTER sub_role");
     }
+    // "Remove" on merchant/staff.php is a soft delete: the audit trail keeps a
+    // foreign key to users.userID, so a staff login that ever signed in cannot
+    // be hard-deleted. A removed row is set Inactive (which blocks sign-in) and
+    // stamped here, and every roster query filters it out.
+    if (!in_array("staff_removed_at", $columns, true)) {
+        $db->exec("ALTER TABLE users ADD COLUMN staff_removed_at DATETIME NULL DEFAULT NULL AFTER position");
+    }
 
     $stmt = $db->prepare(
         "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS
@@ -1729,7 +1797,6 @@ function gjc_app_setting_defaults(): array
         // Transaction limits (panel 2)
         'transfer_daily_limit'     => 5000.00,
         'transfer_min_amount'      => 1.00,
-        'withdraw_min_amount'      => 1.00,
         'topup_max_per_request'    => 5000.00,
         'wallet_default_spend_cap' => 0.00, // 0 = no default cap on new wallets
 
@@ -1740,6 +1807,10 @@ function gjc_app_setting_defaults(): array
 
         // Fee waiver credits (panel 4)
         'fee_waiver_max_amount' => 50000.00,
+
+        // Maintenance fee (panel 5) — a percentage of each student POS payment /
+        // P2P transfer, billed to tuition (0.1 = 0.1%, not 10%). 0 switches it off.
+        'maintenance_fee_rate_pct' => 0.10,
     ];
 }
 
@@ -2779,6 +2850,51 @@ function gjc_ensure_transaction_types(PDO $db, array $requiredTypes): void
 }
 
 /**
+ * Same safe widen-from-the-live-enum approach as gjc_ensure_transaction_types(),
+ * generalized to any ENUM column — used for cap_increase_log.source so new mint
+ * sources don't need a bespoke widener each time. Call before beginTransaction();
+ * this is DDL and MySQL implicitly commits an open transaction the instant it
+ * sees it.
+ */
+function gjc_ensure_enum_values(PDO $db, string $table, string $column, array $required): void
+{
+    try {
+        $column_info = $db->query("SHOW COLUMNS FROM `{$table}` LIKE " . $db->quote($column))->fetch(PDO::FETCH_ASSOC);
+        if (!$column_info) {
+            return;
+        }
+        $type = (string) ($column_info['Type'] ?? '');
+
+        $missing = false;
+        foreach ($required as $value) {
+            if (strpos($type, "'{$value}'") === false) {
+                $missing = true;
+                break;
+            }
+        }
+        if (!$missing) {
+            return;
+        }
+
+        preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $type, $labelMatches);
+        $labels = $labelMatches[1] ?? [];
+        foreach ($required as $value) {
+            if (!in_array($value, $labels, true)) {
+                $labels[] = $value;
+            }
+        }
+        $enumSql = implode(', ', array_map(
+            static fn(string $label): string => "'" . str_replace("'", "\\'", $label) . "'",
+            $labels
+        ));
+        $null = stripos($type, 'NOT NULL') !== false ? ' NOT NULL' : '';
+        $db->exec("ALTER TABLE `{$table}` MODIFY `{$column}` ENUM({$enumSql}){$null}");
+    } catch (\Throwable $e) {
+        // Leave the ENUM as-is; the insert below will surface the failure clearly.
+    }
+}
+
+/**
  * Widens transactions.transaction_type to include 'refund' (used when a
  * merchant issues a Return). Kept as its own function since
  * merchant/api/returns.php already calls it by this name.
@@ -2927,6 +3043,84 @@ function gjc_merchant_wallet(PDO $db, int $userId): array
     }
 
     return ["id" => 0, "balance" => 0.0, "source" => "none"];
+}
+
+/**
+ * Sales a stall hasn't remitted yet: everything since the wallet's last
+ * remittance today, or since midnight if it hasn't remitted at all today.
+ * This is what the Remit Sales button submits, and what the merchant
+ * dashboard shows as the pending amount waiting to be remitted — see
+ * gjc_merchant_remitted_sales_today() for the confirmed "Today's Sales"
+ * figure, and gjc_ensure_sales_remittances_schema() for the table.
+ */
+function gjc_merchant_unremitted_sales(PDO $db, int $walletId): array
+{
+    $since = date("Y-m-d 00:00:00");
+    $amount = 0.0;
+    $count = 0;
+
+    if ($walletId > 0 && gjc_table_exists($db, "sales_remittances")) {
+        $stmt = $db->prepare(
+            "SELECT period_end FROM sales_remittances
+              WHERE merchant_wallet_id = ? AND DATE(period_end) = CURDATE()
+              ORDER BY period_end DESC LIMIT 1",
+        );
+        $stmt->execute([$walletId]);
+        $lastRemit = $stmt->fetchColumn();
+        if ($lastRemit) {
+            $since = $lastRemit;
+        }
+    }
+
+    if ($walletId > 0 && gjc_table_exists($db, "transactions")) {
+        $earningTypes = [
+            CirculationEngine::TXN_PAYMENT,
+            CirculationEngine::TXN_VOUCHER_PAYMENT,
+        ];
+        $placeholders = implode(", ", array_fill(0, count($earningTypes), "?"));
+        $stmt = $db->prepare(
+            "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM transactions
+              WHERE merchant_wallet_id = ?
+                AND transaction_type IN ({$placeholders})
+                AND created_at > ?",
+        );
+        $stmt->execute(array_merge([$walletId], $earningTypes, [$since]));
+        [$amount, $count] = $stmt->fetch(PDO::FETCH_NUM);
+    }
+
+    return ["amount" => (float) $amount, "count" => (int) $count, "since" => $since];
+}
+
+/**
+ * Sales a stall HAS remitted today: 0 until the staff remits at least once
+ * today, then the sum of today's remittance(s). This is the confirmed
+ * "Today's Sales" figure the merchant dashboard headlines — see
+ * gjc_merchant_unremitted_sales() for the pending amount still waiting on
+ * a remittance.
+ */
+function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
+{
+    $amount = 0.0;
+    $count = 0;
+    $periodStart = null;
+    $periodEnd = null;
+
+    if ($walletId > 0 && gjc_table_exists($db, "sales_remittances")) {
+        $stmt = $db->prepare(
+            "SELECT COALESCE(SUM(amount), 0), COALESCE(SUM(txn_count), 0), MIN(period_start), MAX(period_end)
+               FROM sales_remittances
+              WHERE merchant_wallet_id = ? AND DATE(period_end) = CURDATE()",
+        );
+        $stmt->execute([$walletId]);
+        [$amount, $count, $periodStart, $periodEnd] = $stmt->fetch(PDO::FETCH_NUM);
+    }
+
+    return [
+        "amount" => (float) $amount,
+        "count" => (int) $count,
+        "period_start" => $periodStart,
+        "period_end" => $periodEnd,
+    ];
 }
 
 function gjc_merchant_owner_id(PDO $db, ?int $userId = null): int
@@ -3314,6 +3508,7 @@ function gjc_transaction_type_options(): array
         "cap_increase" => "Cap Increase",
         "refund" => "Refund",
         "allowance" => "Allowance",
+        "fee_waiver_claim" => "Fee Waiver Claim",
     ];
 }
 
@@ -3346,6 +3541,7 @@ function gjc_transaction_type_label(string $type): string
         "topup" => "Top-up",
         "encashment" => "Encashment",
         "allowance" => "Allowance",
+        "fee_waiver_claim" => "Fee Waiver Claim",
     ];
 
     return $labels[$type] ?? ucwords(str_replace("_", " ", $type));
@@ -3375,6 +3571,7 @@ function gjc_student_txn_meta(string $type): array
         "voucher_payment" => "voucher",
         "p2p_transfer" => "transfer",
         "allowance" => "allowance",
+        "fee_waiver_claim" => "fee_waiver",
     ];
     $icons = [
         "topup" => "fa-circle-plus",
@@ -3382,6 +3579,7 @@ function gjc_student_txn_meta(string $type): array
         "voucher" => "fa-credit-card",
         "transfer" => "fa-paper-plane",
         "allowance" => "fa-hand-holding-dollar",
+        "fee_waiver" => "fa-hand-holding-dollar",
         "other" => "fa-receipt",
     ];
     $slug = $slugs[$type] ?? "other";
@@ -3389,7 +3587,7 @@ function gjc_student_txn_meta(string $type): array
     return [
         "slug" => $slug,
         "icon" => $icons[$slug],
-        "incoming" => in_array($slug, ["topup", "allowance"], true),
+        "incoming" => in_array($slug, ["topup", "allowance", "fee_waiver"], true),
         "label" => gjc_transaction_type_label($type),
     ];
 }
@@ -3645,8 +3843,19 @@ function gjc_fetch_admin_transactions(
     PDO $db,
     array $filters = [],
     int $limit = 100,
+    ?int $sqlCap = null,
 ): array {
     gjc_ensure_operational_tables($db);
+
+    // How many rows each source SELECT may return. null keeps the historical
+    // 500/300/300, which is what every screen wants - they show at most 150.
+    // 0 means no cap: the CSV export is a reconciliation document and a
+    // silently short one is worse than a slow one. $limit alone could not
+    // express this, because it only ever controlled the array_slice below.
+    $ledgerCap = $sqlCap === null ? 500 : $sqlCap;
+    $requestCap = $sqlCap === null ? 300 : $sqlCap;
+    $ledgerLimit = $ledgerCap > 0 ? ' LIMIT ' . (int) $ledgerCap : '';
+    $requestLimit = $requestCap > 0 ? ' LIMIT ' . (int) $requestCap : '';
 
     $rows = [];
 
@@ -3656,8 +3865,7 @@ function gjc_fetch_admin_transactions(
                     voucher_id, amount, status, notes, created_at, vault_before, vault_after,
                     total_in_circulation
                FROM transactions
-              ORDER BY created_at DESC, id DESC
-              LIMIT 500",
+              ORDER BY created_at DESC, id DESC" . $ledgerLimit,
         );
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3687,8 +3895,7 @@ function gjc_fetch_admin_transactions(
                     approved_by, approved_at, rejected_by, rejected_at, created_at
                FROM topup_requests
               WHERE status <> 'approved' OR reference_no IS NULL OR reference_no = ''
-              ORDER BY created_at DESC, id DESC
-              LIMIT 300",
+              ORDER BY created_at DESC, id DESC" . $requestLimit,
         );
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3719,8 +3926,7 @@ function gjc_fetch_admin_transactions(
                     released_by, released_at, rejected_by, rejected_at, created_at
                FROM encashment_requests
               WHERE status <> 'released' OR reference_no IS NULL OR reference_no = ''
-              ORDER BY created_at DESC, id DESC
-              LIMIT 300",
+              ORDER BY created_at DESC, id DESC" . $requestLimit,
         );
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3801,6 +4007,70 @@ function gjc_fetch_admin_transactions(
     }
 
     return $rows;
+}
+
+/**
+ * The four Transactions stat cards, counted by SQL over the whole tables.
+ *
+ * gjc_admin_transaction_stats() counts an array that gjc_fetch_admin_transactions()
+ * has already capped, so "Total Transactions - All wallet activities" stopped
+ * being true at roughly 1,100 rows. These figures do not depend on how many
+ * rows a page happens to have loaded.
+ *
+ * The source set mirrors the fetch exactly: the ledger, plus the top-up and
+ * encashment requests that have not yet become ledger rows (same WHERE clauses,
+ * so a request is never counted twice). Success and pending statuses match
+ * gjc_transaction_is_success() / gjc_transaction_is_pending().
+ */
+function gjc_admin_transaction_counts(PDO $db): array
+{
+    gjc_ensure_operational_tables($db);
+
+    $success = "('completed', 'approved', 'released')";
+    $pending = "('pending', 'processing')";
+
+    $sources = [
+        ['transactions', '1 = 1'],
+        ['topup_requests', "status <> 'approved' OR reference_no IS NULL OR reference_no = ''"],
+        ['encashment_requests', "status <> 'released' OR reference_no IS NULL OR reference_no = ''"],
+    ];
+
+    $counts = [
+        'total_transactions' => 0,
+        'todays_volume' => 0.0,
+        'pending_transactions' => 0,
+        'completed_today' => 0,
+    ];
+
+    foreach ($sources as [$table, $where]) {
+        if (!gjc_table_exists($db, $table)) {
+            continue;
+        }
+        try {
+            $row = $db->query(
+                "SELECT COUNT(*) AS total,
+                        COALESCE(SUM(CASE WHEN LOWER(status) IN {$success}
+                                           AND DATE(created_at) = CURDATE()
+                                          THEN amount ELSE 0 END), 0) AS volume_today,
+                        SUM(CASE WHEN LOWER(status) IN {$pending} THEN 1 ELSE 0 END) AS pending,
+                        SUM(CASE WHEN LOWER(status) IN {$success}
+                                  AND DATE(created_at) = CURDATE()
+                                 THEN 1 ELSE 0 END) AS done_today
+                   FROM {$table}
+                  WHERE {$where}",
+            )->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            // A missing column on one source must not blank all four cards.
+            continue;
+        }
+
+        $counts['total_transactions'] += (int) ($row['total'] ?? 0);
+        $counts['todays_volume'] += (float) ($row['volume_today'] ?? 0);
+        $counts['pending_transactions'] += (int) ($row['pending'] ?? 0);
+        $counts['completed_today'] += (int) ($row['done_today'] ?? 0);
+    }
+
+    return $counts;
 }
 
 function gjc_admin_transaction_stats(array $rows): array
@@ -3893,40 +4163,113 @@ function gjc_count_users_by_role(PDO $db, string $roleName): int
     return 0;
 }
 
-function gjc_dashboard_transaction_series(
-    array $transactions,
-    int $days = 7,
-): array {
+/**
+ * Daily money flow for the dashboard chart: how much entered wallets, how much
+ * was spent at stalls, and how much left the system as cash.
+ *
+ * Read straight from the ledger with one grouped query rather than from the
+ * recent-transactions list, which is capped at a few hundred rows and would
+ * undercount a busy week. Only completed rows count; the vault-side types
+ * (voucher create/expire, service fee, P2P) are internal shuffles, not flow.
+ *
+ *   loaded      top-ups + tuition credits   (money entering student wallets)
+ *   spent       stall payments + vouchers   (money moving to merchants)
+ *   cashed_out  merchant encashments + student withdrawals (money leaving)
+ */
+function gjc_dashboard_money_flow(PDO $db, int $days = 7): array
+{
     $days = max(1, $days);
     $labels = [];
-    $totals = [];
-
+    $flow = [];
     for ($offset = $days - 1; $offset >= 0; $offset--) {
         $date = date("Y-m-d", strtotime("-{$offset} days"));
         $labels[] = date("M d", strtotime($date));
-        $totals[$date] = 0.0;
+        $flow[$date] = ["loaded" => 0.0, "spent" => 0.0, "cashed_out" => 0.0];
     }
 
-    foreach ($transactions as $transaction) {
-        if (!gjc_transaction_is_success($transaction["status"])) {
-            continue;
-        }
-
-        $date = substr((string) $transaction["created_at"], 0, 10);
-        if (array_key_exists($date, $totals)) {
-            $totals[$date] += (float) $transaction["amount"];
-        }
-    }
-
-    return [
-        "labels" => $labels,
-        "data" => array_map(
-            function ($value) {
-                return round($value, 2);
-            },
-            array_values($totals)
-        ),
+    $bucketOf = [
+        "cash_in" => "loaded",
+        "tuition_credit" => "loaded",
+        "payment" => "spent",
+        "voucher_payment" => "spent",
+        "merchant_settle" => "cashed_out",
+        "student_withdraw" => "cashed_out",
     ];
+
+    if (gjc_table_exists($db, "transactions")) {
+        $marks = implode(",", array_fill(0, count($bucketOf), "?"));
+        $stmt = $db->prepare(
+            "SELECT DATE(created_at) AS d, transaction_type, SUM(amount) AS total
+               FROM transactions
+              WHERE status = 'completed'
+                AND created_at >= ?
+                AND transaction_type IN ($marks)
+              GROUP BY DATE(created_at), transaction_type",
+        );
+        $stmt->execute([
+            date("Y-m-d", strtotime("-" . ($days - 1) . " days")) . " 00:00:00",
+            ...array_keys($bucketOf),
+        ]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $bucket = $bucketOf[$row["transaction_type"]] ?? null;
+            if ($bucket !== null && isset($flow[$row["d"]])) {
+                $flow[$row["d"]][$bucket] += (float) $row["total"];
+            }
+        }
+    }
+
+    $series = ["loaded" => [], "spent" => [], "cashed_out" => []];
+    foreach ($flow as $day) {
+        foreach ($series as $key => $_) {
+            $series[$key][] = round($day[$key], 2);
+        }
+    }
+
+    return ["labels" => $labels, "series" => $series];
+}
+
+/**
+ * The two queues a finance officer is responsible for clearing.
+ *
+ * One source for both places that show them: the "Needs your attention" strip
+ * on the dashboard and the count badges in the sidebar. When those two were
+ * computed separately they could disagree, which is worse than showing
+ * nothing — a badge saying 3 next to a tile saying 2 makes the user distrust
+ * both numbers.
+ *
+ * Every count is guarded by gjc_table_exists() and the whole thing by a
+ * try/catch, because a missing table or a bad connection must degrade to
+ * "no badge" rather than take the sidebar down on every admin page.
+ */
+function gjc_finance_queue_counts(PDO $db): array
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $counts = [
+        'encashments' => 0,
+        'stall_applications' => 0,
+    ];
+
+    $queries = [
+        'encashments' => ['encashment_requests', "SELECT COUNT(*) FROM encashment_requests WHERE status = 'pending'"],
+        'stall_applications' => ['stall_applications', "SELECT COUNT(*) FROM stall_applications WHERE status = 'pending_verification'"],
+    ];
+
+    foreach ($queries as $key => [$table, $sql]) {
+        try {
+            if (gjc_table_exists($db, $table)) {
+                $counts[$key] = (int) $db->query($sql)->fetchColumn();
+            }
+        } catch (Throwable $e) {
+            // Leave it at zero: a broken count must not break the page.
+        }
+    }
+
+    $cached = $counts;
+    return $counts;
 }
 
 function gjc_admin_dashboard_data(PDO $db): array
@@ -3947,7 +4290,7 @@ function gjc_admin_dashboard_data(PDO $db): array
     $transactions = gjc_fetch_admin_transactions($db, [], 0);
     $stats = gjc_admin_transaction_stats($transactions);
     $recentTransactions = array_slice($transactions, 0, 10);
-    $chart = gjc_dashboard_transaction_series($transactions, 7);
+    $moneyFlow = gjc_dashboard_money_flow($db, 7);
 
     $studentWalletsTotal = (float) ($snapshot["student_wallets_total"] ?? 0);
     $merchantWalletsTotal = (float) ($snapshot["merchant_wallets_total"] ?? 0);
@@ -3958,15 +4301,6 @@ function gjc_admin_dashboard_data(PDO $db): array
     $activeVouchersTotal = (float) ($snapshot["active_vouchers_total"] ?? 0);
     $circulatingBalance =
         $studentWalletsTotal + $merchantWalletsTotal + $activeVouchersTotal;
-
-    $pendingTopups = 0;
-    if (gjc_table_exists($db, "topup_requests")) {
-        $pendingTopups = (int) $db
-            ->query(
-                "SELECT COUNT(*) FROM topup_requests WHERE status = 'pending'",
-            )
-            ->fetchColumn();
-    }
 
     $pendingEncashments = 0;
     if (gjc_table_exists($db, "encashment_requests")) {
@@ -3995,7 +4329,6 @@ function gjc_admin_dashboard_data(PDO $db): array
         "system_financials" => [
             "circulating_balance" => $circulatingBalance,
             "todays_volume" => (float) $stats["todays_volume"],
-            "pending_topups" => $pendingTopups,
             "pending_encashments" => $pendingEncashments,
         ],
         "user_demographics" => [
@@ -4004,7 +4337,7 @@ function gjc_admin_dashboard_data(PDO $db): array
             "active_merchants" => gjc_count_users_by_role($db, "merchant"),
         ],
         "recent_transactions" => $recentTransactions,
-        "transaction_chart" => $chart,
+        "money_flow" => $moneyFlow,
     ];
 }
 
@@ -4238,9 +4571,13 @@ function gjc_parent_wallet(PDO $db, int $parentId): array
  * that finance creates (amount + signed parent waiver upload) to be applied
  * against a student's tuition by whichever system actually owns tuition fee
  * — GenPay does not track or manage tuition fee itself, only this credit.
- * This never touches CirculationEngine, student_wallets, or system_settings
- * — do not confuse with the separate (and currently unimplemented) GenCoin
- * tuition-credit concept.
+ * Finance's own set_amount/upload_waiver/cancel workflow (admin/api/fee_waiver_credits.php)
+ * never touches CirculationEngine, student_wallets, or system_settings.
+ *
+ * Once a credit is 'posted', the student or a linked parent may separately
+ * choose to claim it into real GenCoin (gjc_claim_fee_waiver_credit()) —
+ * that is the only path that mints, and it is self-service, one-way, and
+ * unrelated to finance's workflow above.
  */
 function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
 {
@@ -4249,13 +4586,36 @@ function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             student_user_id INT UNSIGNED NOT NULL,
             amount          DECIMAL(10,2) NULL,
-            status          ENUM('empty', 'pending', 'posted') NOT NULL DEFAULT 'empty',
+            status          ENUM('empty', 'pending', 'posted', 'claimed') NOT NULL DEFAULT 'empty',
             waiver_file     VARCHAR(255) NULL,
+            claimed_at         DATETIME NULL,
+            claimed_by_user_id INT UNSIGNED NULL,
+            claim_reference    VARCHAR(30) NULL,
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uq_fee_waiver_student (student_user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
+
+    // Existing installs: widen the status enum and add the claim columns.
+    gjc_ensure_enum_values($db, 'fee_waiver_credits', 'status', ['empty', 'pending', 'posted', 'claimed']);
+    $fwcCols = gjc_table_columns($db, 'fee_waiver_credits');
+    $fwcAltered = false;
+    foreach ([
+        'claimed_at'         => 'DATETIME NULL',
+        'claimed_by_user_id' => 'INT UNSIGNED NULL',
+        'claim_reference'    => 'VARCHAR(30) NULL',
+    ] as $col => $def) {
+        if (!in_array($col, $fwcCols, true)) {
+            try {
+                $db->exec("ALTER TABLE fee_waiver_credits ADD COLUMN {$col} {$def}");
+                $fwcAltered = true;
+            } catch (\Throwable $ignored) {}
+        }
+    }
+    if ($fwcAltered) {
+        gjc_table_columns($db, 'fee_waiver_credits', true);
+    }
 
     // Append-only transition history — no updates/deletes, ever.
     $db->exec(
@@ -4300,15 +4660,510 @@ function gjc_student_waiver_credit(PDO $db, int $studentUserId): array
     gjc_ensure_fee_waiver_credits_schema($db);
 
     $stmt = $db->prepare(
-        "SELECT amount, status, waiver_file FROM fee_waiver_credits WHERE student_user_id = ? LIMIT 1"
+        "SELECT amount, status, waiver_file, claimed_at, claim_reference
+           FROM fee_waiver_credits WHERE student_user_id = ? LIMIT 1"
     );
     $stmt->execute([$studentUserId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['amount' => null, 'status' => 'empty', 'waiver_file' => null];
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
+        'amount' => null, 'status' => 'empty', 'waiver_file' => null,
+        'claimed_at' => null, 'claim_reference' => null,
+    ];
 
     return [
-        'status'      => (string) $row['status'],
-        'amount'      => $row['amount'] !== null ? (float) $row['amount'] : null,
-        'waiver_file' => $row['waiver_file'],
+        'status'         => (string) $row['status'],
+        'amount'         => $row['amount'] !== null ? (float) $row['amount'] : null,
+        'waiver_file'    => $row['waiver_file'],
+        'claimed_at'     => $row['claimed_at'],
+        'claim_reference' => $row['claim_reference'],
+    ];
+}
+
+/**
+ * Claims a posted Fee Waiver Credit into real GenCoin, minted straight into
+ * the student's wallet via CirculationEngine::feeWaiverClaim(). Self-service
+ * — callable by the student themselves or by a linked parent (the caller is
+ * responsible for that access check; this function only re-checks the row's
+ * status). Atomic test-and-set on the status column makes "whoever claims
+ * first wins" race-safe between the student and parent hitting this at the
+ * same time — see references/patterns.md's race-safety pattern.
+ *
+ * @throws RuntimeException if the credit isn't currently 'posted', or the
+ *         student has no wallet yet.
+ */
+function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUserId): array
+{
+    gjc_ensure_fee_waiver_credits_schema($db);
+    require_once __DIR__ . '/CirculationEngine.php';
+
+    // DDL — must run before any beginTransaction() below.
+    gjc_ensure_transaction_types($db, ['fee_waiver_claim']);
+    gjc_ensure_enum_values($db, 'cap_increase_log', 'source', ['super_admin_mint', 'tuition_credit', 'fee_waiver_claim']);
+
+    $stmt = $db->prepare("SELECT id, amount FROM fee_waiver_credits WHERE student_user_id = ? LIMIT 1");
+    $stmt->execute([$studentUserId]);
+    $credit = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$credit) {
+        throw new RuntimeException('No Fee Waiver Credit record exists for this student.');
+    }
+    $creditId = (int) $credit['id'];
+    $amount = (float) $credit['amount'];
+
+    $claim = $db->prepare(
+        "UPDATE fee_waiver_credits
+            SET status = 'claimed', claimed_at = NOW(), claimed_by_user_id = ?
+          WHERE id = ? AND status = 'posted'"
+    );
+    $claim->execute([$actingUserId, $creditId]);
+    if ($claim->rowCount() === 0) {
+        throw new RuntimeException('This credit is not available to claim — it may already have been claimed.');
+    }
+
+    try {
+        $wallet = gjc_student_wallet($db, $studentUserId);
+        if ((int) $wallet['id'] === 0) {
+            throw new RuntimeException('Student wallet not found.');
+        }
+
+        $engine = new CirculationEngine($db);
+        $result = $engine->feeWaiverClaim((int) $wallet['id'], $amount, $actingUserId, $creditId);
+
+        $db->prepare("UPDATE fee_waiver_credits SET claim_reference = ? WHERE id = ?")
+            ->execute([$result['reference'], $creditId]);
+
+        logAudit(
+            $db, $actingUserId, gjc_current_role(), 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
+            ['student_user_id' => $studentUserId, 'status' => 'posted'],
+            ['student_user_id' => $studentUserId, 'status' => 'claimed', 'amount' => $amount, 'reference' => $result['reference']],
+            null,
+            ['target_id' => $studentUserId]
+        );
+
+        gjc_notify(
+            $db,
+            $studentUserId,
+            'fee_waiver',
+            'Fee Waiver Credit Added to Wallet',
+            gjc_money_plain($amount) . ' from your Fee Waiver Credit is now in your GenPay wallet.',
+            'hand-holding-dollar',
+            STUDENT_URL . '/profile.php'
+        );
+
+        return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
+    } catch (\Throwable $e) {
+        // Mint failed after the claim was taken — give the credit back to the queue
+        // instead of leaving it stuck 'claimed' with no money behind it.
+        $db->prepare(
+            "UPDATE fee_waiver_credits SET status = 'posted', claimed_at = NULL, claimed_by_user_id = NULL WHERE id = ? AND status = 'claimed'"
+        )->execute([$creditId]);
+        throw $e;
+    }
+}
+
+/**
+ * Sibling to gjc_claim_fee_waiver_credit(), for the Bulk Student Import's
+ * "Additional Fee" column (admin/maintenance.php): a brand-new student whose
+ * import row carries an amount goes straight from 'empty' to 'claimed' —
+ * there is no waiver document and no separate self-service claim step,
+ * because finance reviewing the import preview and clicking Apply is itself
+ * the approval. MUST be called AFTER the caller's own beginTransaction()/
+ * commit() around the student-creation insert, never nested inside it —
+ * CirculationEngine opens its own transaction and PDO does not support
+ * nested transactions.
+ *
+ * @throws RuntimeException if the credit isn't 'empty' (defensive — the
+ *         row was just created moments ago by the same import), or the
+ *         student has no wallet yet.
+ */
+function gjc_import_fee_waiver_credit(PDO $db, int $studentUserId, float $amount, int $creditId, int $initiatedBy): array
+{
+    require_once __DIR__ . '/CirculationEngine.php';
+
+    // DDL — must run before any beginTransaction() below.
+    gjc_ensure_transaction_types($db, ['fee_waiver_claim']);
+    gjc_ensure_enum_values($db, 'cap_increase_log', 'source', ['super_admin_mint', 'tuition_credit', 'fee_waiver_claim']);
+
+    $claim = $db->prepare(
+        "UPDATE fee_waiver_credits
+            SET status = 'claimed', amount = ?, claimed_at = NOW(), claimed_by_user_id = ?
+          WHERE id = ? AND status = 'empty'"
+    );
+    $claim->execute([$amount, $initiatedBy, $creditId]);
+    if ($claim->rowCount() === 0) {
+        throw new RuntimeException("Fee Waiver Credit #{$creditId} was not in the 'empty' state.");
+    }
+
+    try {
+        $wallet = gjc_student_wallet($db, $studentUserId);
+        if ((int) $wallet['id'] === 0) {
+            throw new RuntimeException('Student wallet not found.');
+        }
+
+        $engine = new CirculationEngine($db);
+        $result = $engine->feeWaiverClaim((int) $wallet['id'], $amount, $initiatedBy, $creditId);
+
+        $db->prepare("UPDATE fee_waiver_credits SET claim_reference = ? WHERE id = ?")
+            ->execute([$result['reference'], $creditId]);
+
+        logAudit(
+            $db, $initiatedBy, gjc_current_role(), 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
+            ['student_user_id' => $studentUserId, 'status' => 'empty'],
+            ['student_user_id' => $studentUserId, 'status' => 'claimed', 'amount' => $amount, 'reference' => $result['reference'], 'source' => 'bulk_import'],
+            null,
+            ['target_id' => $studentUserId]
+        );
+
+        gjc_notify(
+            $db,
+            $studentUserId,
+            'fee_waiver',
+            'Fee Waiver Credit Added to Wallet',
+            gjc_money_plain($amount) . ' from your Fee Waiver Credit is now in your GenPay wallet.',
+            'hand-holding-dollar',
+            STUDENT_URL . '/profile.php'
+        );
+
+        return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
+    } catch (\Throwable $e) {
+        $db->prepare(
+            "UPDATE fee_waiver_credits SET status = 'empty', amount = NULL, claimed_at = NULL, claimed_by_user_id = NULL WHERE id = ? AND status = 'claimed'"
+        )->execute([$creditId]);
+        throw $e;
+    }
+}
+
+/**
+ * Maintenance fee: a percentage charge on a student's POS payment or
+ * P2P transfer. Like the Fee Waiver Credit it is NOT wallet money — the student's
+ * balance is never touched and CirculationEngine/system_settings are never
+ * involved. Each row is one tuition-assessment line finance bills later, so the
+ * lifecycle is accrued -> collected (or voided when the sale is returned).
+ *
+ * Call this BEFORE beginTransaction(): CREATE TABLE is DDL and would implicitly
+ * commit the payment transaction. It also primes the settings cache for the same
+ * reason, so gjc_setting() inside the transaction never runs DDL.
+ */
+function gjc_ensure_maintenance_fees_schema(PDO $db): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS maintenance_fees (
+            id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            student_user_id INT UNSIGNED NOT NULL,
+            reference_no    VARCHAR(40) NOT NULL,
+            source_type     ENUM('payment', 'p2p_transfer') NOT NULL,
+            txn_amount      DECIMAL(12,2) NOT NULL,
+            fee_amount      DECIMAL(10,2) NOT NULL,
+            status          ENUM('accrued', 'collected', 'voided') NOT NULL DEFAULT 'accrued',
+            school_year_id  INT NULL,
+            created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            collected_at    DATETIME NULL,
+            collected_by    INT UNSIGNED NULL,
+            UNIQUE KEY uq_mfee_ref_student (reference_no, student_user_id),
+            INDEX idx_mfee_student_status (student_user_id, status),
+            INDEX idx_mfee_status_created (status, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+
+    // One row per "Mark collected" action on one student — the receipt finance
+    // can point to. maintenance_fees.collection_id links each settled fee to it.
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS maintenance_fee_collections (
+            id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            receipt_no      VARCHAR(40) NOT NULL,
+            student_user_id INT UNSIGNED NOT NULL,
+            entry_count     INT UNSIGNED NOT NULL,
+            total_amount    DECIMAL(12,2) NOT NULL,
+            collected_by    INT UNSIGNED NOT NULL,
+            collected_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_mfc_receipt (receipt_no),
+            INDEX idx_mfc_student (student_user_id),
+            INDEX idx_mfc_collected_at (collected_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+
+    if (!in_array('collection_id', gjc_table_columns($db, 'maintenance_fees', true), true)) {
+        $db->exec("ALTER TABLE maintenance_fees ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_mfee_collection (collection_id)");
+    }
+
+    // Fees collected before receipts existed: group them into one legacy
+    // receipt per (student, collected_at, collector) so the history is complete.
+    $legacy = $db->query(
+        "SELECT student_user_id, collected_at, collected_by, COUNT(*) AS n, SUM(fee_amount) AS total
+           FROM maintenance_fees
+          WHERE status = 'collected' AND collection_id IS NULL AND collected_at IS NOT NULL
+          GROUP BY student_user_id, collected_at, collected_by"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($legacy as $g) {
+        $db->prepare(
+            "INSERT INTO maintenance_fee_collections
+                (receipt_no, student_user_id, entry_count, total_amount, collected_by, collected_at)
+             VALUES (?, ?, ?, ?, ?, ?)"
+        )->execute([gjc_reference('MFR'), (int) $g['student_user_id'], (int) $g['n'], (float) $g['total'], (int) ($g['collected_by'] ?? 0), $g['collected_at']]);
+        $db->prepare(
+            "UPDATE maintenance_fees SET collection_id = ?
+              WHERE student_user_id = ? AND status = 'collected' AND collection_id IS NULL
+                AND collected_at = ? AND collected_by <=> ?"
+        )->execute([(int) $db->lastInsertId(), (int) $g['student_user_id'], $g['collected_at'], $g['collected_by'] !== null ? (int) $g['collected_by'] : null]);
+    }
+
+    gjc_settings_all($db);
+}
+
+/**
+ * Self-declared sales remittance: merchant staff hand over their counted cash
+ * and click Remit Sales, which logs a report of everything since the wallet's
+ * last remittance and moves the "since" boundary forward — no admin approval,
+ * no wallet balance change (see gjc_merchant_unremitted_sales()). Printable
+ * via merchant/remittance_report.php.
+ */
+function gjc_ensure_sales_remittances_schema(PDO $db): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS sales_remittances (
+            id                  INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            merchant_wallet_id  INT UNSIGNED NOT NULL,
+            merchant_user_id    INT UNSIGNED NOT NULL,
+            staff_user_id       INT UNSIGNED NOT NULL,
+            reference_no        VARCHAR(40) NULL UNIQUE,
+            amount              DECIMAL(15,2) NOT NULL,
+            txn_count           INT UNSIGNED NOT NULL DEFAULT 0,
+            period_start        DATETIME NOT NULL,
+            period_end          DATETIME NOT NULL,
+            created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_remit_wallet (merchant_wallet_id),
+            INDEX idx_remit_wallet_period (merchant_wallet_id, period_end),
+            INDEX idx_remit_owner (merchant_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+}
+
+/**
+ * Settle every still-accrued fee for one student under a fresh receipt. Runs in
+ * the caller's transaction. Returns ['receipt_no', 'entries', 'total'], or null
+ * when the student has nothing accrued.
+ */
+function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collectedBy, ?string $createdBefore = null): ?array
+{
+    // $createdBefore limits the settle to fees created before that datetime
+    // (the auto-collect sweep leaves today's open so a same-day return can still void them).
+    $cutoffSql = $createdBefore !== null ? ' AND created_at < ' . $db->quote($createdBefore) : '';
+
+    // Lock first so the receipt total is exactly what flips.
+    $sumStmt = $db->prepare(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(fee_amount), 0) AS total
+           FROM maintenance_fees
+          WHERE student_user_id = ? AND status = 'accrued'{$cutoffSql}
+            FOR UPDATE"
+    );
+    $sumStmt->execute([$studentUserId]);
+    $sum = $sumStmt->fetch(PDO::FETCH_ASSOC);
+    if ((int) $sum['n'] === 0) {
+        return null;
+    }
+
+    $receiptNo = gjc_reference('MFR');
+    $db->prepare(
+        "INSERT INTO maintenance_fee_collections
+            (receipt_no, student_user_id, entry_count, total_amount, collected_by)
+         VALUES (?, ?, ?, ?, ?)"
+    )->execute([$receiptNo, $studentUserId, (int) $sum['n'], (float) $sum['total'], $collectedBy]);
+    $collectionId = (int) $db->lastInsertId();
+
+    $db->prepare(
+        "UPDATE maintenance_fees
+            SET status = 'collected', collected_at = NOW(), collected_by = ?, collection_id = ?
+          WHERE student_user_id = ? AND status = 'accrued'{$cutoffSql}"
+    )->execute([$collectedBy, $collectionId, $studentUserId]);
+
+    return ['receipt_no' => $receiptNo, 'entries' => (int) $sum['n'], 'total' => (float) $sum['total']];
+}
+
+/**
+ * Auto-collect: settle every student's accrued fees from before today, one
+ * receipt per student (collected_by 0 = system). Today's fees stay accrued so a
+ * same-day return can still void them. Called when the admin wallet loads, so
+ * no one has to press "Mark collected". Returns the receipts keyed by student.
+ */
+function gjc_auto_collect_maintenance_fees(PDO $db): array
+{
+    $cutoff = date('Y-m-d 00:00:00');
+    $ids = $db->query(
+        "SELECT DISTINCT student_user_id FROM maintenance_fees
+          WHERE status = 'accrued' AND created_at < " . $db->quote($cutoff)
+    )->fetchAll(PDO::FETCH_COLUMN);
+
+    $receipts = [];
+    foreach ($ids as $sid) {
+        $db->beginTransaction();
+        try {
+            $receipt = gjc_collect_maintenance_fees($db, (int) $sid, 0, $cutoff);
+            if ($receipt === null) {
+                $db->rollBack();
+                continue;
+            }
+            $db->commit();
+            $receipts[(int) $sid] = $receipt;
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('[auto-collect maintenance fees] ' . $e->getMessage());
+        }
+    }
+    return $receipts;
+}
+
+/**
+ * The maintenance fee attached to each given transaction reference, keyed by
+ * reference_no: ['fee_amount' => float, 'status' => accrued|collected|voided,
+ * 'student_user_id' => int, 'collected_at' => ?string, 'receipt_no' => ?string].
+ *
+ * The fee is a line ON its payment/transfer, not a row of its own, so every
+ * transaction view looks it up by the transaction's reference. It is a tuition
+ * charge, never wallet money — nothing here touches balances or circulation.
+ * Pass $studentUserId to scope to one student (the sender); references with no
+ * fee simply have no key.
+ */
+function gjc_maintenance_fees_by_reference(PDO $db, array $referenceNos, ?int $studentUserId = null): array
+{
+    $referenceNos = array_values(array_unique(array_filter(array_map('strval', $referenceNos), static fn($r): bool => $r !== '')));
+    if (!$referenceNos) {
+        return [];
+    }
+    gjc_ensure_maintenance_fees_schema($db);
+
+    // Chunked so a long history page never builds an enormous IN list.
+    $out = [];
+    foreach (array_chunk($referenceNos, 500) as $chunk) {
+        $sql = "SELECT mf.reference_no, mf.student_user_id, mf.fee_amount, mf.status, mf.collected_at, c.receipt_no
+                  FROM maintenance_fees mf
+                  LEFT JOIN maintenance_fee_collections c ON c.id = mf.collection_id
+                 WHERE mf.reference_no IN (" . implode(',', array_fill(0, count($chunk), '?')) . ")";
+        $params = $chunk;
+        if ($studentUserId !== null) {
+            $sql .= " AND mf.student_user_id = ?";
+            $params[] = $studentUserId;
+        }
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[(string) $r['reference_no']] = [
+                'fee_amount'      => (float) $r['fee_amount'],
+                'status'          => (string) $r['status'],
+                'student_user_id' => (int) $r['student_user_id'],
+                'collected_at'    => $r['collected_at'],
+                'receipt_no'      => $r['receipt_no'],
+            ];
+        }
+    }
+    return $out;
+}
+
+/** One transaction's fee, or null when it carried none. See gjc_maintenance_fees_by_reference(). */
+function gjc_maintenance_fee_for_reference(PDO $db, string $referenceNo, ?int $studentUserId = null): ?array
+{
+    return gjc_maintenance_fees_by_reference($db, [$referenceNo], $studentUserId)[$referenceNo] ?? null;
+}
+
+/** Plain-language state of a fee, for the "Maintenance fee" line on a transaction. */
+function gjc_maintenance_fee_state_label(string $status): string
+{
+    return match ($status) {
+        'collected' => 'Billed to tuition · collected',
+        'voided'    => 'Voided · sale returned',
+        default     => 'Billed to tuition',
+    };
+}
+
+/**
+ * The maintenance fee for a transaction of $amount pesos: the configured
+ * percentage, rounded to the nearest centavo, never below ₱0.01 — so every
+ * qualifying transaction pays at least one centavo. 0 when the fee is switched
+ * off (rate 0) or the amount is not positive.
+ */
+function gjc_maintenance_fee_for_amount(PDO $db, float $amount): float
+{
+    $pct = gjc_setting($db, 'maintenance_fee_rate_pct');
+    if ($pct <= 0 || $amount <= 0) {
+        return 0.0;
+    }
+    return max(0.01, round($amount * $pct / 100, 2, PHP_ROUND_HALF_UP));
+}
+
+/** "0.01%", "1%", "2.5%" — a rate label with no trailing zeros. */
+function gjc_fee_rate_label(float $pct): string
+{
+    return rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.') . '%';
+}
+
+/**
+ * Accrue the maintenance fee for one student transaction. Runs inside the
+ * caller's transaction so the fee exists if and only if the payment committed.
+ * Idempotent per (reference, student). Returns the fee accrued (0.0 when off).
+ */
+function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referenceNo, string $sourceType, float $txnAmount): float
+{
+    $fee = gjc_maintenance_fee_for_amount($db, $txnAmount);
+    if ($fee <= 0 || $studentUserId <= 0) {
+        return 0.0;
+    }
+
+    $db->prepare(
+        "INSERT IGNORE INTO maintenance_fees
+            (student_user_id, reference_no, source_type, txn_amount, fee_amount, school_year_id)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    )->execute([$studentUserId, $referenceNo, $sourceType, round($txnAmount, 2), $fee, gjc_active_school_year_id($db)]);
+
+    return $fee;
+}
+
+/**
+ * Void the still-accrued fee attached to a reversed sale. A fee finance has
+ * already collected is left alone — that is a billing correction, not automatic.
+ */
+function gjc_void_maintenance_fee(PDO $db, string $referenceNo): int
+{
+    $stmt = $db->prepare(
+        "UPDATE maintenance_fees SET status = 'voided'
+          WHERE reference_no = ? AND status = 'accrued'"
+    );
+    $stmt->execute([$referenceNo]);
+    return $stmt->rowCount();
+}
+
+/** Accrued / collected totals for one student — shared by the student and parent views. */
+function gjc_student_maintenance_fees(PDO $db, int $studentUserId): array
+{
+    gjc_ensure_maintenance_fees_schema($db);
+
+    $stmt = $db->prepare(
+        "SELECT
+            COALESCE(SUM(CASE WHEN status = 'accrued'   THEN fee_amount END), 0) AS accrued,
+            COALESCE(SUM(CASE WHEN status = 'collected' THEN fee_amount END), 0) AS collected,
+            COALESCE(SUM(CASE WHEN status = 'accrued'   THEN 1 END), 0)          AS accrued_count
+           FROM maintenance_fees
+          WHERE student_user_id = ?"
+    );
+    $stmt->execute([$studentUserId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'accrued'       => (float) ($row['accrued'] ?? 0),
+        'collected'     => (float) ($row['collected'] ?? 0),
+        'accrued_count' => (int) ($row['accrued_count'] ?? 0),
+        'rate_pct'      => gjc_setting($db, 'maintenance_fee_rate_pct'),
     ];
 }
 
@@ -4948,23 +5803,14 @@ function gjc_student_wallet_state(PDO $db, int $studentUserId): string
 }
 
 /**
- * Back-compat shim over gjc_student_wallet_state(). True only for the terminal
- * exit state (graduated or transferred out) — deliberately NOT true for a
- * merely unenrolled student, whose lockout is reversible and much lighter.
- */
-function gjc_student_graduated(PDO $db, int $studentUserId): bool
-{
-    return gjc_student_wallet_state($db, $studentUserId) === 'frozen_exit';
-}
-
-/**
  * Page-level lockout for student HTML pages. Call this right after
  * gjc_require_role(['student']). Do NOT call it on JSON endpoints
  * (student/api/*.php) — a redirect there would break the fetch() caller; those
  * branch on gjc_student_wallet_state() and return a JSON error instead.
  *
- *   frozen_exit        everything redirects to withdraw.php, the one remaining
- *                      action: cashing out what is left.
+ *   frozen_exit        everything redirects to dashboard.php, which tells the
+ *                      student to collect what is left as a cheque from finance
+ *                      (handled off-system).
  *   frozen_unenrolled  the money-moving pages redirect to dashboard.php, which
  *                      explains the situation. Everything read-only stays open
  *                      and the balance stays visible — it is still their money.
@@ -4986,16 +5832,15 @@ function gjc_enforce_student_lock(PDO $db): void
     $script = basename(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''));
 
     if ($state === 'frozen_exit') {
-        if ($script === 'withdraw.php') {
+        if ($script === 'dashboard.php') {
             return;
         }
-        header('Location: ' . STUDENT_URL . '/withdraw.php');
+        header('Location: ' . STUDENT_URL . '/dashboard.php');
         exit();
     }
 
     $unenrolledAllowed = [
         'dashboard.php',
-        'withdraw.php',
         'profile.php',
         'profile_edit.php',
         'history.php',

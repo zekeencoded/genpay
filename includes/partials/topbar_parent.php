@@ -37,5 +37,12 @@ $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES,
                 <span id="topbarAvatarInitial"><?= $__topbar_e($topbarInitial) ?></span>
             <?php endif; ?>
         </div>
+        <?php /* Phone only (hidden by CSS elsewhere): the sidebar's Logout link
+                 is display:none under 768px and the bottom nav has no free
+                 slot. Same modal as the sidebar (logout_modal.php). */ ?>
+        <a href="<?= BASE_URL ?>/logout.php" class="parent-logout-btn" aria-label="Log out"
+           onclick="openLogoutModal(event);">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </a>
     </div>
 </header>

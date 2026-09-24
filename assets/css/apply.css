@@ -1,4 +1,4 @@
-@import url("theme.css?v=12");
+@import url("theme.css?v=14");
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -164,7 +164,7 @@ body {
 .field-input::placeholder { color: var(--gray-5); font-weight: 400; }
 .field-input:focus,
 .field-select:focus {
-    border-color: var(--gp-gold);
+    border-color: var(--gp-focus-border);
     box-shadow: var(--gp-focus-ring);
 }
 .field-input.err,

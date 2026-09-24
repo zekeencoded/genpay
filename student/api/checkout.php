@@ -42,6 +42,9 @@ try {
     $currentUser = gjc_current_user($db);
     $studentUserId = (int) $currentUser['id'];
 
+    // DDL must run before the transaction opens (it would implicitly commit it).
+    gjc_ensure_maintenance_fees_schema($db);
+
     $db->beginTransaction();
     try {
         $orderStmt = $db->prepare(
@@ -190,6 +193,9 @@ try {
             "UPDATE cart_orders SET status = 'paid', paid_at = NOW(), paid_ref = ? WHERE id = ?"
         )->execute([$refNo, (int) $order['id']]);
 
+        // Billed to tuition, never taken from the wallet.
+        gjc_record_maintenance_fee($db, $studentUserId, $refNo, 'payment', $total);
+
         $db->commit();
         gjc_check_parent_balance_alert($db, (int) $studentWallet['id']);
 
@@ -243,11 +249,11 @@ try {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/checkout', 'Something went wrong. Please try again.')]);
     }
 } catch (\Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/checkout', 'Server error. Please try again.')]);
 }

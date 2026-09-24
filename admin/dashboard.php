@@ -9,7 +9,7 @@ gjc_require_role(['finance']);
 $dashboard = gjc_admin_dashboard_data($db);
 $demographics = $dashboard["user_demographics"];
 $recentTransactions = $dashboard["recent_transactions"];
-$transactionChart = $dashboard["transaction_chart"];
+$moneyFlow = $dashboard["money_flow"];
 // The Merchant/Tenant Directory is open to every finance account, matching who
 // can open a stall's own page (admin/merchant_details.php).
 $tenantCards = (new MerchantTenantDirectory($db))->directoryCards();
@@ -40,6 +40,10 @@ if (!empty($tenantCards)) {
     );
 }
 
+$queues = gjc_finance_queue_counts($db);
+$queueTotal = array_sum($queues);
+$currentUser = gjc_current_user($db);
+
 $currentPage = "dashboard";
 ?>
 
@@ -54,8 +58,9 @@ $currentPage = "dashboard";
     <title>Admin Dashboard | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -78,16 +83,64 @@ $currentPage = "dashboard";
 
                 <div>
                     <h1>Admin Dashboard</h1>
-                    <p>Monitor wallet activity, top-ups, encashments, and system users.</p>
+                    <p>Start with anything waiting below, then review activity across the system.</p>
                 </div>
 
                 <div class="admin-user">
-                    <span>Admin</span>
+                    <span><?= htmlspecialchars($currentUser['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
                     <div class="avatar">
                         <i class="fa-solid fa-user-tie"></i>
                     </div>
                 </div>
             </header>
+
+            <section class="gp-attention mb-4" aria-labelledby="attentionHeading">
+                <div class="gp-attention-head">
+                    <h2 id="attentionHeading">Needs your attention</h2>
+                    <?php if ($queueTotal > 0): ?>
+                        <span class="gp-attention-total"><?= (int) $queueTotal ?> item<?= $queueTotal === 1 ? '' : 's' ?> waiting</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php
+                // Each tile links to the exact queue, not just the page, so one
+                // click lands on the rows to clear. A tile at zero stays visible
+                // and greys out: a queue that vanishes when empty teaches the
+                // user it might be hiding work somewhere.
+                $attention = [
+                    [
+                        'label' => 'Encashments to release',
+                        'count' => $queues['encashments'],
+                        'icon'  => 'fa-money-check-dollar',
+                        'href'  => ADMIN_URL . '/cash_management.php#cash-out',
+                        'empty' => 'No merchants waiting',
+                    ],
+                    [
+                        'label' => 'Stall applications',
+                        'count' => $queues['stall_applications'],
+                        'icon'  => 'fa-store',
+                        'href'  => ADMIN_URL . '/stall_applications.php',
+                        'empty' => 'Nothing to verify',
+                    ],
+                ];
+                ?>
+
+                <div class="gp-attention-grid">
+                    <?php foreach ($attention as $item): ?>
+                        <a class="gp-attention-card<?= $item['count'] > 0 ? ' is-active' : ' is-clear' ?>"
+                           href="<?= $item['href'] ?>">
+                            <span class="gp-attention-icon"><i class="fa-solid <?= $item['icon'] ?>"></i></span>
+                            <span class="gp-attention-body">
+                                <strong><?= $item['count'] > 0 ? (int) $item['count'] : '—' ?></strong>
+                                <span class="gp-attention-label"><?= htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="gp-attention-sub"><?= $item['count'] > 0
+                                    ? 'Open the queue'
+                                    : htmlspecialchars($item['empty'], ENT_QUOTES, 'UTF-8') ?></span>
+                            </span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </section>
 
             <section class="premium-panel mb-4" id="tenantDirectoryPanel">
                 <div class="panel-header d-flex justify-content-between align-items-center">
@@ -227,13 +280,13 @@ $currentPage = "dashboard";
                     <div class="premium-panel">
                         <div class="panel-header">
                             <div>
-                                <h3>7-Day Transaction Volume</h3>
-                                <p>Daily wallet transaction performance</p>
+                                <h3>Money Flow &middot; Last 7 Days</h3>
+                                <p>Loaded into wallets, spent at stalls, and cashed out of the system</p>
                             </div>
                         </div>
 
                         <div class="chart-box">
-                            <canvas id="transactionChart"></canvas>
+                            <canvas id="moneyFlowChart" role="img" aria-label="Daily money loaded, spent and cashed out over the last 7 days"></canvas>
                         </div>
                     </div>
                 </div>
@@ -253,13 +306,8 @@ $currentPage = "dashboard";
                                 <b>&rsaquo;</b>
                             </a>
 
-                            <a href="<?= ADMIN_URL ?>/topups.php">
-                                <span>Process Top-ups</span>
-                                <b>&rsaquo;</b>
-                            </a>
-
-                            <a href="<?= ADMIN_URL ?>/encashments.php">
-                                <span>Encashments</span>
+                            <a href="<?= ADMIN_URL ?>/cash_management.php">
+                                <span>Cash Management</span>
                                 <b>&rsaquo;</b>
                             </a>
 
@@ -289,16 +337,17 @@ $currentPage = "dashboard";
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table premium-table align-middle js-datatable" id="dashboardTransactionsTable" data-page-length="10">
+                    <table class="table premium-table align-middle js-datatable" id="dashboardTransactionsTable" data-page-length="10"
+                           data-empty-message="No wallet activity has been recorded yet.">
                         <thead>
                             <tr>
-                                <th>Reference</th>
+                                <th data-card="title">Reference</th>
                                 <th>Type</th>
-                                <th>Amount</th>
-                                <th>Sender</th>
-                                <th>Receiver</th>
+                                <th data-card="amount">Amount</th>
+                                <th data-card="hide">Sender</th>
+                                <th data-card="hide">Receiver</th>
                                 <th>Status</th>
-                                <th>Time</th>
+                                <th data-card="hide">Time</th>
                             </tr>
                         </thead>
 
@@ -355,14 +404,16 @@ $currentPage = "dashboard";
     </div>
 
     <script>
-    window.dashboardTransactionChart = <?php echo json_encode(
-        $transactionChart,
+    window.dashboardMoneyFlow = <?php echo json_encode(
+        $moneyFlow,
         JSON_UNESCAPED_SLASHES,
     ); ?>;
     </script>
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
-    <script src="<?= JS_URL ?>/dashboard_chart.js?v=2"></script>
+    <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+    <script src="<?= JS_URL ?>/dashboard_chart.js?v=4"></script>
 
     <script>
         function toggleSidebar() {

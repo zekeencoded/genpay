@@ -1,6 +1,6 @@
 /* Shared tu-* money-form pieces (₱ amount input, quick-amount chips, method
    cards, guide steps, limit callout) for the sd-* shell — used by
-   student/topup_request.php, student/transfer.php, and student/withdraw.php. */
+   student/transfer.php (and parent/allowance.php). */
 
 /* ===== FORM + GUIDE GRID ===== */
 .tu-grid {
@@ -23,7 +23,7 @@
 }
 
 .tu-money-input:focus-within {
-  border-color: var(--sd-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring);
 }
 
@@ -46,93 +46,8 @@
 }
 
 /* ===== QUICK AMOUNTS ===== */
-.tu-quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tu-quick button {
-  border: 1px solid var(--sd-line);
-  background: #fff;
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--sd-ink);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.tu-quick button:hover {
-  border-color: var(--sd-gold);
-  background: var(--sd-gold-soft);
-}
 
 /* ===== PAYMENT METHOD CARDS ===== */
-.tu-methods {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tu-method {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border: 1.5px solid var(--sd-line);
-  border-radius: 12px;
-  padding: 12px 14px;
-  cursor: pointer;
-  background: #fff;
-  transition: border-color 0.15s, background 0.15s;
-  margin: 0;
-}
-
-.tu-method:hover {
-  border-color: var(--sd-forest-700);
-}
-
-.tu-method.selected {
-  border-color: var(--sd-gold);
-  background: var(--sd-gold-soft);
-}
-
-.tu-method input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.tu-method-icon {
-  flex-shrink: 0;
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
-  background: var(--sd-mint);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
-
-.tu-method-icon img {
-  width: 26px;
-  height: 26px;
-  object-fit: contain;
-}
-
-.tu-method strong {
-  display: block;
-  font-size: 14px;
-  color: var(--sd-ink);
-}
-
-.tu-method span {
-  display: block;
-  font-size: 12px;
-  color: var(--sd-muted);
-}
 
 /* ===== GUIDE STEPS (matches the Scan & Pay guide) ===== */
 .tu-steps {
@@ -206,10 +121,4 @@
 }
 
 /* Live GC equivalence line under the ₱ amount input */
-.tu-equiv {
-  font-size: 13px;
-  color: var(--sd-green);
-  font-weight: 600;
-  margin-top: 6px;
-  min-height: 18px;
-}
+

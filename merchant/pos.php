@@ -27,6 +27,22 @@ if (gjc_table_exists($db, "merchant_inventory")) {
 
 // Get merchant wallet for this POS context
 $wallet = gjc_merchant_wallet($db, $ownerMerchId);
+
+// Recent transactions for the in-POS Transactions tab, so the cashier can
+// look up a sale without leaving the terminal. Full history lives on its
+// own page; this is just the latest slice.
+$recentTransactions = [];
+if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
+    $txStmt = $db->prepare(
+        "SELECT id, reference_no, transaction_type, amount, status, notes, created_at
+           FROM transactions
+          WHERE merchant_wallet_id = ?
+          ORDER BY created_at DESC
+          LIMIT 50",
+    );
+    $txStmt->execute([$wallet["id"]]);
+    $recentTransactions = $txStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -39,11 +55,11 @@ $wallet = gjc_merchant_wallet($db, $ownerMerchId);
     <title>POS Terminal | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=10">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=20">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         .lw-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
@@ -65,8 +81,34 @@ $wallet = gjc_merchant_wallet($db, $ownerMerchId);
         ?>
 
         <div class="pos-layout">
-            <!-- Products Panel -->
+            <!-- Live Order / Products: tabbed, so the cashier can watch the
+                 queue by default and switch to punch a walk-in order. -->
             <div>
+                <div class="pos-tabs" role="tablist">
+                    <button type="button" class="pos-tab is-active" id="posTabQueue" role="tab" onclick="setPosTab('queue')">
+                        <i class="fa-solid fa-list-ol"></i> Live Order
+                        <span class="pos-tab-count" id="posQueueCount" hidden>0</span>
+                    </button>
+                    <button type="button" class="pos-tab" id="posTabProducts" role="tab" onclick="setPosTab('products')">
+                        <i class="fa-solid fa-boxes-stacked"></i> Products
+                    </button>
+                    <button type="button" class="pos-tab" id="posTabTransactions" role="tab" onclick="setPosTab('transactions')">
+                        <i class="fa-solid fa-receipt"></i> Transactions
+                    </button>
+                </div>
+
+                <!-- Queue: today's orders in arrival order (#1, #2, #3...).
+                     Tapping one shows its detail on the right, in place of
+                     the Register panel. -->
+                <div class="pos-pane" id="posPaneQueue">
+                    <h4><span class="me-dot me-dot-green me-pulse" style="margin-right:6px"></span>Order Queue</h4>
+                    <div id="queueList" class="pq-list">
+                        <div class="pq-empty">Loading orders&hellip;</div>
+                    </div>
+                </div>
+
+                <!-- Products -->
+                <div class="pos-pane" id="posPaneProducts" hidden>
                 <div class="pos-product-toolbar">
                     <input type="search" class="pos-search-input" id="posProductSearch"
                         placeholder="Search products by name, SKU, or category" autocomplete="off">
@@ -126,56 +168,106 @@ $wallet = gjc_merchant_wallet($db, $ownerMerchId);
                 </div>
                 <div class="pos-empty-filter" id="posEmptyFilter">No products match your search.</div>
                 <?php endif; ?>
+                </div>
+
+                <!-- Transactions: latest sales for this stall, so the cashier
+                     can look one up without leaving the terminal. -->
+                <div class="pos-pane" id="posPaneTransactions" hidden>
+                <div class="pos-product-toolbar">
+                    <input type="search" class="pos-search-input" id="posTxnSearch"
+                        placeholder="Search by reference or description" autocomplete="off">
+                    <a class="merchant-loadwallet-btn" style="flex-shrink:0;text-decoration:none" href="<?= MERCHANT_URL ?>/history.php">
+                        <i class="fa-solid fa-clock-rotate-left"></i> <span class="merchant-loadwallet-label">Full History</span>
+                    </a>
+                </div>
+                <div id="posTxnList" class="pq-list">
+                    <div class="pq-head">Recent transactions <span><?= count($recentTransactions) ?></span></div>
+                    <?php if (empty($recentTransactions)): ?>
+                    <div class="pq-empty">No transactions yet.</div>
+                    <?php else: ?>
+                    <?php foreach ($recentTransactions as $t):
+                        $statusBadge = match ($t["status"]) {
+                            "reversed" => '<span class="badge bg-secondary">Refunded</span>',
+                            "completed" => '<span class="badge bg-success">Completed</span>',
+                            default => '<span class="badge bg-warning text-dark">' . gjc_e(ucfirst($t["status"])) . '</span>',
+                        };
+                        $txnLabel = $t["notes"] ?: ucwords(str_replace("_", " ", $t["transaction_type"]));
+                        $searchBlob = strtolower($t["reference_no"] . " " . $txnLabel . " " . $t["transaction_type"]);
+                    ?>
+                    <a class="pq-row" data-search="<?= gjc_e($searchBlob) ?>"
+                        href="<?= MERCHANT_URL ?>/view_transaction.php?token=<?= urlencode(gjc_make_view_token((int) $t["id"], "merchant_txn")) ?>">
+                        <span class="pq-main">
+                            <span class="pq-src"><?= gjc_e($t["reference_no"]) ?></span>
+                            <span class="pq-desc"><?= gjc_e($txnLabel) ?></span>
+                        </span>
+                        <span class="pq-side">
+                            <span class="gc-price gc-price--end">
+                                <span class="gc-price-main"><?= $t["transaction_type"] === "refund" ? "-" : "+" ?><?= gjc_gc_amount($t["amount"]) ?> GC</span>
+                                <span class="gc-price-sub">&asymp; <?= gjc_money($t["amount"]) ?></span>
+                            </span>
+                            <span class="pq-time"><?= $statusBadge ?> <?= gjc_e(date("M d, h:i A", strtotime($t["created_at"]))) ?></span>
+                        </span>
+                    </a>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+                <div class="pos-empty-filter" id="posTxnEmptyFilter">No transactions match your search.</div>
+                </div>
             </div>
 
-            <!-- Cart Panel -->
+            <!-- Register: walk-in cart + checkout, beside the product/queue
+                 tabs so the cashier never leaves this screen. Swaps out for
+                 the order detail view when a queue order is opened. -->
             <div class="pos-cart-panel">
-                <h4>&#128722; Current Order</h4>
-
-                <div class="cart-items-list" id="cartList">
-                    <div id="cartEmpty" style="text-align:center;color:var(--gp-muted);padding:30px 0;font-size:13px">
-                        Tap products to add them here
+                <div class="pos-pane" id="posRegisterView">
+                    <h4>Walk-in Order</h4>
+                    <div class="cart-items-list" id="cartList">
+                        <div id="cartEmpty" style="text-align:center;color:var(--gp-muted);padding:30px 0;font-size:13px">
+                            Tap products to add them here
+                        </div>
                     </div>
+
+                    <div class="cart-total-row">
+                        <span>Total</span>
+                        <span id="cartTotal" class="gc-price gc-price--end">
+                            <span class="gc-price-main">0 GC</span>
+                            <span class="gc-price-sub">&asymp; &#8369;0.00</span>
+                        </span>
+                    </div>
+
+                    <button class="pos-charge-btn" id="chargeBtn" onclick="generatePaymentQr()" disabled>
+                        Generate Payment QR
+                    </button>
+
+                    <div class="pos-qr-box" id="posQrBox">
+                        <div class="pos-qr-status is-pending" id="posQrStatus">Waiting for payment&hellip;</div>
+                        <strong id="posQrTitle">Ready for student scan</strong>
+                        <span id="posQrHint">Ask the student to open Shop Cart, tap &ldquo;Pay Now&rdquo;, and scan this QR.</span>
+                        <div class="pos-qr-frame">
+                            <div class="pos-qr-canvas" id="posQrCanvas"></div>
+                            <span class="pos-qr-corner tl"></span>
+                            <span class="pos-qr-corner tr"></span>
+                            <span class="pos-qr-corner bl"></span>
+                            <span class="pos-qr-corner br"></span>
+                        </div>
+                        <div class="pos-qr-manual">
+                            <span>Manual entry code</span>
+                            <strong id="posQrShortCode">----</strong>
+                        </div>
+                        <span id="posQrSummary"></span>
+                        <div class="pos-qr-guide">
+                            <div class="pos-qr-guide-step"><strong>1</strong><span>Show this QR to the student.</span></div>
+                            <div class="pos-qr-guide-step"><strong>2</strong><span>They scan it from the Shop Cart&rsquo;s &ldquo;Pay Now&rdquo; mode.</span></div>
+                            <div class="pos-qr-guide-step"><strong>3</strong><span>Wait for the status to flip to Paid before handing over the order.</span></div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-outline-secondary btn-sm mt-3 w-100" onclick="clearCart()">
+                        &#10005; Clear Order
+                    </button>
                 </div>
 
-                <div class="cart-total-row">
-                    <span>Total</span>
-                    <span id="cartTotal" class="gc-price gc-price--end">
-                        <span class="gc-price-main">0 GC</span>
-                        <span class="gc-price-sub">&asymp; &#8369;0.00</span>
-                    </span>
-                </div>
-
-                <button class="pos-charge-btn" id="chargeBtn" onclick="generatePaymentQr()" disabled>
-                    Generate Payment QR
-                </button>
-
-                <div class="pos-qr-box" id="posQrBox">
-                    <div class="pos-qr-status is-pending" id="posQrStatus">Waiting for payment&hellip;</div>
-                    <strong id="posQrTitle">Ready for student scan</strong>
-                    <span id="posQrHint">Ask the student to open Shop Cart, tap &ldquo;Pay Now&rdquo;, and scan this QR.</span>
-                    <div class="pos-qr-frame">
-                        <div class="pos-qr-canvas" id="posQrCanvas"></div>
-                        <span class="pos-qr-corner tl"></span>
-                        <span class="pos-qr-corner tr"></span>
-                        <span class="pos-qr-corner bl"></span>
-                        <span class="pos-qr-corner br"></span>
-                    </div>
-                    <div class="pos-qr-manual">
-                        <span>Manual entry code</span>
-                        <strong id="posQrShortCode">----</strong>
-                    </div>
-                    <span id="posQrSummary"></span>
-                    <div class="pos-qr-guide">
-                        <div class="pos-qr-guide-step"><strong>1</strong><span>Show this QR to the student.</span></div>
-                        <div class="pos-qr-guide-step"><strong>2</strong><span>They scan it from the Shop Cart&rsquo;s &ldquo;Pay Now&rdquo; mode.</span></div>
-                        <div class="pos-qr-guide-step"><strong>3</strong><span>Wait for the status to flip to Paid before handing over the order.</span></div>
-                    </div>
-                </div>
-
-                <button class="btn btn-outline-secondary btn-sm mt-3 w-100" onclick="clearCart()">
-                    &#10005; Clear Order
-                </button>
+                <div class="pos-pane" id="queueDetailView" hidden></div>
             </div>
         </div>
     </main>
@@ -237,6 +329,25 @@ function applyProductFilters() {
 }
 
 document.getElementById('posProductSearch')?.addEventListener('input', applyProductFilters);
+
+// ── Transactions tab search ─────────────────────────────────────────────
+function applyTxnFilters() {
+    const query = (document.getElementById('posTxnSearch')?.value || '').trim().toLowerCase();
+    let visibleCount = 0;
+
+    document.querySelectorAll('#posTxnList .pq-row').forEach(row => {
+        const shouldShow = query === '' || (row.dataset.search || '').includes(query);
+        row.style.display = shouldShow ? '' : 'none';
+        if (shouldShow) visibleCount++;
+    });
+
+    const emptyFilter = document.getElementById('posTxnEmptyFilter');
+    if (emptyFilter) {
+        emptyFilter.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+}
+
+document.getElementById('posTxnSearch')?.addEventListener('input', applyTxnFilters);
 
 // \u2500\u2500 Cart management \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function addToCart(card) {
@@ -368,6 +479,7 @@ function startStatusPolling(orderId) {
 
             if (data.status === 'paid') {
                 stopStatusPolling();
+                refreshLiveQueue();
                 // Order done: reset the cart but keep the box visible in its
                 // paid state (renderCart hides it) so the cashier sees the ref.
                 Object.keys(cart).forEach(k => delete cart[k]);
@@ -429,6 +541,7 @@ async function generatePaymentQr() {
         setQrStatus('pending', 'Waiting for payment\u2026');
         document.getElementById('posQrBox').style.display = 'block';
         startStatusPolling(result.order_id);
+        refreshLiveQueue();
     } catch (error) {
         alert('Unable to create payment QR. Please try again.');
     } finally {
@@ -436,6 +549,257 @@ async function generatePaymentQr() {
         chargeBtn.textContent = 'Generate Payment QR';
     }
 }
+</script>
+
+<script>
+// ── Order queue (beside the register) ───────────────────────────────────────
+const LIVE_QUEUE_API = '<?= MERCHANT_URL ?>/api/pos.php';
+const queueListEl     = document.getElementById('queueList');
+const posRegisterView = document.getElementById('posRegisterView');
+const queueDetailEl   = document.getElementById('queueDetailView');
+let queueOrders = [];
+let lastQueueSignature = '';
+let openQueueUid = null;
+
+// A ticket stays in the live queue until it is paid (or voided/expired).
+const QUEUE_BADGES = {
+    awaiting_payment: '<span class="badge bg-warning text-dark">Awaiting payment</span>',
+    served:           '<span class="badge bg-success">Paid</span>',
+    voided:           '<span class="badge bg-secondary">Voided</span>',
+    expired:          '<span class="badge bg-secondary">Expired</span>',
+};
+const LIVE_STAGES = ['awaiting_payment'];
+const isLive = o => LIVE_STAGES.includes(o.stage);
+let knownQueueUids = null;
+// Pre-orders come from the student/parent Shop Cart; walk-ins are punched here.
+const QUEUE_SOURCES = {
+    cart_pending: { label: 'App pre-order', icon: 'fa-mobile-screen' },
+    pos:          { label: 'Walk-in',       icon: 'fa-cash-register' },
+};
+
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
+function queueTime(ts) {
+    return ts ? new Date(ts.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
+}
+
+const POS_TABS = {
+    queue:        { pane: 'posPaneQueue',        tab: 'posTabQueue' },
+    products:     { pane: 'posPaneProducts',      tab: 'posTabProducts' },
+    transactions: { pane: 'posPaneTransactions',  tab: 'posTabTransactions' },
+};
+
+function setPosTab(name) {
+    Object.entries(POS_TABS).forEach(([key, ids]) => {
+        document.getElementById(ids.pane).hidden = key !== name;
+        document.getElementById(ids.tab).classList.toggle('is-active', key === name);
+    });
+    if (name === 'queue') document.getElementById('posTabQueue').classList.remove('is-alert');
+}
+
+function queueRowHtml(order, isNext) {
+    const src = QUEUE_SOURCES[order.source] || QUEUE_SOURCES.pos;
+    const waiting = isLive(order);
+    const isSelected = order.uid === openQueueUid;
+    return `
+        <button type="button" class="pq-row${waiting ? '' : ' is-done'}${isNext ? ' is-next' : ''}${isSelected ? ' is-selected' : ''}" onclick="openQueueOrder('${order.uid}')">
+            <span class="pq-no">#${order.queue_no}</span>
+            <span class="pq-main">
+                <span class="pq-src"><i class="fa-solid ${src.icon}"></i> ${src.label}${isNext ? '<b class="pq-next">Next</b>' : ''}</span>
+                <span class="pq-desc">${escapeHtml(order.description || '')}</span>
+            </span>
+            <span class="pq-side">
+                ${gcPriceHtml(Number(order.amount), true)}
+                <span class="pq-time">${QUEUE_BADGES[order.stage] || ''} ${queueTime(order.created_at)}</span>
+            </span>
+        </button>`;
+}
+
+function renderQueue(orders) {
+    queueOrders = orders;
+    const waiting = orders.filter(isLive);   // already oldest-first
+    const done = orders.filter(o => !isLive(o)).reverse().slice(0, 8);
+
+    const countEl = document.getElementById('posQueueCount');
+    countEl.textContent = waiting.length;
+    countEl.hidden = waiting.length === 0;
+
+    let html = `<div class="pq-head">Live queue <span>${waiting.length}</span></div>`;
+    html += waiting.length
+        ? waiting.map((o, i) => queueRowHtml(o, i === 0)).join('')
+        : '<div class="pq-empty">The queue is clear. Pre-orders appear here as students place them; walk-ins go through the Register tab.</div>';
+    if (done.length) {
+        html += `<div class="pq-head">Done today</div>` + done.map(o => queueRowHtml(o, false)).join('');
+    }
+    queueListEl.innerHTML = html;
+}
+
+function flashQueue() {
+    queueListEl.classList.remove('queue-flash');
+    void queueListEl.offsetWidth;   // restart the animation on a rapid update
+    queueListEl.classList.add('queue-flash');
+}
+
+async function refreshLiveQueue() {
+    try {
+        const fd = new FormData();
+        fd.append('action', 'list_queue');
+        const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const signature = JSON.stringify(data.orders.map(o => [o.uid, o.stage, o.amount]));
+        if (signature === lastQueueSignature) return;
+
+        const isFirstLoad = lastQueueSignature === '';
+        lastQueueSignature = signature;
+        const before = queueOrders.find(o => o.uid === openQueueUid);
+        renderQueue(data.orders);
+        if (!isFirstLoad) flashQueue();
+
+        // A pre-order that just arrived while the cashier is on the Register tab.
+        const uids = new Set(data.orders.map(o => o.uid));
+        if (knownQueueUids && data.orders.some(o => o.stage === 'awaiting_payment' && !knownQueueUids.has(o.uid))
+                && document.getElementById('posPaneQueue').hidden) {
+            document.getElementById('posTabQueue').classList.add('is-alert');
+        }
+        knownQueueUids = uids;
+
+        // The order being inspected changed (e.g. the student just paid): refresh it.
+        const after = queueOrders.find(o => o.uid === openQueueUid);
+        if (openQueueUid && before && after && before.stage !== after.stage) {
+            openQueueOrder(openQueueUid);
+        }
+    } catch (error) {
+        // Keep showing the last known queue on a transient network error.
+    }
+}
+
+function closeQueueOrder() {
+    openQueueUid = null;
+    queueDetailEl.hidden = true;
+    queueDetailEl.innerHTML = '';
+    posRegisterView.hidden = false;
+    renderQueue(queueOrders);
+}
+
+async function voidQueueOrder(uid, btn) {
+    const order = queueOrders.find(o => o.uid === uid);
+    if (!order) return;
+    btn.disabled = true;
+    btn.textContent = 'Voiding...';
+    try {
+        const fd = new FormData();
+        fd.append('action', 'void_order');
+        fd.append('order_id', order.id);
+        fd.append('source', order.source);
+        const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) alert(data.message || 'Unable to void this order.');
+    } finally {
+        lastQueueSignature = '';
+        closeQueueOrder();
+        refreshLiveQueue();
+    }
+}
+
+// Inspect an order in place: items, total, and what the student must do to pay.
+async function openQueueOrder(uid) {
+    const order = queueOrders.find(o => o.uid === uid);
+    if (!order) return;
+    openQueueUid = uid;
+    posRegisterView.hidden = true;
+    queueDetailEl.hidden = false;
+    queueDetailEl.innerHTML = '<div class="pq-empty">Loading&hellip;</div>';
+    renderQueue(queueOrders);
+
+    const backBtn = '<button type="button" class="pq-back" onclick="closeQueueOrder()"><i class="fa-solid fa-arrow-left"></i> Register</button>';
+    try {
+        const fd = new FormData();
+        fd.append('action', 'view_order');
+        fd.append('order_id', order.id);
+        fd.append('source', order.source);
+        const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (openQueueUid !== uid) return;   // the cashier moved on while it loaded
+
+        if (!data.success) {
+            queueDetailEl.innerHTML = backBtn + `<div class="alert alert-danger mt-2 mb-0">${escapeHtml(data.message || 'Unable to load this order.')}</div>`;
+            return;
+        }
+
+        const src = QUEUE_SOURCES[order.source] || QUEUE_SOURCES.pos;
+        const items = Array.isArray(data.items) ? data.items : [];
+        const itemRows = items.length
+            ? items.map(item => {
+                const qty = Number(item.qty || 0);
+                const price = Number(item.price || 0);
+                return `<tr>
+                    <td>${escapeHtml(item.name || '')}</td>
+                    <td class="text-center">${qty}</td>
+                    <td class="text-end">${gcPriceHtml(item.line_total != null ? Number(item.line_total) : qty * price, true)}</td>
+                </tr>`;
+            }).join('')
+            : `<tr><td colspan="3" class="text-muted text-center">${escapeHtml(data.description || 'No itemized details recorded.')}</td></tr>`;
+
+        const stage = data.stage || order.stage;
+        const badge = QUEUE_BADGES[stage] || `<span class="badge bg-light text-dark">${escapeHtml(data.status)}</span>`;
+        const paidTime = data.paid_at ? new Date(data.paid_at.replace(' ', 'T')).toLocaleString() : null;
+        const isPending = data.status === 'pending';
+
+        let payBlock = '';
+        if (isPending && data.wallet_qr_url) {
+            payBlock = `
+                <div class="pq-pay">
+                    <img src="${escapeHtml(data.wallet_qr_url)}" alt="Shop Wallet QR">
+                    <div>Pre-order: the student scans this Wallet QR from their Shop Cart to pay <strong>${gcAmount(Number(data.amount || 0))} GC</strong>.</div>
+                </div>`;
+        } else if (isPending && data.qr_payload) {
+            payBlock = `
+                <div class="pq-pay">
+                    <div class="pq-pay-qr" id="pqPayQr"></div>
+                    <div>Walk-in bill: scan from Shop Cart &rarr; Pay Now, or type code <strong>${escapeHtml(data.short_code || '----')}</strong>.</div>
+                </div>`;
+        }
+
+        queueDetailEl.innerHTML = `
+            ${backBtn}
+            <div class="pq-detail-head">
+                <span class="pq-no pq-no--lg">#${order.queue_no}</span>
+                <div>
+                    <div class="pq-src"><i class="fa-solid ${src.icon}"></i> ${src.label}</div>
+                    <small class="text-muted">${escapeHtml(data.student_name || (order.source === 'pos' ? 'Walk-in customer' : 'Student'))} &middot; ${queueTime(data.created_at)}</small>
+                </div>
+                <span class="ms-auto">${badge}</span>
+            </div>
+            <table class="table table-sm align-middle mb-2 pq-items">
+                <thead><tr><th>Item</th><th class="text-center">Qty</th><th class="text-end">Subtotal</th></tr></thead>
+                <tbody>${itemRows}</tbody>
+            </table>
+            <div class="pq-total"><span>Total</span>${gcPriceHtml(Number(data.amount || 0), true)}</div>
+            ${data.maintenance_fee ? `
+            <div class="pq-note">Student maintenance fee &middot; ${escapeHtml(data.maintenance_fee.state)}: &#8369;${Number(data.maintenance_fee.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Billed to tuition &mdash; not deducted from your sale.</div>` : ''}
+            ${paidTime ? `<div class="pq-note">Paid: ${paidTime}</div>` : ''}
+            ${payBlock}
+            ${isPending ? `<div class="pq-note">Hand the order over only after this ticket turns <strong>Paid</strong>.</div>
+            <button type="button" class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="voidQueueOrder('${uid}', this)">&times; Void order</button>` : ''}`;
+
+        if (isPending && data.qr_payload && !data.wallet_qr_url) {
+            new QRCode(document.getElementById('pqPayQr'), {
+                text: data.qr_payload, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+    } catch (error) {
+        queueDetailEl.innerHTML = backBtn + '<div class="alert alert-danger mt-2 mb-0">Unable to reach the server. Please try again.</div>';
+    }
+}
+
+refreshLiveQueue();
+setInterval(refreshLiveQueue, 3000);
 </script>
 
 <!-- ── Load Wallet Modal ──────────────────────────────────────────────── -->

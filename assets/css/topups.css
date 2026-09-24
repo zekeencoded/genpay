@@ -1,8 +1,4 @@
-.topup-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-}
+
 
 /* Appearance (bg, radius, shadow, border, ::after) is unified in gjc-clear.css */
 .topup-stat-card {
@@ -134,24 +130,6 @@
 
 /* .topup-table styling now comes from the canonical table system in theme.css. */
 
-.topup-user-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.topup-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 15px;
-  background: linear-gradient(135deg, var(--gp-green-850), var(--gp-green-700));
-  color: white;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  box-shadow: 0 10px 22px rgba(14, 99, 50, 0.18);
-}
-
 .amount-text {
   color: var(--gp-green-850) !important;
   font-weight: 800 !important;
@@ -190,15 +168,7 @@
   color: var(--gjc-slate);
 }
 
-.topup-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.details-btn,
-.approve-btn,
-.reject-btn {
+.details-btn {
   min-height: 36px;
   padding: 0 13px;
   border-radius: 13px;
@@ -218,31 +188,13 @@
   color: var(--gp-green-850);
 }
 
-.approve-btn {
-  background: linear-gradient(135deg, var(--gp-green-850), var(--gp-green-700));
-  color: white;
-}
-
-.reject-btn {
-  background: var(--gp-line-soft);
-  color: var(--gjc-slate);
-}
-
-.details-btn:hover,
-.reject-btn:hover {
+.details-btn:hover {
   background: var(--gp-green-850);
   color: white;
 }
 
-.approve-btn:hover {
-  color: white;
-  transform: translateY(-1px);
-}
-
 @media (max-width: 1200px) {
-  .topup-stats-grid {
-    grid-template-columns: 1fr;
-  }
+  
 
   .topup-panel-header {
     flex-direction: column;

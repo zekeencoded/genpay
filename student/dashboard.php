@@ -19,7 +19,11 @@ $balance     = (float) $wallet['balance'];
 // Not enrolled for the active school year. gjc_enforce_student_lock() has
 // already turned away the money-moving pages and sent them here; the balance
 // stays on screen because it is still theirs and is not going anywhere.
-$isUnenrolled = gjc_student_wallet_state($db, (int) $currentUser['id']) === 'frozen_unenrolled';
+$walletState  = gjc_student_wallet_state($db, (int) $currentUser['id']);
+$isUnenrolled = $walletState === 'frozen_unenrolled';
+// Graduated / transferred out: the wallet is closed and the remaining balance
+// is paid out by finance as a cheque, off-system.
+$isExited     = $walletState === 'frozen_exit';
 $activeYearName = gjc_active_school_year_name($db);
 
 // Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
@@ -73,7 +77,6 @@ if ($wallet['id'] > 0 && $wallet['source'] === 'student_wallets') {
 }
 $accountStatus = $isFrozen ? 'Frozen' : 'Active';
 
-date_default_timezone_set('Asia/Manila');
 $hour = (int) date('H');
 // $greeting = $hour < 12 ? 'Good morning'  : ($hour > 18 ? 'Good afternoon' : 'Good evening');
 
@@ -103,7 +106,7 @@ $currentPage = 'dashboard';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <style>
         /* Not-enrolled notice. Reversible state, so it reads as information,
            not alarm — warning tokens, never the danger scale. */
@@ -135,6 +138,20 @@ $currentPage = 'dashboard';
 
             <div class="sd-content">
 
+                <?php if ($isExited): ?>
+                <!-- Graduated / transferred out -->
+                <div class="sd-enroll-notice">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                    <div>
+                        <h3>Your wallet is closed</h3>
+                        <p>
+                            Your account is locked because you have graduated or transferred out. Your remaining
+                            balance below is safe &mdash; please visit the finance office to collect it as a cheque.
+                        </p>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <?php if ($isUnenrolled): ?>
                 <!-- Not enrolled for the active school year -->
                 <div class="sd-enroll-notice">
@@ -161,32 +178,12 @@ $currentPage = 'dashboard';
                             <span class="sd-gc-badge">&#8776; &#8369;<span id="sdBalancePhp"><?= number_format($balance, 2) ?></span></span>
                             <span class="sd-gc-rate">&#8369;10 = 1 GC</span>
                         </div>
-                        <div class="sd-balance-actions">
-                            <a class="sd-btn-solid" href="<?= STUDENT_URL ?>/transfer.php"><i class="fa-solid fa-paper-plane"></i>Send</a>
-                            <a class="sd-btn-ghost" href="<?= STUDENT_URL ?>/withdraw.php"><i class="fa-solid fa-money-bill-wave"></i>Withdraw</a>
-                        </div>
                     </div>
                     <div class="sd-balance-holder">
                         <strong><?= $e($studentName) ?></strong>
                         <span class="sd-holder-id"><?= $e($studentID) ?></span>
                         <span class="sd-role-badge">STUDENT</span>
                     </div>
-                </section>
-
-                <!-- Quick actions -->
-                <section class="sd-quick">
-                    <a href="<?= STUDENT_URL ?>/cart.php">
-                        <span class="sd-quick-icon is-cart"><i class="fa-solid fa-cart-shopping"></i></span>
-                        <span>Shop Cart</span>
-                    </a>
-                    <a href="<?= STUDENT_URL ?>/history.php">
-                        <span class="sd-quick-icon is-history"><i class="fa-solid fa-receipt"></i></span>
-                        <span>History</span>
-                    </a>
-                    <a href="<?= STUDENT_URL ?>/profile.php">
-                        <span class="sd-quick-icon is-profile"><i class="fa-solid fa-user"></i></span>
-                        <span>Profile</span>
-                    </a>
                 </section>
 
                 <!-- Stat cards -->

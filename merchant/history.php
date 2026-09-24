@@ -33,6 +33,10 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     }
 }
 
+// Student maintenance fee per sale (a tuition charge shown for context; the
+// stall is credited the full sale amount regardless).
+$saleFees = gjc_maintenance_fees_by_reference($db, array_column($transactions, 'reference_no'));
+
 $currentPage = 'history';
 
 $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'Other'];
@@ -51,10 +55,10 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
@@ -117,9 +121,18 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                         <p>Complete list of payments received by your merchant account.</p>
                     </div>
 
-                    <span class="history-balance-pill">
-                        Balance: <?php echo gjc_money($currentBalance); ?>
-                    </span>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <?php if (!gjc_is_merchant_staff()): ?>
+                        <a class="merchant-loadwallet-btn" style="text-decoration:none"
+                            href="<?= MERCHANT_URL ?>/export_backup.php"
+                            title="One ZIP with all transactions, inventory, staff, encashments, rent and audit records">
+                            <i class="fa-solid fa-file-zipper"></i> Download Backup
+                        </a>
+                        <?php endif; ?>
+                        <span class="history-balance-pill">
+                            Balance: <?php echo gjc_money($currentBalance); ?>
+                        </span>
+                    </div>
                 </div>
 
                 <div class="table-responsive">
@@ -145,7 +158,12 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                             <?php foreach ($transactions as $t): ?>
                             <tr data-txn-id="<?= (int) $t['id'] ?>">
                                 <td><?php echo gjc_e($t['reference_no']); ?></td>
-                                <td><?php echo gjc_e($t['notes'] ?: ucwords(str_replace('_', ' ', $t['transaction_type']))); ?></td>
+                                <td>
+                                    <?php echo gjc_e($t['notes'] ?: ucwords(str_replace('_', ' ', $t['transaction_type']))); ?>
+                                    <?php if (isset($saleFees[$t['reference_no']])): $sf = $saleFees[$t['reference_no']]; ?>
+                                    <small class="d-block text-muted">Student fee <?= gjc_money($sf['fee_amount']) ?> &middot; <?= gjc_e(gjc_maintenance_fee_state_label($sf['status'])) ?> &middot; not deducted from your sale</small>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="merchant-amount">
                                     <?php echo $t['transaction_type'] === 'refund' ? '-' : '+'; ?><?php echo gjc_money($t['amount']); ?>
                                 </td>

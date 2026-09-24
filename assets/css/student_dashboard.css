@@ -2,8 +2,8 @@
    Scoped under sd-* so gjc-clear.css's student-* !important overrides never
    apply here. Pages using the shared student sidebar / bottom-nav partials
    must link this file. */
-@import url("gjc-clear.css?v=21");
-@import url("theme.css?v=12");
+@import url("gjc-clear.css?v=23");
+@import url("theme.css?v=14");
 
 /* sd-* tokens are aliases of the shared gp-* theme (assets/css/theme.css)
    — theme.css is the single source of truth for the palette. */
@@ -116,7 +116,6 @@ body.sd-body {
 
 .sd-menu a.active {
   background: var(--sd-gold-soft);
-  border-left-color: var(--sd-gold);
   color: var(--sd-gold);
 }
 
@@ -455,7 +454,6 @@ body.sd-body {
   overflow: hidden;
   border-radius: var(--sd-radius);
   background: var(--sd-forest-950);
-  border-top: var(--gp-keyline);
   color: #fff;
   padding: 26px 28px;
   display: flex;
@@ -955,7 +953,7 @@ body.sd-body {
 }
 
 .sd-panel .dataTables_filter input:focus {
-  border-color: var(--gp-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring);
 }
 

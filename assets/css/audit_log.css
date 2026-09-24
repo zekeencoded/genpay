@@ -2,7 +2,7 @@
 .audit-filter-grid { display:grid; grid-template-columns:repeat(5, minmax(140px, 1fr)); gap:14px; align-items:end; }
 .audit-field label { display:block; font-size:12px; font-weight:700; color:var(--gp-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.3px !important; }
 .audit-field select, .audit-field input { width:100%; border:1px solid var(--gp-line); border-radius:var(--gjc-radius); padding:10px 12px; font-weight:600; color:var(--gp-ink); background:#fff; }
-.audit-field select:focus, .audit-field input:focus { outline:none; border-color: var(--gp-gold); box-shadow: var(--gp-focus-ring); }
+.audit-field select:focus, .audit-field input:focus { outline:none; border-color: var(--gp-focus-border); box-shadow: var(--gp-focus-ring); }
 .audit-filter-btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--gp-green-850); border-radius:var(--gjc-radius); padding:11px 18px; background:var(--gp-green-850); color:#fff; font-weight:700; }
 .audit-filter-btn:hover { background:var(--gp-green-950); border-color:var(--gp-green-950); }
 .audit-reset { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--gp-line); border-radius:var(--gjc-radius); padding:10px 14px; color:var(--gp-ink); text-decoration:none; font-weight:700; background:#fff; }

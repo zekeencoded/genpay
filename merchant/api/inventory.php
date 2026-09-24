@@ -344,5 +344,5 @@ try {
             echo json_encode(['success' => false, 'message' => 'Unknown action.']);
     }
 } catch (\Throwable $e) {
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/inventory', 'Server error. Please try again.')]);
 }

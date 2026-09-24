@@ -24,14 +24,73 @@ $stallStmt->execute([$ownerMerchId]);
 $stallRow = $stallStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 $merchantDisplayName = $stallRow['stall_name'] ?? $currentUser['name'];
 $merchantStallId = $stallRow['stall_id'] ?? '';
-$todaysSales = 0;
 $totalEarned = 0;
 $encashmentStatus = "Available";
 $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
 $earningTypePlaceholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 
-$recentSales = [];
+gjc_ensure_sales_remittances_schema($db);
+$unremittedSales = gjc_merchant_unremitted_sales($db, $wallet['id']);
+$remittedToday = gjc_merchant_remitted_sales_today($db, $wallet['id']);
+$todaysSales = $remittedToday['amount'];
+$pendingSales = $unremittedSales['amount'];
+
+$lastRemitToday = null;
+if ($wallet['id'] > 0) {
+    $lastRemitStmt = $db->prepare(
+        "SELECT amount, reference_no, period_end FROM sales_remittances
+          WHERE merchant_wallet_id = ? AND DATE(period_end) = CURDATE()
+          ORDER BY period_end DESC LIMIT 1"
+    );
+    $lastRemitStmt->execute([$wallet['id']]);
+    if ($row = $lastRemitStmt->fetch(PDO::FETCH_ASSOC)) {
+        $lastRemitToday = [
+            'amount' => (float) $row['amount'],
+            'reference_no' => $row['reference_no'],
+            'time' => date('h:i A', strtotime($row['period_end'])),
+        ];
+    }
+}
+
 if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
+    $totalStmt = $db->prepare(
+        "SELECT COALESCE(SUM(amount), 0) FROM transactions
+          WHERE merchant_wallet_id = ?
+            AND transaction_type IN ({$earningTypePlaceholders})"
+    );
+    $totalStmt->execute(array_merge([$wallet['id']], $earningTypes));
+    $totalEarned = (float) $totalStmt->fetchColumn();
+}
+
+// ---- Voided/cancelled orders today (staff dashboard only) ------------------
+$isMerchantStaff = !$canEncash;
+$voidedOrdersToday = [];
+if ($isMerchantStaff) {
+    if (gjc_table_exists($db, 'cart_orders')) {
+        $voidStmt = $db->prepare(
+            "SELECT reference_no AS reference, description, amount, created_at
+               FROM cart_orders
+              WHERE merchant_user_id = ? AND status = 'voided' AND DATE(created_at) = CURDATE()"
+        );
+        $voidStmt->execute([$ownerMerchId]);
+        $voidedOrdersToday = array_merge($voidedOrdersToday, $voidStmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+    if (gjc_table_exists($db, 'merchant_qr_orders')) {
+        $voidStmt = $db->prepare(
+            "SELECT short_code AS reference, description, amount, created_at
+               FROM merchant_qr_orders
+              WHERE merchant_user_id = ? AND status = 'voided' AND DATE(created_at) = CURDATE()"
+        );
+        $voidStmt->execute([$ownerMerchId]);
+        $voidedOrdersToday = array_merge($voidedOrdersToday, $voidStmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+    usort($voidedOrdersToday, fn($a, $b) => strtotime($b['created_at']) <=> strtotime($a['created_at']));
+    $voidedOrdersToday = array_slice($voidedOrdersToday, 0, 8);
+}
+
+// ---- Recent sales (staff dashboard only) ------------------------------------
+$recentSales = [];
+if ($isMerchantStaff && $wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     $stmt = $db->prepare(
         "SELECT reference_no, transaction_type, amount, created_at
            FROM transactions
@@ -42,23 +101,136 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     );
     $stmt->execute(array_merge([$wallet['id']], $earningTypes));
     $recentSales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
-    $todayStmt = $db->prepare(
-        "SELECT COALESCE(SUM(amount), 0) FROM transactions
+// ---- Inventory stock by category (staff dashboard only) ---------------------
+$inventoryCategories = ['food', 'beverage', 'snack', 'supplies', 'service', 'general'];
+$inventoryStockByCategory = array_fill_keys($inventoryCategories, 0);
+if ($isMerchantStaff && gjc_table_exists($db, 'merchant_inventory')) {
+    $stockStmt = $db->prepare(
+        "SELECT category, COALESCE(SUM(stock_qty), 0) AS total_stock
+           FROM merchant_inventory
+          WHERE merchant_user_id = ?
+          GROUP BY category"
+    );
+    $stockStmt->execute([$ownerMerchId]);
+    foreach ($stockStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (array_key_exists($row['category'], $inventoryStockByCategory)) {
+            $inventoryStockByCategory[$row['category']] = (int) $row['total_stock'];
+        }
+    }
+}
+
+// ---- Date-range captions for the sales charts/cards (owner dashboard only) ----
+$dailyRangeLabel     = date('M j', strtotime('-6 days')) . ' – ' . date('M j');
+$weekRangeStart      = date('Y-m-d', strtotime('monday this week'));
+$weekRangeLabel      = date('M j', strtotime($weekRangeStart)) . ' – ' . date('M j', strtotime($weekRangeStart . ' +6 days'));
+$monthRangeLabel     = date('F Y');
+$currentQuarterLabel = 'Q' . (int) ceil(((int) date('n')) / 3) . ' ' . date('Y');
+$yearRangeLabel      = date('Y');
+
+// ---- Daily sales, last 7 days (owner dashboard only) --------------------------
+$sevenDaySales = [];
+if (!$isMerchantStaff && $wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
+    $salesStmt = $db->prepare(
+        "SELECT DATE(created_at) AS sale_date, COALESCE(SUM(amount), 0) AS total
+           FROM transactions
           WHERE merchant_wallet_id = ?
             AND transaction_type IN ({$earningTypePlaceholders})
-            AND DATE(created_at) = CURDATE()"
+            AND created_at >= (CURDATE() - INTERVAL 6 DAY)
+          GROUP BY DATE(created_at)"
     );
-    $todayStmt->execute(array_merge([$wallet['id']], $earningTypes));
-    $todaysSales = (float) $todayStmt->fetchColumn();
+    $salesStmt->execute(array_merge([$wallet['id']], $earningTypes));
+    $salesByDate = array_column($salesStmt->fetchAll(PDO::FETCH_ASSOC), 'total', 'sale_date');
 
-    $totalStmt = $db->prepare(
-        "SELECT COALESCE(SUM(amount), 0) FROM transactions
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-{$i} days"));
+        $sevenDaySales[] = [
+            'label'  => date('D', strtotime($date)),
+            'amount' => (float) ($salesByDate[$date] ?? 0),
+        ];
+    }
+}
+
+// ---- Weekly/monthly/quarterly/yearly sales totals (owner dashboard only) ------
+$periodSales = ['weekly' => 0.0, 'monthly' => 0.0, 'quarterly' => 0.0, 'yearly' => 0.0];
+if (!$isMerchantStaff && $wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
+    $periodStmt = $db->prepare(
+        "SELECT
+            COALESCE(SUM(CASE WHEN YEARWEEK(created_at, 3) = YEARWEEK(CURDATE(), 3) THEN amount ELSE 0 END), 0) AS weekly,
+            COALESCE(SUM(CASE WHEN YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE()) THEN amount ELSE 0 END), 0) AS monthly,
+            COALESCE(SUM(CASE WHEN YEAR(created_at) = YEAR(CURDATE()) AND QUARTER(created_at) = QUARTER(CURDATE()) THEN amount ELSE 0 END), 0) AS quarterly,
+            COALESCE(SUM(CASE WHEN YEAR(created_at) = YEAR(CURDATE()) THEN amount ELSE 0 END), 0) AS yearly
+           FROM transactions
           WHERE merchant_wallet_id = ?
-            AND transaction_type IN ({$earningTypePlaceholders})"
+            AND transaction_type IN ({$earningTypePlaceholders})
+            AND created_at >= (CURDATE() - INTERVAL 1 YEAR)"
     );
-    $totalStmt->execute(array_merge([$wallet['id']], $earningTypes));
-    $totalEarned = (float) $totalStmt->fetchColumn();
+    $periodStmt->execute(array_merge([$wallet['id']], $earningTypes));
+    if ($row = $periodStmt->fetch(PDO::FETCH_ASSOC)) {
+        $periodSales = array_map('floatval', $row);
+    }
+}
+
+// ---- Mini bar-chart breakdowns for the period cards (owner dashboard only) ----
+$weeklyBreakdown = $monthlyBreakdown = $quarterlyBreakdown = $yearlyBreakdown = [];
+if (!$isMerchantStaff && $wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
+    $weekStart  = date('Y-m-d', strtotime('monday this week'));
+    $monthStart = date('Y-m-01');
+    $yearStart  = date('Y-01-01');
+    $sinceDaily = min($weekStart, $monthStart);
+
+    // Daily buckets power the Weekly (7 days) and Monthly (weeks-in-month) bars.
+    $dailyStmt = $db->prepare(
+        "SELECT DATE(created_at) AS d, COALESCE(SUM(amount), 0) AS total
+           FROM transactions
+          WHERE merchant_wallet_id = ?
+            AND transaction_type IN ({$earningTypePlaceholders})
+            AND created_at >= ?
+          GROUP BY DATE(created_at)"
+    );
+    $dailyStmt->execute(array_merge([$wallet['id']], $earningTypes, [$sinceDaily]));
+    $byDate = array_column($dailyStmt->fetchAll(PDO::FETCH_ASSOC), 'total', 'd');
+
+    for ($i = 0; $i < 7; $i++) {
+        $date = date('Y-m-d', strtotime("{$weekStart} +{$i} days"));
+        $weeklyBreakdown[] = ['label' => date('D', strtotime($date)), 'amount' => (float) ($byDate[$date] ?? 0)];
+    }
+
+    $daysInMonth = (int) date('t');
+    $weekBuckets = [];
+    for ($d = 1; $d <= $daysInMonth; $d++) {
+        $date = date('Y-m-') . str_pad((string) $d, 2, '0', STR_PAD_LEFT);
+        $weekIndex = intdiv($d - 1, 7);
+        $weekBuckets[$weekIndex] = ($weekBuckets[$weekIndex] ?? 0) + (float) ($byDate[$date] ?? 0);
+    }
+    foreach ($weekBuckets as $idx => $total) {
+        $monthlyBreakdown[] = ['label' => 'Wk ' . ($idx + 1), 'amount' => $total];
+    }
+
+    // Monthly buckets power the Quarterly (3 months) and Yearly (12 months) bars.
+    $monthlyStmt = $db->prepare(
+        "SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COALESCE(SUM(amount), 0) AS total
+           FROM transactions
+          WHERE merchant_wallet_id = ?
+            AND transaction_type IN ({$earningTypePlaceholders})
+            AND created_at >= ?
+          GROUP BY ym"
+    );
+    $monthlyStmt->execute(array_merge([$wallet['id']], $earningTypes, [$yearStart]));
+    $byMonth = array_column($monthlyStmt->fetchAll(PDO::FETCH_ASSOC), 'total', 'ym');
+
+    $currentQuarter = (int) ceil(((int) date('n')) / 3);
+    $qStartMonth = ($currentQuarter - 1) * 3 + 1;
+    for ($m = 0; $m < 3; $m++) {
+        $ym = date('Y') . '-' . str_pad((string) ($qStartMonth + $m), 2, '0', STR_PAD_LEFT);
+        $quarterlyBreakdown[] = ['label' => date('M', strtotime($ym . '-01')), 'amount' => (float) ($byMonth[$ym] ?? 0)];
+    }
+
+    for ($m = 1; $m <= 12; $m++) {
+        $ym = date('Y') . '-' . str_pad((string) $m, 2, '0', STR_PAD_LEFT);
+        $yearlyBreakdown[] = ['label' => date('M', strtotime($ym . '-01')), 'amount' => (float) ($byMonth[$ym] ?? 0)];
+    }
 }
 
 // ---- Lease & signed contract (owner only) ----------------------------------
@@ -93,14 +265,14 @@ $currentPage = 'dashboard';
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Merchant Dashboard | GenPay</title>
+    <title>Dashboard | GenPay</title>
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
@@ -118,7 +290,7 @@ $currentPage = 'dashboard';
         <main class="merchant-main">
 
             <?php
-            $topbarTitle = 'Merchant Dashboard';
+            $topbarTitle = 'Dashboard';
             $topbarSubtitle = 'Monitor sales, balance, QR payments' . ($canEncash ? ', and encashment activity' : '') . '.';
             require __DIR__ . '/../includes/partials/topbar_merchant.php';
             ?>
@@ -148,7 +320,8 @@ $currentPage = 'dashboard';
                 </div>
             </section>
 
-            <section class="sd-quick mb-4">
+            <?php /* Phone only: on desktop the sidebar already links to all of these. */ ?>
+            <section class="sd-quick mb-4 d-md-none">
                 <a href="<?= MERCHANT_URL ?>/pos.php">
                     <span class="sd-quick-icon is-scan"><i class="fa-solid fa-cash-register"></i></span>
                     <span>POS</span>
@@ -175,15 +348,31 @@ $currentPage = 'dashboard';
 
             <section class="sd-stats mb-4">
 
-                <div class="sd-stat">
+                <div class="sd-stat" id="todaysSalesCard" role="button" tabindex="0" style="cursor:pointer">
                     <div class="sd-stat-top">
                         <span>Today's Sales</span>
                         <span class="sd-stat-icon is-spent"><i class="fa-solid fa-chart-line"></i></span>
                     </div>
                     <h2 class="sd-num" id="todaysSalesValue"><?php echo gjc_money($todaysSales); ?></h2>
-                    <p>Today's received payments</p>
+                    <p>Remitted today &middot; click to view all</p>
                 </div>
 
+                <?php if ($isMerchantStaff): ?>
+                <div class="sd-stat sd-stat--remit">
+                    <div class="sd-stat-top">
+                        <span>Sales Remittance</span>
+                    </div>
+                    <p id="pendingRemitInfo">Pending: <?php echo gjc_money($pendingSales); ?></p>
+                    <button type="button" id="remitSalesBtn" class="sd-btn-solid sd-remit-btn">
+                        <i class="fa-solid fa-paper-plane"></i> Remit Sales
+                    </button>
+                    <p id="lastRemitInfo">
+                        <?php echo $lastRemitToday
+                            ? 'Last remitted ' . gjc_e($lastRemitToday['time']) . ' &middot; ' . gjc_money($lastRemitToday['amount'])
+                            : 'No remittance yet today'; ?>
+                    </p>
+                </div>
+                <?php else: ?>
                 <div class="sd-stat">
                     <div class="sd-stat-top">
                         <span>Total Earned</span>
@@ -192,11 +381,12 @@ $currentPage = 'dashboard';
                     <h2 class="sd-num" id="totalEarnedValue"><?php echo gjc_money($totalEarned); ?></h2>
                     <p>Lifetime merchant earnings</p>
                 </div>
+                <?php endif; ?>
 
                 <?php if ($canEncash): ?>
                 <div class="sd-stat sd-stat--status">
                     <div class="sd-stat-top">
-                        <span>Encashment</span>
+                        <span>Encashment Status</span>
                         <span class="sd-stat-icon is-status"><i class="fa-solid fa-money-check-dollar"></i></span>
                     </div>
                     <h2><?php echo $encashmentStatus; ?></h2>
@@ -279,96 +469,118 @@ $currentPage = 'dashboard';
             <?php endif; ?>
 
             <section class="row g-4 mb-4">
-                <div class="col-12">
-                    <div class="merchant-premium-panel">
-                        <div class="merchant-panel-header d-flex justify-content-between align-items-center">
-                            <div>
-                                <h3>
-                                    <span class="me-dot me-dot-green me-pulse" style="margin-right:6px"></span>
-                                    Live Order Queue
-                                </h3>
-                                <p>Orders from the POS and the student Shop Cart, updated automatically.</p>
-                            </div>
-                            <a href="<?= MERCHANT_URL ?>/pos.php" class="merchant-view-btn">Open POS</a>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table merchant-premium-table align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th data-card="title">Order</th>
-                                        <th data-card="hide">Source</th>
-                                        <th data-card="hide">Items</th>
-                                        <th data-card="amount">Amount</th>
-                                        <th>Status</th>
-                                        <th>Time</th>
-                                        <th class="text-end">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="liveQueueBody">
-                                    <tr id="liveQueueEmpty">
-                                        <td colspan="7" class="text-center text-muted py-4">Loading live orders&hellip;</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="row g-4 mb-4">
 
                 <div class="col-12 col-xl-8">
                     <div class="merchant-premium-panel">
+                        <?php if ($isMerchantStaff): ?>
                         <div class="merchant-panel-header">
                             <div>
-                                <h3>7-Day Sales</h3>
-                                <p>Daily merchant wallet payment performance</p>
+                                <h3>Inventory Stock by Category</h3>
+                                <p>Total stock quantity currently on record, per category</p>
+                            </div>
+                        </div>
+
+                        <div class="merchant-chart-box">
+                            <canvas id="merchantInventoryChart"></canvas>
+                        </div>
+                        <?php else: ?>
+                        <div class="merchant-panel-header">
+                            <div>
+                                <h3>Daily Sales</h3>
+                                <p>Daily merchant wallet payment performance &middot; <?php echo gjc_e($dailyRangeLabel); ?></p>
                             </div>
                         </div>
 
                         <div class="merchant-chart-box">
                             <canvas id="merchantSalesChart"></canvas>
                         </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-xl-4">
-                    <div class="merchant-premium-panel h-100">
-                        <div class="merchant-panel-header">
-                            <div>
-                                <h3>Quick Actions</h3>
-                                <p>Frequently used merchant tools</p>
-                            </div>
-                        </div>
-
-                        <div class="merchant-quick-actions">
-                            <?php if ($canEncash): ?>
-                            <a href="<?= MERCHANT_URL ?>/encash.php">
-                                <span>Request Encashment</span>
-                                <b>›</b>
-                            </a>
-                            <?php endif; ?>
-
-                            <a href="<?= MERCHANT_URL ?>/history.php">
-                                <span>Full History</span>
-                                <b>›</b>
-                            </a>
-                        </div>
-
-                        <?php if ($canEncash): ?>
-                        <div class="merchant-note">
-                            Encash your balance at the <strong>Accountancy Office</strong>. Your wallet holds digital
-                            receipts only.
-                        </div>
                         <?php endif; ?>
                     </div>
                 </div>
 
+                <?php if ($isMerchantStaff): ?>
+                <div class="col-12 col-xl-4">
+                    <div class="merchant-premium-panel h-100">
+                        <div class="merchant-panel-header">
+                            <div>
+                                <h3>Voided Transactions</h3>
+                                <p>Orders cancelled before payment</p>
+                            </div>
+                        </div>
+
+                        <?php if (empty($voidedOrdersToday)): ?>
+                        <div class="text-center text-muted py-4">No voided orders today.</div>
+                        <?php else: ?>
+                        <div class="merchant-quick-actions">
+                            <?php foreach ($voidedOrdersToday as $vo): ?>
+                            <div class="d-flex justify-content-between align-items-start gap-2 py-2" style="border-bottom:1px solid var(--ad-line)">
+                                <div>
+                                    <div style="font-weight:700"><?= gjc_e($vo['reference']) ?></div>
+                                    <div style="font-size:12px;color:var(--text-muted)"><?= gjc_e($vo['description'] ?: 'Order') ?></div>
+                                </div>
+                                <div class="text-end">
+                                    <div style="font-weight:700"><?= gjc_money((float) $vo['amount']) ?></div>
+                                    <div style="font-size:12px;color:var(--text-muted)"><?= date('h:i A', strtotime($vo['created_at'])) ?></div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="col-12 col-xl-4">
+                    <div class="merchant-metric-card merchant-metric-card--chart h-100">
+                        <span>Weekly Sales</span>
+                        <h2><?php echo gjc_money($periodSales['weekly']); ?></h2>
+                        <p><?php echo gjc_e($weekRangeLabel); ?></p>
+                        <div class="merchant-metric-chart">
+                            <canvas id="weeklyMiniChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
             </section>
 
+            <?php if (!$isMerchantStaff): ?>
+            <section class="row g-4 mb-4">
+                <div class="col-12 col-md-4">
+                    <div class="merchant-metric-card merchant-metric-card--chart h-100">
+                        <span>Monthly Sales</span>
+                        <h2><?php echo gjc_money($periodSales['monthly']); ?></h2>
+                        <p><?php echo gjc_e($monthRangeLabel); ?></p>
+                        <div class="merchant-metric-chart">
+                            <canvas id="monthlyMiniChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="merchant-metric-card merchant-metric-card--chart h-100">
+                        <span>Quarterly Sales</span>
+                        <h2><?php echo gjc_money($periodSales['quarterly']); ?></h2>
+                        <p><?php echo gjc_e($currentQuarterLabel); ?></p>
+                        <div class="merchant-metric-chart">
+                            <canvas id="quarterlyMiniChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="merchant-metric-card merchant-metric-card--chart h-100">
+                        <span>Yearly Sales</span>
+                        <h2><?php echo gjc_money($periodSales['yearly']); ?></h2>
+                        <p><?php echo gjc_e($yearRangeLabel); ?></p>
+                        <div class="merchant-metric-chart">
+                            <canvas id="yearlyMiniChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if (!$isMerchantStaff): ?>
             <?php
-            
+
             $mce        = new CirculationEngine($db);
             $mceSnap    = $mce->getCirculationSnapshot();
             $mceCap     = max((float)($mceSnap['cap']                  ?? 1), 0.01);
@@ -506,7 +718,9 @@ $currentPage = 'dashboard';
                 <?php endif; ?>
 
             </section>
+            <?php endif; ?>
 
+            <?php if ($isMerchantStaff): ?>
             <section class="merchant-premium-panel">
                 <div class="merchant-panel-header d-flex justify-content-between align-items-center">
                     <div>
@@ -540,23 +754,58 @@ $currentPage = 'dashboard';
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
+                        <?php if (!empty($recentSales)): ?>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2" class="text-end">Subtotal</th>
+                                <th class="merchant-amount">+<?php echo gjc_money(array_sum(array_column($recentSales, 'amount'))); ?></th>
+                                <th colspan="2"></th>
+                            </tr>
+                        </tfoot>
+                        <?php endif; ?>
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
         </main>
 
     </div>
 
-    <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
+    <div class="modal fade" id="todaysSalesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content custom-modal">
                 <div class="modal-header">
-                    <h5 class="modal-title">Order Details</h5>
+                    <h5 class="modal-title">Today's Sales</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="orderDetailsBody">
-                    <div class="text-center text-muted py-4">Loading&hellip;</div>
+                <div class="modal-body">
+                    <div id="todaysSalesModalLoading" class="text-center text-muted py-4">Loading...</div>
+                    <div class="table-responsive" id="todaysSalesModalTableWrap" style="display:none; max-height:60vh; overflow-y:auto">
+                        <table class="table merchant-premium-table align-middle">
+                            <thead>
+                                <tr>
+                                    <th data-card="title">Ref</th>
+                                    <th data-card="hide">Description</th>
+                                    <th>Items Bought</th>
+                                    <th data-card="amount">Amount</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="todaysSalesModalBody"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="3" class="text-end">Subtotal</th>
+                                    <th id="todaysSalesModalSubtotal" class="merchant-amount"></th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div id="todaysSalesModalEmpty" class="text-center text-muted py-4" style="display:none">No sales recorded today yet.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -565,208 +814,158 @@ $currentPage = 'dashboard';
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
     <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
-    <script src="<?= JS_URL ?>/merchant_chart.js?v=11"></script>
+
+    <?php if ($isMerchantStaff): ?>
+    <script>
+    (function () {
+        const ctx = document.getElementById('merchantInventoryChart');
+        if (!ctx) return;
+
+        const labels = <?= json_encode(array_map('ucfirst', array_keys($inventoryStockByCategory))) ?>;
+        const data = <?= json_encode(array_values($inventoryStockByCategory)) ?>;
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Stock Quantity',
+                    data: data,
+                    backgroundColor: '#1e5c3a',
+                    borderRadius: 6,
+                    maxBarThickness: 56,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#6b7a70' },
+                        grid: { display: false },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#6b7a70', precision: 0 },
+                        grid: { color: 'rgba(13, 36, 24, 0.06)' },
+                    },
+                },
+            },
+        });
+    })();
+    </script>
+    <?php else: ?>
+    <script>
+    (function () {
+        const ctx = document.getElementById('merchantSalesChart');
+        if (!ctx) return;
+
+        const labels = <?= json_encode(array_column($sevenDaySales, 'label')) ?>;
+        const data = <?= json_encode(array_column($sevenDaySales, 'amount')) ?>;
+
+        const formatPeso = (amount) => '₱' + Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sales',
+                    data: data,
+                    backgroundColor: '#1e5c3a',
+                    borderRadius: 6,
+                    maxBarThickness: 56,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (item) => ' ' + formatPeso(item.parsed.y),
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#6b7a70' },
+                        grid: { display: false },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#6b7a70',
+                            callback: (value) => formatPeso(value),
+                        },
+                        grid: { color: 'rgba(13, 36, 24, 0.06)' },
+                    },
+                },
+            },
+        });
+    })();
+
+    (function () {
+        const buildMiniBarChart = (canvasId, points) => {
+            const el = document.getElementById(canvasId);
+            if (!el || !points.length) return;
+
+            new Chart(el, {
+                type: 'bar',
+                data: {
+                    labels: points.map((p) => p.label),
+                    datasets: [{
+                        data: points.map((p) => p.amount),
+                        backgroundColor: '#1e5c3a',
+                        borderRadius: 3,
+                        maxBarThickness: 22,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => ' ₱' + Number(item.parsed.y).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#6b7a70', font: { size: 9 } },
+                            grid: { display: false },
+                        },
+                        y: { display: false, beginAtZero: true },
+                    },
+                },
+            });
+        };
+
+        buildMiniBarChart('weeklyMiniChart', <?= json_encode($weeklyBreakdown) ?>);
+        buildMiniBarChart('monthlyMiniChart', <?= json_encode($monthlyBreakdown) ?>);
+        buildMiniBarChart('quarterlyMiniChart', <?= json_encode($quarterlyBreakdown) ?>);
+        buildMiniBarChart('yearlyMiniChart', <?= json_encode($yearlyBreakdown) ?>);
+    })();
+    </script>
+    <?php endif; ?>
 
     <script>
-    // ── Live Order Queue ─────────────────────────────────────────────────────
     const LIVE_QUEUE_API = '<?= MERCHANT_URL ?>/api/pos.php';
-
-    // GenCoin display conversion (₱10 = 1 GC). Order amounts from the API stay in ₱.
-    const PESOS_PER_GC = <?= GJC_PESOS_PER_GC ?>;
-    function gcAmount(pesos) {
-        return (pesos / PESOS_PER_GC).toLocaleString('en-PH', {maximumFractionDigits: 2});
-    }
-    function gcPriceHtml(pesos, endAlign = false) {
-        return `<span class="gc-price${endAlign ? ' gc-price--end' : ''}">
-            <span class="gc-price-main">${gcAmount(pesos)} GC</span>
-            <span class="gc-price-sub">≈ ₱${(+pesos).toFixed(2)}</span>
-        </span>`;
-    }
-    const liveQueueBody = document.getElementById('liveQueueBody');
-    let lastQueueSignature = '';
-
-    const QUEUE_BADGES = {
-        pending: '<span class="badge bg-warning text-dark">Pending</span>',
-        paid:    '<span class="badge bg-success">Paid</span>',
-        voided:  '<span class="badge bg-secondary">Voided</span>',
-        expired: '<span class="badge bg-secondary">Expired</span>',
-    };
-
-    const QUEUE_SOURCE_BADGES = {
-        pos:          '<span class="badge bg-light text-dark border"><i class="fa-solid fa-cash-register"></i> POS</span>',
-        cart:         '<span class="badge bg-light text-dark border"><i class="fa-solid fa-cart-shopping"></i> Shop Cart</span>',
-        cart_pending: '<span class="badge bg-light text-dark border"><i class="fa-solid fa-cart-shopping"></i> Shop Cart</span>',
-    };
-
-    function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = value ?? '';
-        return div.innerHTML;
-    }
-
-    function renderLiveQueue(orders) {
-        if (!orders.length) {
-            liveQueueBody.innerHTML = `
-                <tr id="liveQueueEmpty">
-                    <td colspan="7" class="text-center text-muted py-4">No orders yet. Generate a payment QR from the POS, or wait for a Shop Cart checkout.</td>
-                </tr>`;
-            return;
-        }
-
-        liveQueueBody.innerHTML = orders.map(order => {
-            const time = new Date(order.created_at.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const badge = QUEUE_BADGES[order.status] || `<span class="badge bg-light text-dark">${order.status}</span>`;
-            const sourceBadge = QUEUE_SOURCE_BADGES[order.source] || '';
-            const isVoidable = (order.source === 'pos' || order.source === 'cart_pending') && order.status === 'pending';
-            const voidBtn = isVoidable
-                ? `<button type="button" class="btn btn-sm btn-outline-danger" onclick="voidLiveOrder(${order.id}, '${order.source}', this)">&times; Void</button>`
-                : '';
-
-            return `
-                <tr data-order-uid="${order.uid}">
-                    <td>#${order.id}</td>
-                    <td>${sourceBadge}</td>
-                    <td>${escapeHtml(order.description)}</td>
-                    <td>${gcPriceHtml(Number(order.amount))}</td>
-                    <td>${badge}</td>
-                    <td>${time}</td>
-                    <td class="text-end">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="viewOrderDetails(${order.id}, '${order.source}')">View</button>
-                        ${voidBtn}
-                    </td>
-                </tr>`;
-        }).join('');
-    }
-
-    function flashLiveQueue() {
-        liveQueueBody.classList.remove('queue-flash');
-        // Restart the animation even if it's already mid-flash from a rapid update.
-        void liveQueueBody.offsetWidth;
-        liveQueueBody.classList.add('queue-flash');
-    }
-
-    async function refreshLiveQueue() {
-        try {
-            const fd = new FormData();
-            fd.append('action', 'list_queue');
-            const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
-            const data = await res.json();
-            if (!data.success) return;
-
-            const signature = JSON.stringify(data.orders.map(o => [o.uid, o.status, o.amount]));
-            if (signature === lastQueueSignature) return;
-
-            const isFirstLoad = lastQueueSignature === '';
-            lastQueueSignature = signature;
-            renderLiveQueue(data.orders);
-            if (!isFirstLoad) flashLiveQueue();
-        } catch (error) {
-            // Keep showing the last known queue state on a transient network error.
-        }
-    }
-
-    async function voidLiveOrder(orderId, source, btn) {
-        btn.disabled = true;
-        btn.textContent = 'Voiding...';
-        try {
-            const fd = new FormData();
-            fd.append('action', 'void_order');
-            fd.append('order_id', orderId);
-            fd.append('source', source);
-            const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
-            const data = await res.json();
-            if (!data.success) {
-                alert(data.message || 'Unable to void this order.');
-            }
-        } finally {
-            lastQueueSignature = '';
-            refreshLiveQueue();
-        }
-    }
-
-    refreshLiveQueue();
-    setInterval(refreshLiveQueue, 3000);
-
-    // ── View full order details ────────────────────────────────────────────────
-    const orderDetailsModalEl = document.getElementById('orderDetailsModal');
-    const orderDetailsModal = bootstrap.Modal.getOrCreateInstance(orderDetailsModalEl);
-    const orderDetailsBody = document.getElementById('orderDetailsBody');
-
-    async function viewOrderDetails(orderId, source) {
-        orderDetailsBody.innerHTML = '<div class="text-center text-muted py-4">Loading&hellip;</div>';
-        orderDetailsModal.show();
-
-        try {
-            const fd = new FormData();
-            fd.append('action', 'view_order');
-            fd.append('order_id', orderId);
-            fd.append('source', source);
-            const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
-            const data = await res.json();
-
-            if (!data.success) {
-                orderDetailsBody.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(data.message || 'Unable to load this order.')}</div>`;
-                return;
-            }
-
-            const items = Array.isArray(data.items) ? data.items : [];
-            const itemRows = items.length
-                ? items.map(item => {
-                    const qty = Number(item.qty || 0);
-                    const price = Number(item.price || 0);
-                    const lineTotal = item.line_total != null ? Number(item.line_total) : qty * price;
-                    return `
-                        <tr>
-                            <td>${escapeHtml(item.name || '')}</td>
-                            <td class="text-center">${qty}</td>
-                            <td class="text-end">${gcPriceHtml(price, true)}</td>
-                            <td class="text-end">${gcPriceHtml(lineTotal, true)}</td>
-                        </tr>`;
-                }).join('')
-                : `<tr><td colspan="4" class="text-muted text-center">${escapeHtml(data.description || 'No itemized details recorded.')}</td></tr>`;
-
-            const badge = QUEUE_BADGES[data.status] || `<span class="badge bg-light text-dark">${data.status}</span>`;
-            const submittedTime = data.created_at ? new Date(data.created_at.replace(' ', 'T')).toLocaleString() : '--';
-            const paidTime = data.paid_at ? new Date(data.paid_at.replace(' ', 'T')).toLocaleString() : null;
-
-            orderDetailsBody.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="mb-1">${escapeHtml(data.reference || ('#' + orderId))}</h5>
-                        <small class="text-muted">${escapeHtml(data.student_name || 'Student')}</small>
-                    </div>
-                    ${badge}
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-2">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th class="text-center">Qty</th>
-                                <th class="text-end">Price</th>
-                                <th class="text-end">Subtotal</th>
-                            </tr>
-                        </thead>
-                        <tbody>${itemRows}</tbody>
-                    </table>
-                </div>
-                <div class="d-flex justify-content-between fw-bold mb-3" style="font-size:16px;border-top:2px solid var(--gp-line);padding-top:10px;">
-                    <span>Total</span>
-                    ${gcPriceHtml(Number(data.amount || 0), true)}
-                </div>
-                <div style="font-size:13px;color:var(--gp-muted);">
-                    <div>Submitted: ${submittedTime}</div>
-                    ${paidTime ? `<div>Paid: ${paidTime}</div>` : ''}
-                </div>
-            `;
-        } catch (error) {
-            orderDetailsBody.innerHTML = '<div class="alert alert-danger mb-0">Unable to reach the server. Please try again.</div>';
-        }
-    }
-
-    // ── Live Sales Summary (Today's Sales / Total Earned) ───────────────────────
+    // ── Live Sales Summary (Today's Sales / Total Earned / Remittance) ──────────
     const todaysSalesValue = document.getElementById('todaysSalesValue');
     const totalEarnedValue = document.getElementById('totalEarnedValue');
+    const lastRemitInfo = document.getElementById('lastRemitInfo');
+    const pendingRemitInfo = document.getElementById('pendingRemitInfo');
+
+    function formatMoney(amount) {
+        return '&#8369;' + Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     async function refreshSalesSummary() {
         try {
@@ -776,14 +975,119 @@ $currentPage = 'dashboard';
             const data = await res.json();
             if (!data.success) return;
 
-            todaysSalesValue.innerHTML = '&#8369;' + Number(data.todays_sales).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            totalEarnedValue.innerHTML = '&#8369;' + Number(data.total_earned).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            todaysSalesValue.innerHTML = formatMoney(data.todays_sales);
+            if (totalEarnedValue) {
+                totalEarnedValue.innerHTML = formatMoney(data.total_earned);
+            }
+            if (pendingRemitInfo) {
+                pendingRemitInfo.innerHTML = 'Pending: ' + formatMoney(data.pending_amount);
+            }
+            if (lastRemitInfo) {
+                lastRemitInfo.textContent = data.last_remit
+                    ? `Last remitted ${data.last_remit.time} · ₱${Number(data.last_remit.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : 'No remittance yet today';
+            }
         } catch (error) {
             // Keep showing the last known values on a transient network error.
         }
     }
 
     setInterval(refreshSalesSummary, 5000);
+
+    // ── Remit Sales (one click, self-declared, prints a report) ─────────────────
+    const remitSalesBtn = document.getElementById('remitSalesBtn');
+    if (remitSalesBtn) {
+        remitSalesBtn.addEventListener('click', async () => {
+            remitSalesBtn.disabled = true;
+            const originalHtml = remitSalesBtn.innerHTML;
+            remitSalesBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Remitting…';
+
+            try {
+                const fd = new FormData();
+                fd.append('action', 'remit_sales');
+                const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (!data.success) {
+                    alert(data.message || 'Unable to remit sales.');
+                    return;
+                }
+
+                lastRemitInfo.textContent = `Last remitted ${data.time} · ₱${Number(data.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                refreshSalesSummary();
+                window.open(data.report_url, '_blank');
+            } catch (error) {
+                alert('Network error. Please try again.');
+            } finally {
+                remitSalesBtn.disabled = false;
+                remitSalesBtn.innerHTML = originalHtml;
+            }
+        });
+    }
+
+    // ── Today's Sales Modal ──────────────────────────────────────────────────────
+    const todaysSalesCard = document.getElementById('todaysSalesCard');
+    const todaysSalesModalEl = document.getElementById('todaysSalesModal');
+    const todaysSalesModal = bootstrap.Modal.getOrCreateInstance(todaysSalesModalEl);
+    const todaysSalesModalLoading = document.getElementById('todaysSalesModalLoading');
+    const todaysSalesModalTableWrap = document.getElementById('todaysSalesModalTableWrap');
+    const todaysSalesModalEmpty = document.getElementById('todaysSalesModalEmpty');
+    const todaysSalesModalBody = document.getElementById('todaysSalesModalBody');
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+    }
+
+    async function openTodaysSalesModal() {
+        todaysSalesModal.show();
+        todaysSalesModalLoading.style.display = '';
+        todaysSalesModalTableWrap.style.display = 'none';
+        todaysSalesModalEmpty.style.display = 'none';
+
+        try {
+            const fd = new FormData();
+            fd.append('action', 'get_today_sales');
+            const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
+            const data = await res.json();
+
+            todaysSalesModalLoading.style.display = 'none';
+
+            if (!data.success || !data.sales.length) {
+                todaysSalesModalEmpty.style.display = '';
+                return;
+            }
+
+            todaysSalesModalBody.innerHTML = data.sales.map((sale) => `
+                <tr>
+                    <td>${escapeHtml(sale.reference_no)}</td>
+                    <td>${escapeHtml(sale.description)}</td>
+                    <td>${escapeHtml(sale.items)}</td>
+                    <td class="merchant-amount">+&#8369;${Number(sale.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td>${escapeHtml(sale.time)}</td>
+                </tr>
+            `).join('');
+
+            const subtotal = data.sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+            document.getElementById('todaysSalesModalSubtotal').textContent =
+                '+₱' + subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            todaysSalesModalTableWrap.style.display = '';
+        } catch (error) {
+            todaysSalesModalLoading.style.display = 'none';
+            todaysSalesModalEmpty.textContent = 'Could not load today\'s sales. Please try again.';
+            todaysSalesModalEmpty.style.display = '';
+        }
+    }
+
+    todaysSalesCard.addEventListener('click', openTodaysSalesModal);
+    todaysSalesCard.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openTodaysSalesModal();
+        }
+    });
     </script>
 
     <?php require __DIR__ . '/../includes/partials/bottom_nav_merchant.php'; ?>

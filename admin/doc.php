@@ -123,6 +123,7 @@ if (in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true
     header('Content-Type: text/html; charset=UTF-8');
     header('Cache-Control: private, max-age=3600');
     echo '<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;background:#1e1e1e;display:flex;align-items:center;justify-content:center}

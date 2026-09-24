@@ -11,6 +11,7 @@ gjc_require_role(['merchant']);
 gjc_ensure_merchant_qr_orders_schema($db);
 gjc_ensure_cart_orders_schema($db);
 gjc_ensure_parent_schema($db);
+gjc_ensure_sales_remittances_schema($db);
 
 $action         = trim((string) ($_POST['action'] ?? ''));
 $merchantUserId = gjc_user_id();
@@ -251,21 +252,14 @@ try {
     // ── LIVE SALES SUMMARY (Today's Sales / Total Earned) ───────────────────────
     if ($action === 'get_sales_summary') {
         $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
-        $todaysSales = 0.0;
         $totalEarned = 0.0;
+
+        $unremitted = gjc_merchant_unremitted_sales($db, $merchantWallet['id']);
+        $remittedToday = gjc_merchant_remitted_sales_today($db, $merchantWallet['id']);
 
         if ($merchantWallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
             $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
             $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
-
-            $todayStmt = $db->prepare(
-                "SELECT COALESCE(SUM(amount), 0) FROM transactions
-                  WHERE merchant_wallet_id = ?
-                    AND transaction_type IN ({$placeholders})
-                    AND DATE(created_at) = CURDATE()"
-            );
-            $todayStmt->execute(array_merge([$merchantWallet['id']], $earningTypes));
-            $todaysSales = (float) $todayStmt->fetchColumn();
 
             $totalStmt = $db->prepare(
                 "SELECT COALESCE(SUM(amount), 0) FROM transactions
@@ -276,10 +270,133 @@ try {
             $totalEarned = (float) $totalStmt->fetchColumn();
         }
 
+        $lastRemit = null;
+        $lastRemitStmt = $db->prepare(
+            "SELECT amount, reference_no, period_end FROM sales_remittances
+              WHERE merchant_wallet_id = ? AND DATE(period_end) = CURDATE()
+              ORDER BY period_end DESC LIMIT 1"
+        );
+        $lastRemitStmt->execute([$merchantWallet['id']]);
+        if ($row = $lastRemitStmt->fetch(PDO::FETCH_ASSOC)) {
+            $lastRemit = [
+                'amount' => (float) $row['amount'],
+                'reference_no' => $row['reference_no'],
+                'time' => date('h:i A', strtotime($row['period_end'])),
+            ];
+        }
+
         echo json_encode([
             'success' => true,
-            'todays_sales' => $todaysSales,
+            'todays_sales' => $remittedToday['amount'],
+            'pending_amount' => $unremitted['amount'],
             'total_earned' => $totalEarned,
+            'last_remit' => $lastRemit,
+        ]);
+        exit;
+    }
+
+    // ── TODAY'S SALES (FULL LIST, ALREADY REMITTED TODAY) ───────────────────────
+    if ($action === 'get_today_sales') {
+        $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
+        $sales = [];
+
+        $remittedToday = gjc_merchant_remitted_sales_today($db, $merchantWallet['id']);
+
+        if ($merchantWallet['id'] > 0 && $remittedToday['period_end'] && gjc_table_exists($db, 'transactions')) {
+            $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
+            $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
+
+            $stmt = $db->prepare(
+                "SELECT reference_no, transaction_type, amount, notes, created_at
+                   FROM transactions
+                  WHERE merchant_wallet_id = ?
+                    AND transaction_type IN ({$placeholders})
+                    AND created_at > ?
+                    AND created_at <= ?
+                  ORDER BY created_at DESC"
+            );
+            $stmt->execute(array_merge(
+                [$merchantWallet['id']],
+                $earningTypes,
+                [$remittedToday['period_start'], $remittedToday['period_end']]
+            ));
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                // 'notes' holds the item summary ("2x Rice Meal, 1x Iced Tea") for both
+                // POS sales ("POS Sale: " prefixed) and cart/QR checkouts (unprefixed).
+                $itemsBought = preg_replace('/^POS Sale:\s*/i', '', trim((string) $row['notes']));
+
+                $sales[] = [
+                    'reference_no' => $row['reference_no'],
+                    'description'  => ucwords(str_replace('_', ' ', $row['transaction_type'])),
+                    'items'        => $itemsBought !== '' ? $itemsBought : '—',
+                    'amount'       => (float) $row['amount'],
+                    'time'         => date('M d, h:i A', strtotime($row['created_at'])),
+                ];
+            }
+        }
+
+        echo json_encode(['success' => true, 'sales' => $sales]);
+        exit;
+    }
+
+    // ── REMIT SALES (self-declared, no approval) ─────────────────────────────────
+    if ($action === 'remit_sales') {
+        $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
+        if ($merchantWallet['id'] === 0) {
+            echo json_encode(['success' => false, 'message' => 'Merchant wallet not found.']);
+            exit;
+        }
+
+        $unremitted = gjc_merchant_unremitted_sales($db, $merchantWallet['id']);
+        if ($unremitted['amount'] <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No new sales to remit yet.']);
+            exit;
+        }
+
+        $periodEnd = date('Y-m-d H:i:s');
+        $reference = gjc_reference('RMT');
+
+        $db->prepare(
+            "INSERT INTO sales_remittances
+                (merchant_wallet_id, merchant_user_id, staff_user_id, reference_no, amount, txn_count, period_start, period_end)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )->execute([
+            $merchantWallet['id'],
+            $ownerMerchId,
+            $merchantUserId,
+            $reference,
+            $unremitted['amount'],
+            $unremitted['count'],
+            $unremitted['since'],
+            $periodEnd,
+        ]);
+
+        logAudit(
+            $db,
+            $merchantUserId,
+            gjc_current_role(),
+            'TRANSACTION',
+            'sales_remittances',
+            null,
+            [
+                'reference_no' => $reference,
+                'amount' => $unremitted['amount'],
+                'txn_count' => $unremitted['count'],
+                'merchant_wallet_id' => $merchantWallet['id'],
+                'period_start' => $unremitted['since'],
+                'period_end' => $periodEnd,
+            ],
+            null,
+            ['target_id' => $reference]
+        );
+
+        echo json_encode([
+            'success' => true,
+            'reference_no' => $reference,
+            'amount' => $unremitted['amount'],
+            'txn_count' => $unremitted['count'],
+            'time' => date('h:i A', strtotime($periodEnd)),
+            'report_url' => MERCHANT_URL . '/remittance_report.php?ref=' . urlencode($reference),
         ]);
         exit;
     }
@@ -343,6 +460,28 @@ try {
             $items = json_decode((string) $row['items_json'], true);
             $studentName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
 
+            // The stall's static Wallet QR (same payload the buyer's Shop Cart
+            // pay_order expects), shown in the order view so the counter can
+            // present it without leaving the queue. Pending orders only.
+            $walletQrUrl = null;
+            if ($row['status'] === 'pending') {
+                $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
+                $stallStmt = $db->prepare("SELECT stall_name FROM merchant WHERE userID = ? LIMIT 1");
+                $stallStmt->execute([$ownerMerchId]);
+                $stallName = (string) ($stallStmt->fetchColumn() ?: '');
+                if ($stallName === '') {
+                    $stallName = (string) (gjc_current_user($db)['name'] ?? '');
+                }
+                $walletQrPayload = json_encode([
+                    'type' => 'merchant_wallet',
+                    'merchant_wallet_id' => $merchantWallet['id'],
+                    'merchant_user_id' => $ownerMerchId,
+                    'merchant' => $stallName,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $walletQrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=H&margin=12&data='
+                    . rawurlencode($walletQrPayload);
+            }
+
             echo json_encode([
                 'success' => true,
                 'reference' => $row['reference_no'],
@@ -352,6 +491,7 @@ try {
                 'status' => $row['status'],
                 'created_at' => $row['created_at'],
                 'paid_at' => $row['paid_at'],
+                'wallet_qr_url' => $walletQrUrl,
                 'student_name' => $studentName !== ''
                     ? $studentName
                     : (($row['buyer_role'] ?? 'student') === 'parent' ? 'Parent' : 'Student'),
@@ -553,6 +693,9 @@ try {
             }
         }
 
+        // DDL must run before the transaction opens (it would implicitly commit it).
+        gjc_ensure_maintenance_fees_schema($db);
+
         // ── BEGIN TRANSACTION ───────────────────────────────────────────────────
         $db->beginTransaction();
         try {
@@ -613,6 +756,11 @@ try {
                 gjc_active_school_year_id($db),
             ]);
 
+            // 6. Maintenance fee — billed to tuition, never taken from the wallet.
+            $feePayerStmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ?");
+            $feePayerStmt->execute([$walletId]);
+            gjc_record_maintenance_fee($db, (int) $feePayerStmt->fetchColumn(), $refNo, 'payment', $totalAmt);
+
             $db->commit();
             gjc_check_parent_balance_alert($db, $walletId);
             logAudit(
@@ -666,7 +814,7 @@ try {
             ]);
         } catch (\Throwable $e) {
             $db->rollBack();
-            echo json_encode(['success' => false, 'message' => 'Transaction failed: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/pos', 'Transaction failed. Please try again.')]);
         }
         exit;
     }
@@ -674,5 +822,5 @@ try {
     echo json_encode(['success' => false, 'message' => 'Unknown action.']);
 } catch (\Throwable $e) {
     if ($db->inTransaction()) $db->rollBack();
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/pos', 'Server error. Please try again.')]);
 }

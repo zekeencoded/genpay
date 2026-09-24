@@ -1,31 +1,116 @@
-.profile-logo-preview {
-    width: 96px; height: 96px; border-radius: 50%;
-    object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.15);
-    background: var(--gjc-soft-2);
-}
-.profile-logo-fallback {
-    width: 96px; height: 96px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, #1e5c3a, #27764b);
-    color: #fff; font-weight: 800; font-size: 32px;
-}
-.wallet-qr-print-card {
-    display: flex; align-items: center; gap: 24px;
-    flex-wrap: wrap; padding: 20px; border-radius: 16px;
-    background: #f8fafc; border: 1px solid var(--gp-line);
-}
-.wallet-qr-image {
-    width: 200px; height: 200px; border-radius: 12px;
-    background: #fff; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
-}
-.wallet-qr-caption { display: flex; flex-direction: column; gap: 4px; }
-.wallet-qr-caption strong { font-size: 18px; color: #1e5c3a; }
-.wallet-qr-caption span { font-size: 13px; color: var(--gp-muted); }
+/* merchant/settings.php — Business Profile.
+   The listing panel is a form on the left and a preview of the public
+   Stall Directory tile on the right. The tile copies stalls.css
+   (.stall--occupied / .stall--has-logo) at the directory's real column
+   width, so a name that gets cut off here gets cut off there too. */
 
-@media print {
-    .sd-sidebar, .sd-topbar, .sd-bottomnav, .merchant-premium-panel:not(#walletQrPanel) {
-        display: none !important;
-    }
-    #walletQrPanel .merchant-panel-header button { display: none; }
-    .wallet-qr-image { width: 320px; height: 320px; }
+.bp-edit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 32px;
+    align-items: start;
+    margin-top: 8px;
+}
+
+.bp-edit-fields { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+
+.bp-field-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+}
+.bp-counter { font-size: 12px; color: var(--gp-muted); }
+
+.bp-warn {
+    display: flex; gap: 8px; align-items: flex-start;
+    margin-top: 8px; padding: 8px 12px;
+    border-radius: var(--gp-radius);
+    background: var(--gp-warning-bg); color: var(--gp-warning);
+    font-size: 13px; line-height: 1.45;
+}
+.bp-warn > i { margin-top: 3px; }
+
+/* Logo picker: a small square of the current image beside its actions. */
+.bp-logo-row { display: flex; align-items: center; gap: 16px; }
+.bp-logo-thumb {
+    flex: none;
+    width: 64px; height: 64px;
+    border-radius: var(--gp-radius);
+    background: var(--gp-green-850) center / cover no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 24px;
+}
+.bp-logo-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.bp-logo-actions .merchant-view-btn { cursor: pointer; }
+/* Phones give .merchant-view-btn a 52px min-height as a block-ish inline
+   element, which strands the label at the top; centre it instead. */
+.bp-listing .merchant-view-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+
+.bp-link-btn {
+    background: none; border: none; padding: 0;
+    font-size: 13px; font-weight: 600;
+    color: var(--gp-muted);
+    text-decoration: underline; text-underline-offset: 2px;
+}
+.bp-link-btn:hover { color: var(--gp-ink); }
+#logoRemoveBtn:hover { color: var(--gp-danger); }
+
+.bp-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.bp-actions .login-btn { width: auto; padding-left: 24px; padding-right: 24px; }
+.bp-actions .login-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bp-dirty { font-size: 12px; color: var(--gp-muted); }
+
+/* ── Preview ─────────────────────────────────────────────────────────── */
+.bp-preview { margin: 0; }
+.bp-preview figcaption {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--gp-muted);
+    margin-bottom: 8px;
+}
+.bp-preview-note { font-size: 12px; color: var(--gp-muted); line-height: 1.45; margin: 10px 0 0; }
+
+/* One directory column: (1000 - 2*24 padding - 4*16 gap) / 5 ≈ 178px. */
+.bp-tile {
+    position: relative;
+    width: 178px; max-width: 100%;
+    min-height: 130px;
+    padding: 22px 16px 18px;
+    border-radius: var(--gp-radius);
+    border: 2px solid #f0b8b2;
+    background: var(--gp-danger-bg) center / cover no-repeat;
+    box-shadow: var(--gp-shadow-card);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px;
+    text-align: center;
+}
+.bp-tile.has-logo::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: var(--gp-radius);
+    background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.45));
+}
+.bp-tile-id {
+    position: relative; z-index: 1;
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gp-green-850); color: #fff;
+    font-size: 17px; font-weight: 800; line-height: 1;
+    border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.bp-tile.has-logo .bp-tile-id { background: rgba(255,255,255,.95); color: var(--gp-danger); }
+.bp-tile-name {
+    position: relative; z-index: 1;
+    max-width: 100%;
+    font-size: 11px; font-weight: 600; color: var(--gp-ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bp-tile.has-logo .bp-tile-name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.bp-tile-name.is-placeholder { opacity: .55; font-style: italic; }
+
+@media (max-width: 767.98px) {
+    .bp-edit { grid-template-columns: 1fr; gap: 24px; }
+    .bp-preview { order: -1; }
+    .bp-actions .login-btn { flex: 1 1 auto; }
+    .bp-logo-actions .merchant-view-btn { min-height: 44px; }
 }

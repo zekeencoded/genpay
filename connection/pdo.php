@@ -2,13 +2,12 @@
 
 class Database
 {
-    private $host = "localhost";
-    private $db = "ewallet";
-    private $user = "root";
-
-    private $pass = "gitzeke126";
+    private $host;
+    private $db;
+    private $user;
+    private $pass;
     private $charset = "utf8mb4";
-    private $port = "3306";
+    private $port;
 
     private $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -20,6 +19,11 @@ class Database
     private $dsn;
     public function initConnection()
     {
+        $this->host = gjc_local_config('db_host', 'GJC_DB_HOST');
+        $this->port = gjc_local_config('db_port', 'GJC_DB_PORT');
+        $this->db   = gjc_local_config('db_name', 'GJC_DB_NAME');
+        $this->user = gjc_local_config('db_user', 'GJC_DB_USER');
+        $this->pass = gjc_local_config('db_pass', 'GJC_DB_PASS');
         $this->dsn = "mysql:host=$this->host;dbname=$this->db;charset=$this->charset;port=$this->port";
         $this->pdo = null;
         try {

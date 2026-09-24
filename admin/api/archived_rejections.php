@@ -57,7 +57,8 @@ try {
             $db->commit();
         } catch (Throwable $e) {
             $db->rollBack();
-            archived_json(['success' => false, 'message' => 'Reactivation failed: ' . $e->getMessage()]);
+            error_log('[admin/api/archived_rejections.php] reactivate: ' . $e->getMessage());
+            archived_json(['success' => false, 'message' => 'The application could not be reactivated. Nothing was changed.']);
         }
 
         archived_json(['success' => true, 'message' => 'Application reactivated at Step 1 - Review Requirements.']);
@@ -68,5 +69,6 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    archived_json(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    error_log('[admin/api/archived_rejections.php] ' . $e->getMessage());
+    archived_json(['success' => false, 'message' => 'A server error occurred. Nothing was changed.']);
 }

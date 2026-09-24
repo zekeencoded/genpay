@@ -480,13 +480,15 @@ $currentPage = "audit_log";
     <link rel="icon" type="image/png" sizes="192x192" href="<?= ICONS_URL ?>/gp_logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audit Log | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/audit_log.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/audit_log.css?v=10">
 </head>
 <body class="gp-theme">
     <div class="admin-layout">
@@ -616,13 +618,13 @@ $currentPage = "audit_log";
                     <table class="table audit-table align-middle">
                         <thead>
                             <tr>
-                                <th>Time</th>
-                                <th>Actor</th>
-                                <th>Role</th>
+                                <th data-card="hide">Time</th>
+                                <th data-card="title">Actor</th>
+                                <th data-card="hide">Role</th>
                                 <th>Action</th>
                                 <th>Outcome</th>
-                                <th>Table / Target</th>
-                                <th>Details</th>
+                                <th data-card="hide">Table / Target</th>
+                                <th data-card="hide">Details</th>
                             </tr>
                         </thead>
                         <tbody id="auditLogBody">
@@ -663,6 +665,7 @@ $currentPage = "audit_log";
 
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
     <script>
     function toggleSidebar() {
         document.getElementById("sidebar").classList.toggle("collapsed");

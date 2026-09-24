@@ -3,8 +3,8 @@
    (mirrors the exact pattern used in admin.css / merchant.css).
    Replaces the legacy .student-layout shell, which was deleted with
    assets/css/student.css once nothing referenced it. */
-@import url("gjc-clear.css?v=21");
-@import url("theme.css?v=12");
+@import url("gjc-clear.css?v=23");
+@import url("theme.css?v=14");
 
 :root {
   --emerald-950: var(--gp-green-950);
@@ -165,7 +165,6 @@ body {
 
 .parent-menu a.active {
   background: var(--gp-gold-soft);
-  border-left-color: var(--gp-gold);
   color: var(--gp-gold);
 }
 
@@ -322,6 +321,11 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
+}
+
+/* Topbar logout — phone only; desktop/tablet use the sidebar's Logout. */
+.parent-logout-btn {
+  display: none;
 }
 
 /* ===== CONTENT WRAPPER (replaces the old inline style="padding:24px 28px") ===== */
@@ -568,6 +572,29 @@ body {
     width: 34px;
     height: 34px;
     font-size: 13px;
+  }
+
+  .parent-user {
+    gap: 8px;
+  }
+
+  .parent-logout-btn {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--gp-radius);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .parent-logout-btn:hover,
+  .parent-logout-btn:focus-visible {
+    background: var(--gp-gold-soft);
+    color: var(--gp-gold);
   }
 
   /* Bottom padding clears the fixed nav plus the iOS home indicator. */

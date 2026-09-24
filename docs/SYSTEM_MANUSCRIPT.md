@@ -189,7 +189,7 @@ Peer-to-peer transfer by Student ID. The API has a `lookup` action (resolve `GJC
 
 ### 6.5 Withdrawing
 
-`student/withdraw.php` mirrors the top-up request: a `withdrawal_requests` row that only becomes money when the cashier physically hands over cash and clicks release, which calls `CirculationEngine::studentSettle()` (wallet → vault).
+The student-facing page (`student/withdraw.php`) was removed; graduated students now collect their balance as a cheque from finance, off-system. The admin release path is kept for legacy requests. It mirrored the top-up request: a `withdrawal_requests` row that only becomes money when the cashier physically hands over cash and clicks release, which calls `CirculationEngine::studentSettle()` (wallet → vault).
 
 ### 6.6 History and profile
 

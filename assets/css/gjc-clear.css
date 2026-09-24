@@ -1,6 +1,6 @@
 /* GenPay Clear UI Theme
    Shared override for admin, student, merchant, login, and public pages. */
-@import url("theme.css?v=12");
+@import url("theme.css?v=14");
 
 :root {
   /* Primary green scale — aliases of the shared gp-* theme
@@ -117,7 +117,6 @@ img {
    with !important and made the finance side look different.) */
 
 .user-avatar,
-.topup-avatar,
 .encash-avatar {
   background: var(--gjc-green-800) !important;
   box-shadow: none !important;
@@ -171,8 +170,8 @@ img {
    Tier 1 · surface panels (tables/forms): the white-panel block above.
    Tier 2 · stat tiles: white, ink figures, tinted icon chip — the
              numbers carry the hierarchy, the chrome disappears.
-   Tier 3 · hero balance: the one dark emerald card per page, gold
-             keyline on top. */
+   Tier 3 · hero balance: the one dark emerald card per page. No
+             keyline: the dark field on a light page carries it. */
 
 /* Tier 2 — stat tiles */
 .metric-card,
@@ -196,7 +195,6 @@ img {
 .history-balance-card {
   background: var(--gjc-green-950) !important;
   border: 1px solid var(--gjc-green-700) !important;
-  border-top: 3px solid var(--gjc-gold-500) !important;
   border-radius: var(--gjc-radius-md) !important;
   box-shadow: var(--gjc-shadow-md) !important;
   overflow: hidden;
@@ -334,7 +332,7 @@ img {
 .ce-input:focus,
 .input-modern input:focus,
 .input-group-box input:focus {
-  border-color: var(--gp-gold) !important;
+  border-color: var(--gp-focus-border) !important;
   box-shadow: var(--gp-focus-ring)!important;
 }
 
@@ -430,7 +428,6 @@ img {
   color: #fff !important;
 }
 
-.approve-btn,
 .release-btn {
   background: var(--gjc-success) !important;
   color: #fff !important;
@@ -438,7 +435,6 @@ img {
   border-radius: var(--gp-radius-pill) !important;
 }
 
-.reject-btn,
 .modal-cancel-btn {
   background: #fff !important;
   color: var(--gjc-danger) !important;
@@ -547,7 +543,6 @@ img {
   max-width: 430px !important;
   background: #fff !important;
   border: 1px solid var(--gjc-line) !important;
-  border-top: 6px solid var(--gjc-gold-500) !important;
   border-radius: var(--gjc-radius) !important;
   box-shadow: var(--gjc-shadow-md) !important;
   color: var(--gjc-ink) !important;
@@ -608,10 +603,10 @@ img {
   backdrop-filter: none !important;
 }
 
-.modal-title,
-.modal-desc,
-.modal-steps,
-/* Public landing page overrides */
+/* Public landing page navbar. .modal-title/.modal-desc/.modal-steps used to
+   sit in this selector list, so every dialog heading in the app was painted
+   like a navbar: white background, drop shadow and a 4px gold underline. That
+   was never the intent of a rule whose own comment says "landing page". */
 .navbar {
   background: #fff !important;
   box-shadow: var(--gjc-shadow-sm) !important;

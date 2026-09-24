@@ -56,6 +56,7 @@ if (!$student) {
 $walletId    = (int) ($student['wallet_id'] ?? 0);
 $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
 $credit      = gjc_student_waiver_credit($db, $targetUid);
+$maintFees   = gjc_student_maintenance_fees($db, $targetUid);
 
 // Read-only per-year balance snapshots (school_year_balances is never written
 // to by the parent portal — finance's rollover is the only writer).
@@ -112,8 +113,10 @@ $typeLabels = [
     'p2p_transfer'  => ['label' => 'Transfer',  'icon' => 'fa-money-bill-transfer', 'color' => '#2563eb', 'bg' => '#e3edfd'],
     'voucher_payment' => ['label' => 'Voucher', 'icon' => 'fa-ticket',         'color' => '#7c3aed', 'bg' => '#efe7fb'],
     'allowance'     => ['label' => 'Allowance', 'icon' => 'fa-hand-holding-dollar', 'color' => '#15803d', 'bg' => '#dcf3e4'],
+    'fee_waiver_claim' => ['label' => 'Fee Waiver', 'icon' => 'fa-hand-holding-dollar', 'color' => '#15803d', 'bg' => '#dcf3e4'],
 ];
 
+$csrfToken = gjc_csrf_token();
 $currentPage = '';
 ?>
 <!DOCTYPE html>
@@ -125,10 +128,10 @@ $currentPage = '';
     <title><?= htmlspecialchars($studentName) ?> — Ledger | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_student.css?v=5">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
 </head>
 <body class="gp-theme">
 <div class="parent-layout">
@@ -157,7 +160,7 @@ $currentPage = '';
                 <small>Current Balance</small>
                 <div class="status-chips">
                     <?php if (!empty($student['graduated_at'])): ?>
-                    <span class="status-chip frozen"><i class="fa-solid fa-graduation-cap me-1"></i>Graduated — Locked (withdraw only)</span>
+                    <span class="status-chip frozen"><i class="fa-solid fa-graduation-cap me-1"></i>Graduated — Locked</span>
                     <?php elseif ($student['is_frozen']): ?>
                     <span class="status-chip frozen"><i class="fa-solid fa-lock me-1"></i>Wallet Frozen</span>
                     <?php endif; ?>
@@ -180,6 +183,8 @@ $currentPage = '';
                             <span class="parent-badge parent-badge--warning">Pending</span>
                         <?php elseif ($credit['status'] === 'posted'): ?>
                             <span class="parent-badge parent-badge--success">Posted</span>
+                        <?php elseif ($credit['status'] === 'claimed'): ?>
+                            <span class="parent-badge parent-badge--success">Claimed</span>
                         <?php endif; ?>
                     </div>
 
@@ -199,18 +204,65 @@ $currentPage = '';
                         <small style="display:block;color:var(--gp-muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;">Amount</small>
                         <strong style="font-size:18px;color:var(--gp-success);">&#8369;<?= number_format((float) $credit['amount'], 2) ?></strong>
                     </div>
+                    <p style="margin-bottom:14px;">
+                        <button type="button" class="parent-btn parent-btn--forest" id="fwcClaimOpen" data-amount="<?= (float) $credit['amount'] ?>">
+                            <i class="fa-solid fa-wallet"></i>Add to <?= htmlspecialchars(explode(' ', $studentName)[0]) ?>'s Wallet
+                        </button>
+                    </p>
+                    <?php elseif ($credit['status'] === 'claimed'): ?>
+                    <div style="margin-bottom:14px;">
+                        <small style="display:block;color:var(--gp-muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;">Amount Added to Wallet</small>
+                        <strong style="font-size:18px;color:var(--gp-success);">&#8369;<?= number_format((float) $credit['amount'], 2) ?></strong>
+                        <?php if (!empty($credit['claimed_at'])): ?>
+                        <div style="font-size:12px;color:var(--gp-muted);margin-top:4px;">
+                            Added <?= htmlspecialchars(date('M j, Y', strtotime((string) $credit['claimed_at']))) ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
                     <?php else: ?>
                     <p style="font-size:13px;color:var(--gp-muted);margin:0;">
                         No Fee Waiver Credit has been requested for this student yet.
                     </p>
                     <?php endif; ?>
 
-                    <?php if ($credit['status'] === 'posted' && $credit['waiver_file']): ?>
+                    <?php if (in_array($credit['status'], ['posted', 'claimed'], true) && $credit['waiver_file']): ?>
                     <p style="margin:0;">
                         <a href="<?= ADMIN_URL ?>/doc.php?f=<?= urlencode($credit['waiver_file']) ?>"
                            onclick="return gjcViewWaiver(this.href);"
                            style="color:var(--gp-green-700);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
                             <i class="fa-solid fa-file-lines"></i>View Signed Waiver
+                        </a>
+                    </p>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Maintenance Fees — a percentage charge per POS payment / transfer, billed
+                     with tuition. Never deducted from the wallet. -->
+                <div class="parent-card parent-grid-full">
+                    <div class="parent-card-head">
+                        <h5><i class="fa-solid fa-wallet me-2" style="color:var(--gp-green-700)"></i>Maintenance Fees</h5>
+                        <?php if ($maintFees['accrued'] > 0): ?>
+                            <span class="parent-badge parent-badge--warning">Due</span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div style="margin-bottom:10px;">
+                        <small style="display:block;color:var(--gp-muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;">To be added to tuition</small>
+                        <strong style="font-size:18px;color:var(--gp-ink);">&#8369;<?= number_format($maintFees['accrued'], 2) ?></strong>
+                    </div>
+                    <p style="font-size:13px;color:var(--gp-muted);margin:0 0 10px;">
+                        <?= $maintFees['rate_pct'] > 0
+                            ? gjc_fee_rate_label($maintFees['rate_pct']) . ' of each POS payment or transfer this student makes is charged as a maintenance fee (minimum &#8369;0.01). It is billed with tuition and never taken from the wallet.'
+                            : 'No maintenance fee is currently charged.' ?>
+                        <?php if ($maintFees['collected'] > 0): ?>
+                            &#8369;<?= number_format($maintFees['collected'], 2) ?> already collected.
+                        <?php endif; ?>
+                    </p>
+                    <?php if ($maintFees['accrued'] > 0 || $maintFees['collected'] > 0): ?>
+                    <p style="margin:0;">
+                        <a href="<?= ADMIN_URL ?>/print_maintenance_fees.php?student_user_id=<?= $targetUid ?>" target="_blank"
+                           style="color:var(--gp-green-700);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-print"></i>View Statement
                         </a>
                     </p>
                     <?php endif; ?>
@@ -339,6 +391,34 @@ $currentPage = '';
     </div>
 </div>
 
+<!-- Fee Waiver Credit claim confirmation -->
+<div class="modal fade" id="fwcClaimModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+        <div class="modal-content" style="border-radius:16px;border:none;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" style="font-size:15px">Add to <?= htmlspecialchars(explode(' ', $studentName)[0]) ?>'s Wallet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p style="font-size:13px;color:var(--gp-muted);margin-bottom:16px;">
+                    This Fee Waiver Credit will be added to <?= htmlspecialchars($studentName) ?>'s GenPay wallet as GenCoin.
+                </p>
+                <div style="text-align:center;margin-bottom:16px;">
+                    <strong id="fwcClaimAmount" style="font-size:22px;color:var(--gp-success);">--</strong>
+                </div>
+                <div id="fwcClaimError" style="display:none;color:var(--gp-danger);font-size:13px;margin-bottom:12px;"></div>
+                <p style="font-size:12px;color:var(--gp-muted);text-align:center;margin:0 0 16px;">
+                    This is final and cannot be undone.
+                </p>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="parent-btn parent-btn--forest" id="fwcClaimConfirm">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 <script>
@@ -355,6 +435,63 @@ function gjcViewWaiver(url) {
 document.getElementById('gjcWaiverModal').addEventListener('hidden.bs.modal', function () {
     document.getElementById('gjcWaiverFrame').src = '';
 });
+</script>
+
+<script>
+/* ── Fee Waiver Credit claim ──────────────────────────────── */
+(function() {
+    const openBtn = document.getElementById('fwcClaimOpen');
+    if (!openBtn) return;
+
+    const CSRF = <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?>;
+    const STUDENT_UID = <?= (int) $targetUid ?>;
+    const modalEl = document.getElementById('fwcClaimModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const amountEl = document.getElementById('fwcClaimAmount');
+    const errorEl = document.getElementById('fwcClaimError');
+    const confirmBtn = document.getElementById('fwcClaimConfirm');
+
+    function fmt(n) {
+        return '₱' + (+n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    openBtn.addEventListener('click', () => {
+        amountEl.textContent = fmt(openBtn.dataset.amount || 0);
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Confirm';
+        modal.show();
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Adding…';
+        errorEl.style.display = 'none';
+
+        try {
+            const res = await fetch('<?= PARENT_URL ?>/api/fee_waiver_claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'claim', student_user_id: STUDENT_UID, csrf_token: CSRF }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                location.reload();
+            } else {
+                errorEl.textContent = data.error || 'Could not add the credit to the wallet.';
+                errorEl.style.display = 'block';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm';
+            }
+        } catch (e) {
+            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.style.display = 'block';
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
+        }
+    });
+})();
 </script>
 
 <?php require __DIR__ . '/../includes/partials/bottom_nav_parent.php'; ?>

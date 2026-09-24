@@ -66,7 +66,8 @@ if (gjc_table_exists($db, 'merchant_inventory')) {
 }
 
 if (in_array('merchant_owner_id', gjc_table_columns($db, 'users'), true)) {
-    $q = $db->prepare("SELECT COUNT(*) FROM users WHERE merchant_owner_id = ?");
+    gjc_ensure_staff_position_schema($db);
+    $q = $db->prepare("SELECT COUNT(*) FROM users WHERE merchant_owner_id = ? AND staff_removed_at IS NULL");
     $q->execute([$userId]);
     $glance['staff'] = (int) $q->fetchColumn();
 }
@@ -122,17 +123,14 @@ $complianceDocs = [
     'gjc_requirements' => ['GJC requirements', 'School-specific documents'],
 ];
 
+// "Stall B1" already names the unit, so don't print the code twice.
+$stallTitle = 'No stall assigned yet';
+if ($merchant && !empty($merchant['stall_id'])) {
+    $stallTitle = trim((string) $merchant['stall_label']) !== '' ? (string) $merchant['stall_label'] : 'Stall ' . $merchant['stall_id'];
+}
+
 $currentPage = 'settings';
 $logoUrl = $merchant && $merchant['profile_img'] ? BASE_URL . '/' . $merchant['profile_img'] : null;
-
-$walletDisplayName = $merchant['stall_name'] ?? $currentUser['name'];
-$walletQrPayload = json_encode([
-    'type' => 'merchant_wallet',
-    'merchant_wallet_id' => $wallet['id'],
-    'merchant_user_id' => $userId,
-    'merchant' => $walletDisplayName,
-], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-$walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=H&margin=12&data=' . rawurlencode($walletQrPayload);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -145,11 +143,11 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
     <title>Business Profile | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=8">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=11">
 </head>
 <body class="gp-theme">
 <div class="merchant-layout">
@@ -158,7 +156,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
     <main class="merchant-main">
         <?php
         $topbarTitle = 'Business Profile';
-        $topbarSubtitle = "This display name and logo appear publicly on the Stall Directory.";
+        $topbarSubtitle = 'Your public listing, and the details the finance office holds for your stall.';
         require __DIR__ . '/../includes/partials/topbar_merchant.php';
         ?>
 
@@ -167,36 +165,80 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
             <p class="text-muted mb-0">No merchant record is linked to this account yet.</p>
         </section>
         <?php else: ?>
-        <section class="merchant-premium-panel">
-            <div class="merchant-panel-header">
+        <!-- ── The public listing: edit on the left, the real tile on the right ── -->
+        <section class="merchant-premium-panel bp-listing">
+            <div class="merchant-panel-header d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div>
-                    <h3>Stall Directory Listing</h3>
-                    <p>Stall <?= gjc_e($merchant['stall_id'] ?? 'Not yet assigned') ?><?= $merchant['stall_label'] ? ' - ' . gjc_e($merchant['stall_label']) : '' ?></p>
+                    <h3>Stall Directory listing</h3>
+                    <p><?= htmlspecialchars($stallTitle) ?> &middot; what students and visitors see when they browse the stalls.</p>
                 </div>
+                <?php if (!empty($merchant['stall_id'])): ?>
+                    <a class="merchant-view-btn" target="_blank" rel="noopener"
+                       href="<?= BASE_URL ?>/stalls.php#stall-<?= rawurlencode((string) $merchant['stall_id']) ?>">
+                        Open the directory <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
+                    </a>
+                <?php endif; ?>
             </div>
 
-            <form id="profileForm" enctype="multipart/form-data" class="mt-3">
-                <div class="row g-4 align-items-start">
-                    <div class="col-12 col-md-3 text-center">
-                        <?php if ($logoUrl): ?>
-                        <img id="logoPreview" class="profile-logo-preview" src="<?= htmlspecialchars($logoUrl) ?>" alt="Current logo">
-                        <?php else: ?>
-                        <div id="logoPreview" class="profile-logo-fallback"><?= htmlspecialchars(mb_substr($merchant['stall_name'], 0, 1)) ?></div>
-                        <?php endif; ?>
-                        <label class="btn btn-outline-secondary btn-sm mt-3 w-100" for="logoInput">Change Logo</label>
-                        <input type="file" id="logoInput" name="logo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="d-none">
-                        <div class="form-text">JPG or PNG, max 5 MB.</div>
-                    </div>
-                    <div class="col-12 col-md-9">
-                        <label class="form-label fw-semibold">Display Name <span class="text-danger">*</span></label>
+            <form id="profileForm" enctype="multipart/form-data" class="bp-edit" novalidate>
+                <div class="bp-edit-fields">
+                    <div class="bp-field">
+                        <div class="bp-field-head">
+                            <label class="form-label fw-semibold mb-0" for="stallNameInput">Display name</label>
+                            <span class="bp-counter" id="nameCounter" aria-live="polite"></span>
+                        </div>
                         <input type="text" class="form-control" name="stall_name" id="stallNameInput"
-                               value="<?= htmlspecialchars($merchant['stall_name']) ?>" maxlength="255" required>
-                        <div class="form-text">Shown as your company name on the public Stall Directory.</div>
+                               value="<?= htmlspecialchars($merchant['stall_name']) ?>" maxlength="255" required
+                               aria-describedby="nameHint">
+                        <div class="form-text" id="nameHint">Your business name as it appears on your stall's tile.</div>
+                        <div class="bp-warn" id="nameCutWarn" hidden>
+                            <i class="fa-solid fa-scissors"></i>
+                            <span>Too long for the tile — it gets cut off, as the preview shows. A shorter name reads better.</span>
+                        </div>
+                    </div>
 
-                        <div id="profileMsg" class="mt-3"></div>
-                        <button type="submit" class="login-btn mt-3" id="profileSubmitBtn">Save Changes</button>
+                    <div class="bp-field">
+                        <span class="form-label fw-semibold d-block">Logo</span>
+                        <div class="bp-logo-row">
+                            <div class="bp-logo-thumb" id="logoThumb"
+                                 <?= $logoUrl ? 'style="background-image:url(&quot;' . htmlspecialchars($logoUrl, ENT_QUOTES) . '&quot;)"' : '' ?>>
+                                <span <?= $logoUrl ? 'hidden' : '' ?>><?= htmlspecialchars(mb_strtoupper(mb_substr($merchant['stall_name'], 0, 1))) ?></span>
+                            </div>
+                            <div class="bp-logo-actions">
+                                <label class="merchant-view-btn mb-0" for="logoInput" role="button" tabindex="0" id="logoPickBtn">
+                                    <i class="fa-solid fa-upload me-1"></i> <span><?= $logoUrl ? 'Replace logo' : 'Upload logo' ?></span>
+                                </label>
+                                <button type="button" class="bp-link-btn" id="logoRemoveBtn" <?= $logoUrl ? '' : 'hidden' ?>>Remove</button>
+                            </div>
+                        </div>
+                        <input type="file" id="logoInput" name="logo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="d-none">
+                        <input type="hidden" name="remove_logo" id="removeLogoInput" value="0">
+                        <div class="form-text">
+                            JPG or PNG, up to 5 MB. The logo fills the whole tile and is cropped to fit,
+                            so keep the important part in the middle.
+                        </div>
+                    </div>
+
+                    <div class="bp-actions">
+                        <button type="submit" class="login-btn" id="profileSubmitBtn" disabled>Save changes</button>
+                        <button type="button" class="bp-link-btn" id="profileResetBtn" hidden>Discard changes</button>
+                        <span class="bp-dirty" id="dirtyNote" hidden>Unsaved changes</span>
                     </div>
                 </div>
+
+                <figure class="bp-preview" aria-label="Preview of your Stall Directory tile">
+                    <figcaption>Preview</figcaption>
+                    <div class="bp-tile<?= $logoUrl ? ' has-logo' : '' ?>" id="tilePreview"
+                         <?= $logoUrl ? 'style="background-image:url(&quot;' . htmlspecialchars($logoUrl, ENT_QUOTES) . '&quot;)"' : '' ?>>
+                        <div class="bp-tile-id"><?= htmlspecialchars((string) ($merchant['stall_id'] ?: '—')) ?></div>
+                        <div class="bp-tile-name" id="tileName"><?= htmlspecialchars($merchant['stall_name']) ?></div>
+                    </div>
+                    <p class="bp-preview-note" id="previewNote">
+                        <?= !empty($merchant['stall_id'])
+                            ? 'Same size as on the directory (on a computer). Updates as you edit — nothing goes public until you save.'
+                            : 'You have no stall assigned yet, so this tile is not on the directory.' ?>
+                    </p>
+                </figure>
             </form>
         </section>
         <?php endif; ?>
@@ -207,7 +249,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
         <section class="merchant-premium-panel mt-4">
             <div class="merchant-panel-header">
                 <div>
-                    <h3><i class="fa-solid fa-chart-simple" style="margin-right:6px"></i>Business at a glance</h3>
+                    <h3><i class="fa-solid fa-chart-simple me-2"></i>Business at a glance</h3>
                     <p>A summary of what is on your stall right now.</p>
                 </div>
             </div>
@@ -252,7 +294,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
         <section class="merchant-premium-panel mt-4">
             <div class="merchant-panel-header">
                 <div>
-                    <h3><i class="fa-solid fa-id-card" style="margin-right:6px"></i>Proprietor &amp; contact</h3>
+                    <h3><i class="fa-solid fa-id-card me-2"></i>Proprietor &amp; contact</h3>
                     <p>Held by the finance office. Ask them to update anything that is wrong or missing.</p>
                 </div>
             </div>
@@ -281,7 +323,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
         <section class="merchant-premium-panel mt-4">
             <div class="merchant-panel-header">
                 <div>
-                    <h3><i class="fa-solid fa-store" style="margin-right:6px"></i>Stall &amp; tenancy</h3>
+                    <h3><i class="fa-solid fa-store me-2"></i>Stall &amp; tenancy</h3>
                     <p>The unit you lease and how it is recorded in the stall map.</p>
                 </div>
             </div>
@@ -327,7 +369,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
         <section class="merchant-premium-panel mt-4">
             <div class="merchant-panel-header">
                 <div>
-                    <h3><i class="fa-solid fa-folder-open" style="margin-right:6px"></i>Compliance documents</h3>
+                    <h3><i class="fa-solid fa-folder-open me-2"></i>Compliance documents</h3>
                     <p>The permits and clearances the finance office holds for your stall.</p>
                 </div>
             </div>
@@ -392,67 +434,160 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&ec
 
         <?php endif; ?>
 
-        <section class="merchant-premium-panel mt-4" id="walletQrPanel">
-            <div class="merchant-panel-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h3>Shop Wallet QR</h3>
-                    <p>Print this once and tape it to your cardboard menu. Students scan it to pay for their whole cart &mdash; it never expires and carries no fixed amount.</p>
-                </div>
-                <button type="button" class="merchant-view-btn" onclick="window.print()">
-                    <i class="fa-solid fa-print"></i> Print
-                </button>
-            </div>
-
-            <div class="wallet-qr-print-card">
-                <img src="<?= htmlspecialchars($walletQrImageUrl) ?>" alt="Shop Wallet QR" class="wallet-qr-image">
-                <div class="wallet-qr-caption">
-                    <strong><?= gjc_e($walletDisplayName) ?></strong>
-                    <span>Scan to pay your GenPay cart total</span>
-                </div>
-            </div>
-        </section>
     </main>
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script>
-const PROFILE_API = '<?= MERCHANT_URL ?>/api/profile.php';
+(function () {
+    const form = document.getElementById('profileForm');
+    if (!form) return;
 
-document.getElementById('logoInput')?.addEventListener('change', function () {
-    const file = this.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-        let img = document.getElementById('logoPreview');
-        if (img.tagName !== 'IMG') {
-            const newImg = document.createElement('img');
-            newImg.id = 'logoPreview';
-            newImg.className = 'profile-logo-preview';
-            img.replaceWith(newImg);
-            img = newImg;
-        }
-        img.src = e.target.result;
+    const PROFILE_API = '<?= MERCHANT_URL ?>/api/profile.php';
+    const MAX_BYTES   = 5 * 1024 * 1024;
+
+    const nameInput = document.getElementById('stallNameInput');
+    const counter   = document.getElementById('nameCounter');
+    const cutWarn   = document.getElementById('nameCutWarn');
+    const fileInput = document.getElementById('logoInput');
+    const removeIn  = document.getElementById('removeLogoInput');
+    const pickBtn   = document.getElementById('logoPickBtn');
+    const removeBtn = document.getElementById('logoRemoveBtn');
+    const thumb     = document.getElementById('logoThumb');
+    const tile      = document.getElementById('tilePreview');
+    const tileName  = document.getElementById('tileName');
+    const saveBtn   = document.getElementById('profileSubmitBtn');
+    const resetBtn  = document.getElementById('profileResetBtn');
+    const dirtyNote = document.getElementById('dirtyNote');
+
+    // What is live right now; the form is "dirty" whenever it differs.
+    const saved = {
+        name: nameInput.value,
+        logo: <?= json_encode($logoUrl) ?>,
     };
-    reader.readAsDataURL(file);
-});
+    let pendingLogo = null; // data: URL of a picked-but-unsaved file
+    let dirty = false;
 
-document.getElementById('profileForm')?.addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const btn = document.getElementById('profileSubmitBtn');
-    const msg = document.getElementById('profileMsg');
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
-    try {
-        const r = await fetch(PROFILE_API, { method: 'POST', body: new FormData(this) });
-        const d = await r.json();
-        msg.innerHTML = `<div class="alert ${d.success ? 'alert-success' : 'alert-danger'} mb-0">${d.message}</div>`;
-    } catch (err) {
-        msg.innerHTML = '<div class="alert alert-danger mb-0">Unable to contact the server. Please try again.</div>';
+    function shownLogo() {
+        if (pendingLogo) return pendingLogo;
+        return removeIn.value === '1' ? null : saved.logo;
     }
-    btn.disabled = false;
-    btn.textContent = 'Save Changes';
-});
+
+    function paintLogo() {
+        const url = shownLogo();
+        const bg  = url ? 'url("' + url.replace(/"/g, '%22') + '")' : '';
+        tile.style.backgroundImage  = bg;
+        thumb.style.backgroundImage = bg;
+        tile.classList.toggle('has-logo', !!url);
+        const initial = thumb.querySelector('span');
+        initial.hidden = !!url;
+        initial.textContent = (nameInput.value.trim()[0] || '?').toUpperCase();
+        pickBtn.querySelector('span').textContent = url ? 'Replace logo' : 'Upload logo';
+        removeBtn.hidden = !url;
+    }
+
+    function refresh() {
+        const name = nameInput.value;
+        tileName.textContent = name.trim() || 'Your business name';
+        tileName.classList.toggle('is-placeholder', !name.trim());
+        counter.textContent = name.length + ' / 255';
+        // Measured on the preview tile itself, which is the directory tile's real width.
+        cutWarn.hidden = !(name.trim() && tileName.scrollWidth > tileName.clientWidth + 1);
+
+        dirty = name !== saved.name || pendingLogo !== null || removeIn.value === '1';
+        saveBtn.disabled  = !dirty || !name.trim();
+        resetBtn.hidden   = !dirty;
+        dirtyNote.hidden  = !dirty;
+        paintLogo();
+    }
+
+    nameInput.addEventListener('input', refresh);
+
+    // The label opens the picker on click; make Enter/Space do the same.
+    pickBtn.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+
+    fileInput.addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        if (!['image/jpeg', 'image/png'].includes(file.type)) {
+            this.value = '';
+            gpToast('That file is not a JPG or PNG image.', false);
+            return;
+        }
+        if (file.size > MAX_BYTES) {
+            this.value = '';
+            gpToast('That image is ' + (file.size / 1048576).toFixed(1) + ' MB. The limit is 5 MB.', false);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => {
+            pendingLogo = e.target.result;
+            removeIn.value = '0';
+            refresh();
+        };
+        reader.readAsDataURL(file);
+    });
+
+    removeBtn.addEventListener('click', function () {
+        if (pendingLogo) {
+            // Only un-picks the new file; the saved logo comes back.
+            pendingLogo = null;
+            fileInput.value = '';
+        } else {
+            removeIn.value = '1';
+        }
+        refresh();
+    });
+
+    resetBtn.addEventListener('click', function () {
+        nameInput.value = saved.name;
+        pendingLogo = null;
+        fileInput.value = '';
+        removeIn.value = '0';
+        refresh();
+    });
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (saveBtn.disabled) return;
+
+        if (removeIn.value === '1' && !pendingLogo) {
+            const ok = await gpConfirm({
+                title: 'Remove your logo?',
+                body: 'Your tile on the Stall Directory will show just your stall number and name until you upload a new one.',
+                confirmLabel: 'Remove logo',
+                danger: true,
+            });
+            if (!ok) return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        const d = await gpFetchJson(PROFILE_API, new FormData(form));
+        saveBtn.textContent = 'Save changes';
+
+        if (d.success) {
+            saved.name  = d.stall_name ?? nameInput.value;
+            saved.logo  = d.logo_url ?? null;
+            nameInput.value = saved.name;
+            pendingLogo = null;
+            fileInput.value = '';
+            removeIn.value  = '0';
+        }
+        gpToast(d.message, !!d.success);
+        refresh();
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+        if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    refresh();
+})();
 </script>
+<?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
 <?php require __DIR__ . '/../includes/partials/bottom_nav_merchant.php'; ?>
 </body>
 </html>

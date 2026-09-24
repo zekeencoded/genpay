@@ -1,4 +1,4 @@
-@import url("theme.css?v=12");
+@import url("theme.css?v=14");
 
 body {
     font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif;
@@ -10,99 +10,20 @@ body {
     display: flex;
     flex-direction: column;
 }
-.navbar {
-    background-color: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    padding: 15px 50px;
-    position: fixed;
-    width: 100%;
-    top: 0;
-    z-index: 1000;
-}
-.navbar-brand {
-    font-weight: 800;
-    color: var(--gp-green-700) !important;
-    font-size: 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-decoration: none;
-}
-.navbar-brand img {
-    width: 45px;
-    height: 45px;
-    object-fit: contain;
-}
-.nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-.nav-actions .btn-outline-custom {
-    padding: 10px 22px;
-    font-size: 15px;
-    background: transparent;
-    border: 2px solid var(--gp-green-700);
-    color: var(--gp-green-700);
-    box-shadow: none;
-}
-.nav-actions .btn-login {
-    padding: 10px 25px;
-    font-size: 16px;
-}
 .hero {
     flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
     padding: 140px 20px 80px 20px;
-    background: linear-gradient(rgba(15, 61, 46, 0.85), rgba(15, 61, 46, 0.85)), url('../images/GenSimeon-Bldg.jpg') center/cover no-repeat;
-    color: #ffffff;
-    margin-top: 0;
 }
 .hero-content {
     max-width: 800px;
 }
 .hero h1 {
     font-size: 56px;
-    font-weight: 800;
-    color: #ffffff;
     margin-bottom: 24px;
-    line-height: 1.2;
-}
-.hero h1 span {
-    color: #4ade80;
-    background: #4ade80;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 .hero p {
     font-size: 20px;
-    color: #e2e8f0;
     margin-bottom: 40px;
-    line-height: 1.6;
-}
-.btn-primary-custom {
-    background: #4ade80;
-    color: var(--gp-green-700);
-    padding: 15px 40px;
-    font-size: 18px;
-    font-weight: 800;
-    border-radius: var(--gp-radius-pill);
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-    border: none;
-    box-shadow: 0 10px 20px rgba(34, 197, 94, 0.3);
-}
-.btn-primary-custom:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 25px rgba(34, 197, 94, 0.4);
-    color: var(--gp-green-700);
 }
 .features {
     padding: 80px 20px;
@@ -179,8 +100,8 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #4ade80;
-    color: var(--gp-green-700);
+    background: var(--gp-gold-soft);
+    color: var(--gp-green-950);
     font-weight: 800;
     font-size: 18px;
     display: flex;
@@ -230,7 +151,7 @@ body {
     line-height: 1.5;
 }
 .requirements-list li i {
-    color: #22c55e;
+    color: var(--gp-success);
     flex-shrink: 0;
     margin-top: 3px;
 }
@@ -252,24 +173,7 @@ body {
     .how-to-apply .section-title { font-size: 26px; }
     .requirements-box { padding: 26px 22px; }
 }
-footer {
-    background: #052916;
-    color: #ffffff;
-    text-align: center;
-    padding: 30px 20px;
-    font-size: 14px;
-    opacity: 0.9;
-}
 @media (max-width: 768px) {
-    .navbar { padding: 12px 20px; }
-    .navbar-brand { font-size: 19px; gap: 8px; }
-    .navbar-brand img { width: 36px; height: 36px; }
-    .nav-actions { gap: 8px; }
-    .nav-actions .btn-outline-custom,
-    .nav-actions .btn-login {
-        padding: 8px 14px;
-        font-size: 13px;
-    }
     .hero {
         padding: 190px 20px 60px 20px;
     }

@@ -169,6 +169,9 @@ try {
         $refNo = 'P2P-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
         $recipientName = trim($recipient['first_name'] . ' ' . $recipient['last_name']);
 
+        // DDL must run before the transaction opens (it would implicitly commit it).
+        gjc_ensure_maintenance_fees_schema($db);
+
         // --- BEGIN TRANSACTION ---
         $db->beginTransaction();
         try {
@@ -229,6 +232,9 @@ try {
                 $message ?: null,
             ]);
 
+            // 6. Maintenance fee — sender only, billed to tuition, never taken from the wallet.
+            gjc_record_maintenance_fee($db, $currentUserId, $refNo, 'p2p_transfer', $amount);
+
             // --- COMMIT ---
             $db->commit();
             gjc_check_parent_balance_alert($db, $senderWallet['id']);
@@ -285,7 +291,7 @@ try {
             ]);
         } catch (\Throwable $e) {
             $db->rollBack();
-            echo json_encode(['success' => false, 'message' => 'Transfer failed: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/transfer', 'Transfer failed. Please try again.')]);
         }
         exit;
     }
@@ -293,5 +299,5 @@ try {
     echo json_encode(['success' => false, 'message' => 'Unknown action.']);
 } catch (\Throwable $e) {
     if ($db->inTransaction()) $db->rollBack();
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/transfer', 'Server error. Please try again.')]);
 }

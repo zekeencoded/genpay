@@ -34,14 +34,15 @@ parent (`parent_shell.css`, `--emerald-*`/`--gp-*` alias pattern) stylesheets.
 | `--gp-radius-tag` | `2px` | Inline tags and badges — tighter than containers |
 | `--gp-radius-pill` | `999px` | **Buttons only.** Shape alone says "pressable" |
 | `--gp-mono` | IBM Plex Mono | References, amounts, IDs (all numbers) |
-| `--gp-grad-hero` | flat `#0d2418` | Dark hero cards. Name kept, value is flat — a gold keyline, not a gradient, makes a hero a hero |
+| `--gp-grad-hero` | flat `#0d2418` | Dark hero cards. Name kept, value is flat — no gradient and no keyline; the dark field alone makes a hero a hero |
 | `--gp-grad-shell` | flat `#0d2418` | Sidebar |
 | `--gp-grad-forest-btn` | flat `#1e5c3a` | Primary commit buttons |
-| `--gp-keyline` | `2px solid` gold | The system signature, on heroes and balance cards |
+| `--gp-keyline` | `1px solid` `--gp-line` | **Retired.** Was the 2px gold "system signature" on heroes; removed as decoration. Defined only so a stray reference still resolves — do not use |
 | `--gp-shadow-card` | `0 1px 2px` | Resting surfaces |
 | `--gp-shadow-raised` | `0 1px 3px` | Heroes, sticky bars (`--gp-shadow-hero` is an alias) |
 | `--gp-shadow-overlay` | `0 10px 22px` | Modals, dropdowns, notification panel |
-| `--gp-focus-ring` | `0 0 0 3px` gold-line | **The** focus treatment, for every interactive element |
+| `--gp-focus-ring` | `0 0 0 3px` ink @ 16% | **The** focus treatment, for every interactive element. Dark neutral, not gold |
+| `--gp-focus-border` | `--gp-ink` | The border colour a focused field takes. Pair with `--gp-focus-ring` |
 
 ### The neutral ramp
 
@@ -280,7 +281,7 @@ Two things worth knowing if you touch this again:
 ## Bootstrap bridge — `body.gp-theme`
 
 Add `class="gp-theme"` to `<body>` to theme Bootstrap controls without touching markup:
-cream page bg, inputs/selects with gold focus ring, pill `.btn-primary/.btn-success`
+cream page bg, inputs/selects with the neutral focus ring, pill `.btn-primary/.btn-success`
 (forest), `.btn-secondary/.btn-outline-secondary` (neutral), `.btn-danger`,
 16px-radius modals, and `.badge.bg-*` → soft status tints. All admin and interactive
 merchant pages have it (merchant's print_menu.php is excluded, like admin's print

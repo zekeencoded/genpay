@@ -227,8 +227,9 @@ $stateBadge = [
     <title>Leases &amp; Rent | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -344,11 +345,11 @@ $stateBadge = [
                 <table class="table premium-table align-middle gp-rent-table">
                     <thead>
                         <tr>
-                            <th>Stall &amp; tenant</th>
-                            <th>Monthly rent</th>
+                            <th data-card="title">Stall &amp; tenant</th>
+                            <th data-card="hide">Monthly rent</th>
                             <th>Rent standing</th>
-                            <th>Next charge due</th>
-                            <th class="text-end">Unpaid</th>
+                            <th data-card="hide">Next charge due</th>
+                            <th class="text-end" data-card="amount">Unpaid</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
@@ -585,5 +586,6 @@ function toggleSidebar() {
 window.leaseApiConfig = { endpoint: '<?= ADMIN_URL ?>/api/leases.php' };
 </script>
 <script src="<?= JS_URL ?>/admin_leases.js?v=4"></script>
+<script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 </body>
 </html>

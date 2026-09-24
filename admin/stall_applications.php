@@ -152,7 +152,7 @@ function sa_meeting_label(?string $dt): string
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=11">
@@ -230,6 +230,17 @@ function sa_meeting_label(?string $dt): string
     .sa-section { border:1px solid var(--gp-line); border-radius:14px; padding:16px; }
     .sa-section h6 { font-weight:800; margin-bottom:12px; }
     .sa-done-pill { font-size:11px; font-weight:800; color:#166534; background:var(--gp-success-bg); border-radius:999px; padding:3px 10px; }
+
+    /* What has to be true before a stall can be awarded. Previously the user
+       found this out by clicking Award and being refused, one condition at a
+       time, with the requirements written nowhere on the page. */
+    .sa-checklist { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+    .sa-checklist li { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--gp-muted); }
+    .sa-checklist li i { font-size:11px; color:var(--gp-subtle); }
+    .sa-checklist li.is-done { color:var(--gp-success); }
+    .sa-checklist li.is-done i { color:var(--gp-success); }
+    .sa-checklist li.is-blocked { color:var(--gp-danger); }
+    .sa-checklist li.is-blocked i { color:var(--gp-danger); }
     .filter-btn.active { background:#1e5c3a; color:#fff; border-color:#1e5c3a; }
 
     /* Inline accordion (replaces the old workspace modal) */
@@ -335,6 +346,9 @@ function sa_meeting_label(?string $dt): string
                     ) ?>)</button>
                     <button type="button" class="filter-btn" data-status="pending_verification">Pending (<?= $statusCounts[
                         "pending_verification"
+                    ] ?>)</button>
+                    <button type="button" class="filter-btn" data-status="awarded">Awarded (<?= $statusCounts[
+                        "awarded"
                     ] ?>)</button>
                     <button type="button" class="filter-btn" data-status="rejected">Rejected (<?= $statusCounts[
                         "rejected"
@@ -501,6 +515,7 @@ function sa_meeting_label(?string $dt): string
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . "/../includes/partials/datatables_assets.php"; ?>
+<?php require __DIR__ . "/../includes/partials/feedback_assets.php"; ?>
 <script>
 const APPS = <?= json_encode(
     array_values($apps),
@@ -737,6 +752,12 @@ function paymentComplete(app) {
 function renderWorkspace(app) {
     const hasContract = !!app.contract_file;
     const payDone = paymentComplete(app);
+    /* The first unmet prerequisite becomes the button's label, so the reason it
+       is disabled is readable without clicking it. */
+    const awardBlocker = !hasContract ? 'Upload the contract first'
+        : !payDone ? 'Record the payment first'
+        : !VACANT_STALLS.length ? 'No vacant stalls'
+        : '';
     const contractUrl = hasContract ? DOC_URL + encodeURIComponent(String(app.contract_file).replace(/^\//, '')) : '';
 
     const stallOpts = VACANT_STALLS.map(s =>
@@ -805,10 +826,25 @@ function renderWorkspace(app) {
                     </div>
                     <div class="col-md-6 text-md-end">
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="askReason(${app.id})"><i class="fa-solid fa-circle-xmark me-1"></i>Reject</button>
-                        <button type="button" class="btn btn-success btn-sm" id="awardBtn-${app.id}"><i class="fa-solid fa-award me-1"></i>Award</button>
+                        <button type="button" class="btn btn-success btn-sm" id="awardBtn-${app.id}"${awardBlocker ? ' disabled' : ''}>
+                            <i class="fa-solid fa-award me-1"></i>${awardBlocker || 'Award'}
+                        </button>
                     </div>
                 </div>
-                <div class="small text-muted mt-2"><i class="fa-solid fa-circle-info me-1"></i>Award requires the signed contract uploaded and payment recorded.</div>
+                <ul class="sa-checklist mt-3" id="awardChecklist-${app.id}">
+                    <li class="${hasContract ? 'is-done' : ''}">
+                        <i class="fa-solid ${hasContract ? 'fa-circle-check' : 'fa-circle'}"></i>
+                        Signed contract uploaded
+                    </li>
+                    <li class="${payDone ? 'is-done' : ''}">
+                        <i class="fa-solid ${payDone ? 'fa-circle-check' : 'fa-circle'}"></i>
+                        Deposit, advance, start date and schedule recorded
+                    </li>
+                    <li class="${VACANT_STALLS.length ? '' : 'is-blocked'}">
+                        <i class="fa-solid ${VACANT_STALLS.length ? 'fa-circle' : 'fa-circle-exclamation'}"></i>
+                        ${VACANT_STALLS.length ? 'Pick a stall above' : 'No vacant stalls available'}
+                    </li>
+                </ul>
             </div>
         </div>
     </div>`;
@@ -893,20 +929,23 @@ function wireWorkspace(app) {
 
     document.getElementById(`awardBtn-${id}`).addEventListener('click', () => {
         const stallId = document.getElementById(`awardStall-${id}`).value;
-        if (!stallId) { toast('Select a stall to award.', false); return; }
-        if (!app.contract_file) { toast('Upload the signed contract before awarding.', false); return; }
-        if (!paymentComplete(app)) { toast('Record the payment before awarding.', false); return; }
+        if (!stallId) { toast('Pick a stall in the dropdown before awarding.', false); return; }
         awardAppId = id; awardStallId = stallId;
         document.getElementById('awardConfirmText').innerHTML =
-            `Award Stall <strong>${esc(stallId)}</strong> and create a merchant account for <strong>${esc(app.proprietor_name)}</strong>?`;
+            `Award Stall <strong>${esc(stallId)}</strong> to <strong>${esc(app.proprietor_name)}</strong>?` +
+            `<span class="d-block mt-2 text-muted">This creates their merchant account, opens the lease on the rent roll, ` +
+            `marks the stall occupied, and emails their login details. It cannot be undone.</span>`;
         awardModal.show();
     });
 }
-document.getElementById('awardConfirm').addEventListener('click', () => {
+document.getElementById('awardConfirm').addEventListener('click', function () {
     if (!awardAppId || !awardStallId) return;
+    if (!gpBusy(this, 'Awarding…')) return;
+    const btn = this;
     post({ action: 'award', app_id: awardAppId, stall_id: awardStallId }).then(res => {
         toast(res.message, res.success);
-        if (res.success) { awardModal.hide(); setTimeout(() => location.reload(), 1200); }
+        if (res.success) { awardModal.hide(); setTimeout(() => location.reload(), 1200); return; }
+        gpBusyDone(btn);
     });
 });
 

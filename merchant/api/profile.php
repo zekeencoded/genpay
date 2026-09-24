@@ -1,7 +1,8 @@
 <?php
 // ============================================================
 //  merchant/api/profile.php
-//  Lets a merchant admin update their business display name and logo.
+//  Lets a merchant admin update their business display name and logo,
+//  or take the logo down (remove_logo=1) so the tile falls back to plain.
 //  Both values are what the public Stall Directory (stalls.php) renders
 //  for an occupied stall, via merchant.stall_name and users.profile_img.
 // ============================================================
@@ -66,6 +67,7 @@ if ($stallName === '' || mb_strlen($stallName) > 255) {
 }
 
 $logoRelPath = null;
+$removeLogo = ($_POST['remove_logo'] ?? '') === '1' && $oldLogo !== '';
 if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] !== UPLOAD_ERR_NO_FILE) {
     $file = $_FILES['logo'];
     if ($file['error'] !== UPLOAD_ERR_OK) {
@@ -96,6 +98,7 @@ if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] !== UPLOAD_ERR_N
         @unlink($old);
     }
     $logoRelPath = 'assets/merchant_logos/' . $merchantId . '.' . $ext;
+    $removeLogo = false; // a new upload wins over a removal in the same save
     if (!move_uploaded_file($file['tmp_name'], BASE_PATH . '/' . $logoRelPath)) {
         echo json_encode(['success' => false, 'message' => 'Failed to save the uploaded logo.']);
         exit;
@@ -105,17 +108,23 @@ if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] !== UPLOAD_ERR_N
 $db->prepare("UPDATE merchant SET stall_name = ? WHERE merchantID = ?")->execute([$stallName, $merchantId]);
 if ($logoRelPath !== null) {
     $db->prepare("UPDATE users SET profile_img = ? WHERE userID = ?")->execute([$logoRelPath, $userId]);
+} elseif ($removeLogo) {
+    foreach (glob(BASE_PATH . '/assets/merchant_logos/' . $merchantId . '.*') ?: [] as $old) {
+        @unlink($old);
+    }
+    $db->prepare("UPDATE users SET profile_img = NULL WHERE userID = ?")->execute([$userId]);
 }
 
 // Before/after with the same keys on both sides, so the audit viewer's diff
 // highlights exactly what changed. A save that changed nothing is not logged.
 $nameChanged = $stallName !== $oldStallName;
-$logoChanged = $logoRelPath !== null;
+$logoChanged = $logoRelPath !== null || $removeLogo;
 
 if ($nameChanged || $logoChanged) {
     $changed = array_values(array_filter([
         $nameChanged ? 'display name' : null,
-        $logoChanged ? 'logo' : null,
+        $logoRelPath !== null ? 'logo' : null,
+        $removeLogo ? 'logo (removed)' : null,
     ]));
 
     logAudit(
@@ -130,7 +139,7 @@ if ($nameChanged || $logoChanged) {
             'event'            => 'business_profile_update',
             'stall_name'       => $stallName,
             'logo'             => $logoChanged ? $logoRelPath : ($oldLogo !== '' ? $oldLogo : null),
-            'logo_fingerprint' => $logoChanged ? profile_logo_fingerprint($logoRelPath) : $oldLogoFingerprint,
+            'logo_fingerprint' => $logoChanged ? ($logoRelPath !== null ? profile_logo_fingerprint($logoRelPath) : null) : $oldLogoFingerprint,
         ],
         $merchant['stall_id'] ?? null,
         [
@@ -142,6 +151,12 @@ if ($nameChanged || $logoChanged) {
 
 echo json_encode([
     'success' => true,
-    'message' => 'Business profile updated. Changes are now live on the public Stall Directory.',
-    'logo_url' => $logoRelPath ? (BASE_URL . '/' . $logoRelPath) : null,
+    'message' => ($nameChanged || $logoChanged)
+        ? 'Saved. Your listing on the Stall Directory is updated.'
+        : 'Nothing changed, so nothing was saved.',
+    'stall_name' => $stallName,
+    // Cache-busted: a re-upload with the same extension lands on the same path.
+    'logo_url' => $logoRelPath
+        ? (BASE_URL . '/' . $logoRelPath . '?v=' . time())
+        : ($removeLogo || $oldLogo === '' ? null : BASE_URL . '/' . $oldLogo),
 ]);

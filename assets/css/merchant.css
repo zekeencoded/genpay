@@ -1,5 +1,5 @@
-@import url("gjc-clear.css?v=21");
-@import url("theme.css?v=12");
+@import url("gjc-clear.css?v=23");
+@import url("theme.css?v=14");
 
 :root {
   /* Alias layer — pure aliases of the shared gp-* theme
@@ -154,9 +154,53 @@ html {
   z-index: 2;
 }
 
+.merchant-metric-card--chart {
+  min-height: 190px;
+}
+
+.merchant-metric-card--chart p {
+  margin: 2px 0 0;
+}
+
+.merchant-metric-chart {
+  width: 100%;
+  height: 70px;
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+
 /* Dashboard hero balance + quick actions + stat row reuse student's
    sd-balance / sd-quick / sd-stats classes directly (see
    assets/css/student_dashboard.css and merchant/dashboard.php). */
+
+/* Sales Remittance stat card (staff dashboard, replaces Total Earned) — same
+   .sd-stat shell, but a button instead of a number. */
+.sd-stat--remit {
+  display: flex;
+  flex-direction: column;
+}
+
+.sd-remit-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+  border: none;
+  cursor: pointer;
+}
+
+.sd-remit-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.sd-stat--remit p {
+  margin-top: 8px;
+}
+
+.sd-stat--remit #lastRemitInfo {
+  margin-top: 14px;
+}
 
 .merchant-premium-panel {
   background: #fff;
@@ -636,10 +680,8 @@ html {
   50%      { opacity:0.4; transform:scale(1.35); }
 }
 
-/* Live Order Queue — brief highlight when new AJAX data lands */
-#liveQueueBody.queue-flash {
-  animation: queue-flash-kf 1s ease-out;
-}
+/* Live Order Queue — brief highlight when new AJAX data lands (the queue lives in
+   pos.css; the keyframes stay here). */
 @keyframes queue-flash-kf {
   0%   { background-color: rgba(240, 165, 0, 0.18); }
   100% { background-color: transparent; }
@@ -1425,3 +1467,9 @@ html {
   .gp-bp-doc-actions { width: 100%; }
   .gp-bp-doc-actions > .merchant-view-btn { flex: 1 1 0; text-align: center; }
 }
+
+/* Staff table: keep pills, dates and the View/Manage pair on one line each. */
+#staffTable .merchant-type-pill,
+#staffTable .status-badge { display: inline-block; white-space: nowrap; }
+#staffTable td:nth-child(3),
+#staffTable td:nth-child(5) { white-space: nowrap; }

@@ -95,13 +95,15 @@
 
   /* ---- Composite surfaces & shadows
      The --gp-grad-* names are kept (about ten files reference them), but the
-     values are now flat fields: no ramps, no radial glows. Dark surfaces earn
-     their identity from a gold keyline instead, and the hero shadow is a
+     values are now flat fields: no ramps, no radial glows, and no gold
+     keyline either — a dark field is identity enough. The hero shadow is a
      hairline so panels sit on the page rather than floating over it. */
   --gp-grad-hero: var(--gp-green-950);
   --gp-grad-shell: var(--gp-green-950);
   --gp-grad-forest-btn: var(--gp-green-700);
-  --gp-keyline: 2px solid var(--gp-gold);
+  /* Retired: the gold keyline that used to sit on top of every hero card.
+     Kept as a definition only so any stray var(--gp-keyline) still resolves. */
+  --gp-keyline: 1px solid var(--gp-line);
   --gp-shadow-card: 0 1px 2px rgba(16, 32, 24, 0.04);
 
   /* ---- Elevation
@@ -117,7 +119,10 @@
   /* The one focus treatment, for every interactive element. Uses
      --gp-gold-line (45% alpha) rather than --gp-gold-soft (14%): a 14% tint
      cannot reach 3:1 against white and is not a usable focus indicator. */
-  --gp-focus-ring: 0 0 0 3px var(--gp-gold-line);
+  /* Focus is one gesture app-wide. It used to be a gold glow, which read as
+     decoration rather than state; these two are the only knobs. */
+  --gp-focus-ring: 0 0 0 3px rgba(20, 37, 27, 0.16);
+  --gp-focus-border: var(--gp-ink);
 
   /* ---- Space — 4pt scale
      One scale for every margin, padding and gap. 8pt was rejected: this is a
@@ -235,14 +240,14 @@
   color: var(--gp-muted);
 }
 
-/* Flat dark hero. The gold keyline across the top is the one piece of
-   ornament the system allows itself, and it is what makes a hero a hero. */
+/* Flat dark hero. It used to carry a gold keyline across the top as "the
+   system signature"; that read as decoration, not information, and was
+   removed. The dark field on a light page is what makes a hero a hero. */
 .gp-hero {
   position: relative;
   overflow: hidden;
   border-radius: var(--gp-radius);
   background: var(--gp-grad-hero);
-  border-top: var(--gp-keyline);
   color: #fff;
   padding: 26px 28px;
   box-shadow: var(--gp-shadow-hero);
@@ -444,6 +449,126 @@
 }
 
 /* ============================================================
+   FEEDBACK — toast + confirm dialog (pairs with assets/js/gp_feedback.js)
+
+   The admin side had six ways to report the same thing, including
+   window.alert(). This is the one way. Bootstrap supplies the Toast and
+   Modal behaviour (already vendored); everything visual here is the
+   existing palette — no new colour is introduced.
+
+   The toast deliberately does NOT use Bootstrap's .text-bg-success /
+   .text-bg-danger utilities, which the one pre-existing toast
+   (admin/stall_applications.php) did: those paint Bootstrap's own
+   #198754 / #dc3545, two colours this palette never uses.
+   ============================================================ */
+
+.gp-toast-host {
+  position: fixed;
+  right: var(--gp-space-4);
+  bottom: var(--gp-space-4);
+  z-index: var(--gp-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gp-space-2);
+  max-width: min(380px, calc(100vw - var(--gp-space-5)));
+}
+
+.gp-toast {
+  border: 1px solid var(--gp-line);
+  border-left: 3px solid var(--gp-muted);
+  border-radius: var(--gp-radius);
+  background: var(--gp-card);
+  box-shadow: var(--gp-shadow-overlay);
+}
+
+.gp-toast .toast-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gp-space-2);
+  color: var(--gp-ink);
+  font-size: var(--gp-text-sm);
+  font-weight: 600;
+  line-height: var(--gp-leading-snug);
+}
+
+.gp-toast .toast-body i { font-size: 15px; margin-top: 1px; }
+
+.gp-toast--ok { border-left-color: var(--gp-success); }
+.gp-toast--ok .toast-body i { color: var(--gp-success); }
+.gp-toast--err { border-left-color: var(--gp-danger); }
+.gp-toast--err .toast-body i { color: var(--gp-danger); }
+
+/* Confirm dialog. Every money action states what, how much, to whom, and
+   whether it can be undone — the .gp-confirm-detail rows carry that. */
+.gp-confirm-dialog { max-width: 440px; }
+
+.gp-confirm-title {
+  font-size: var(--gp-text-lg);
+  font-weight: 800;
+  color: var(--gp-ink);
+}
+
+.gp-confirm-body {
+  font-size: var(--gp-text-sm);
+  color: var(--gp-muted);
+  line-height: var(--gp-leading-normal);
+  margin-bottom: var(--gp-space-3);
+}
+
+.gp-confirm-detail {
+  background: var(--gp-cream);
+  border: 1px solid var(--gp-line);
+  border-radius: var(--gp-radius);
+  padding: var(--gp-space-2) var(--gp-space-4);
+  margin-bottom: var(--gp-space-3);
+}
+
+.gp-confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--gp-space-4);
+  padding: var(--gp-space-2) 0;
+  font-size: var(--gp-text-sm);
+}
+
+.gp-confirm-row + .gp-confirm-row { border-top: 1px solid var(--gp-line-soft); }
+.gp-confirm-row span { color: var(--gp-muted); }
+
+.gp-confirm-row strong {
+  color: var(--gp-ink);
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-confirm-note {
+  background: var(--gp-warning-bg);
+  border-radius: var(--gp-radius);
+  color: var(--gp-warning);
+  font-size: var(--gp-text-xs);
+  font-weight: 700;
+  line-height: var(--gp-leading-snug);
+  padding: var(--gp-space-2) var(--gp-space-3);
+  margin-bottom: 0;
+}
+
+.gp-confirm-note--danger {
+  background: var(--gp-danger-bg);
+  color: var(--gp-danger);
+}
+
+.gp-confirm-typelabel {
+  display: block;
+  font-size: var(--gp-text-xs);
+  font-weight: 700;
+  color: var(--gp-ink);
+  margin: var(--gp-space-3) 0 var(--gp-space-1);
+}
+
+.gp-confirm-typelabel strong { color: var(--gp-danger); }
+
+/* ============================================================
    TABLES — one canonical design, all roles (minimal hairline).
    Covers: opt-in .gp-table, every Bootstrap .table under the
    role shells (body.gp-theme = admin/merchant/parent,
@@ -550,7 +675,7 @@ body.gp-theme .table-bordered tbody td {
 .dataTables_wrapper .dataTables_filter input:focus,
 .dataTables_wrapper .dataTables_length select:focus {
   outline: none;
-  border-color: var(--gp-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring)!important;
 }
 
@@ -637,7 +762,7 @@ body.gp-theme .form-select {
 
 body.gp-theme .form-control:focus,
 body.gp-theme .form-select:focus {
-  border-color: var(--gp-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring);
 }
 

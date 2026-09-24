@@ -37,10 +37,10 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=54">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=30">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -152,14 +152,6 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                                         href="<?= MERCHANT_URL ?>/view_product.php?token=<?= urlencode(gjc_make_view_token((int) $item['id'], 'merchant_product')) ?>">
                                         <i class="fa-regular fa-eye"></i> View
                                     </a>
-                                    <?php if (!$isMerchAdmin): ?>
-                                    <!-- Staff have no Edit button, so the quick Stock modal stays their
-                                         only way to update quantities. Admins update stock via Edit. -->
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        onclick="editStock(<?= (int)$item['id'] ?>, <?= (int)$item['stock_qty'] ?>, '<?= gjc_e($item['product_name']) ?>')">
-                                        Stock
-                                    </button>
-                                    <?php endif; ?>
                                     <button class="btn btn-sm btn-outline-success rounded-0"
                                         <?= $item['sku'] ? '' : 'disabled title="Add a SKU first — the QR encodes the SKU."' ?>
                                         onclick='openItemQr(<?= json_encode([
@@ -170,7 +162,15 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                                         ], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                                         <i class="fa-solid fa-qrcode"></i> QR
                                     </button>
-                                    <?php if ($isMerchAdmin): ?>
+                                    <!-- Same order for both roles: View · QR · the role's action.
+                                         Staff have no Edit, so the quick Stock modal takes that
+                                         slot; admins update stock via Edit. -->
+                                    <?php if (!$isMerchAdmin): ?>
+                                    <button class="btn btn-sm btn-outline-primary rounded-0"
+                                        onclick='editStock(<?= (int) $item['id'] ?>, <?= (int) $item['stock_qty'] ?>, <?= htmlspecialchars(json_encode($item['product_name']), ENT_QUOTES) ?>)'>
+                                        Stock
+                                    </button>
+                                    <?php else: ?>
                                     <button class="btn btn-sm btn-outline-primary rounded-0"
                                         onclick="editProduct(<?= htmlspecialchars(json_encode($item), ENT_QUOTES) ?>)">
                                         Edit

@@ -33,9 +33,8 @@
    table keeps scrolling sideways as before.
 
    Rows that arrive later are covered too — DataTables replaces the
-   whole tbody on every draw/search/page, the merchant dashboard
-   polls its live order queue into #liveQueueBody, and the order
-   modal builds its item table from a template string. A single
+   whole tbody on every draw/search/page, and any
+   table built from a template string by a script. A single
    document-level MutationObserver re-applies all of it.
 
    Opt a table out with data-cards="false".

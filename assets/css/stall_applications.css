@@ -1,5 +1,4 @@
 #docFrame { width: 100%; height: 70vh; border: 0; }
 .app-row { cursor: pointer; }
-.app-row .chevron { display: inline-block; transition: transform .15s ease; }
-.app-row[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+
 .app-detail-row > td { padding: 0; border-top: 0; }

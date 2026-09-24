@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 header('Content-Type: application/json');
 gjc_require_role(['merchant']);
 gjc_ensure_transaction_refund_type($db);
+gjc_ensure_maintenance_fees_schema($db);
 
 $action = trim((string) ($_POST['action'] ?? ''));
 $merchantUserId = gjc_user_id();
@@ -117,6 +118,9 @@ try {
             "UPDATE transactions SET status = 'reversed' WHERE id = ?"
         )->execute([$transactionId]);
 
+        // The sale is undone, so its still-accrued maintenance fee is too.
+        gjc_void_maintenance_fee($db, (string) $original['reference_no']);
+
         $db->commit();
 
         logAudit(
@@ -151,11 +155,11 @@ try {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/returns', 'Something went wrong. Please try again.')]);
     }
 } catch (\Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/returns', 'Server error. Please try again.')]);
 }

@@ -197,7 +197,7 @@ try {
 
 } catch (RuntimeException | InvalidArgumentException $e) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => gjc_safe_error($e, 'admin/api/economy')]);
 } catch (Throwable $e) {
     http_response_code(500);
     error_log('[economy_api.php] ' . $e->getMessage());

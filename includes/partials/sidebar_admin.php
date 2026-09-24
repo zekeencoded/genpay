@@ -1,7 +1,25 @@
 <?php
 // Partial: Admin sidebar — included by dashboard.php
 // Requires: $currentPage string (e.g. 'dashboard', 'users', 'leases', etc.)
-$currentPage = $currentPage ?? ""; ?>
+$currentPage = $currentPage ?? "";
+
+// Pending work, so the queues that need clearing are visible from anywhere
+// rather than only after opening each page. Same source as the dashboard's
+// "Needs your attention" strip, so a badge and a tile can never disagree.
+$__queues = function_exists('gjc_finance_queue_counts') && isset($db)
+    ? gjc_finance_queue_counts($db)
+    : ['encashments' => 0, 'stall_applications' => 0];
+
+/** The badge that was already on Stall Applications, now available to any item. */
+$__badge = static function (int $count, string $noun): string {
+    if ($count < 1) {
+        return '';
+    }
+    $label = $count . ' ' . $noun . ($count === 1 ? '' : 's') . ' waiting';
+    return '<span class="nav-badge" title="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '">'
+        . ($count > 99 ? '99+' : $count) . '</span>';
+};
+?>
 <aside class="admin-sidebar" id="sidebar">
     <div class="brand-box">
         <div class="brand-logo">
@@ -25,13 +43,10 @@ $currentPage = $currentPage ?? ""; ?>
             <i class="fa-solid fa-file-signature nav-icon"></i>
             <span class="nav-text">Leases &amp; Rent</span>
         </a>
-        <a href="<?= ADMIN_URL ?>/topups.php" class="<?= $currentPage === 'topups' ? 'active' : '' ?>">
+        <a href="<?= ADMIN_URL ?>/cash_management.php" class="<?= $currentPage === 'cash' ? 'active' : '' ?>">
             <i class="fa-solid fa-money-bill-transfer nav-icon"></i>
-            <span class="nav-text">Top-ups</span>
-        </a>
-        <a href="<?= ADMIN_URL ?>/encashments.php" class="<?= $currentPage === 'encashments' ? 'active' : '' ?>">
-            <i class="fa-solid fa-money-check-dollar nav-icon"></i>
-            <span class="nav-text">Encashments</span>
+            <span class="nav-text">Cash Management</span>
+            <?= $__badge($__queues['encashments'], 'payout') ?>
         </a>
         <a href="<?= ADMIN_URL ?>/transactions.php" class="<?= $currentPage === 'transactions' ? 'active' : '' ?>">
             <i class="fa-solid fa-receipt nav-icon"></i>
@@ -41,17 +56,14 @@ $currentPage = $currentPage ?? ""; ?>
             <i class="fa-solid fa-coins nav-icon"></i>
             <span class="nav-text">Economy</span>
         </a>
+        <a href="<?= ADMIN_URL ?>/wallet.php" class="<?= $currentPage === 'wallet' ? 'active' : '' ?>">
+            <i class="fa-solid fa-wallet nav-icon"></i>
+            <span class="nav-text">Admin Wallet</span>
+        </a>
         <a href="<?= ADMIN_URL ?>/stall_applications.php" class="<?= $currentPage === 'stall_applications' ? 'active' : '' ?>">
             <i class="fa-solid fa-store nav-icon"></i>
             <span class="nav-text">Stall Applications</span>
-            <?php
-            try {
-                $__pendingCount = $db->query("SELECT COUNT(*) FROM stall_applications WHERE status='pending_verification'")->fetchColumn();
-                if ($__pendingCount > 0): ?>
-                <span style="background:var(--gp-red);color:#fff;font-size:11px;font-weight:700;border-radius:50px;padding:1px 7px;margin-left:auto;"><?= (int)$__pendingCount ?></span>
-            <?php endif;
-            } catch (Throwable $__e) {}
-            ?>
+            <?= $__badge($__queues['stall_applications'], 'application') ?>
         </a>
         <a href="<?= ADMIN_URL ?>/school_years.php" class="<?= $currentPage === 'school_years' ? 'active' : '' ?>">
             <i class="fa-solid fa-graduation-cap nav-icon"></i>

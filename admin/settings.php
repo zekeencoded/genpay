@@ -62,17 +62,18 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
     <link rel="icon" type="image/png" sizes="192x192" href="<?= ICONS_URL ?>/gp_logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings | GenPay</title>
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/settings.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/settings.css?v=16">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
 </head>
 
 <body class="gp-theme">
@@ -119,6 +120,9 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                 <button type="button" class="settings-tab" role="tab"
                         id="tab-waiver" data-tab="waiver" aria-controls="waiver"
                         aria-selected="false" tabindex="-1">Fee Waivers</button>
+                <button type="button" class="settings-tab" role="tab"
+                        id="tab-maintenance" data-tab="maintenance" aria-controls="maintenance"
+                        aria-selected="false" tabindex="-1">Maintenance Fee</button>
                 <span class="settings-tabs-split" aria-hidden="true"></span>
                 <button type="button" class="settings-tab" role="tab"
                         id="tab-info" data-tab="info" aria-controls="info"
@@ -227,19 +231,9 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                         </div>
                     </div>
 
-                    <h4>Withdrawals &amp; Top-ups</h4>
+                    <h4>Top-ups</h4>
 
                     <div class="settings-grid">
-                        <div class="settings-field money-field">
-                            <label>Minimum Withdrawal</label>
-                            <small>Smallest cashier release request</small>
-                            <div class="input-with-prefix">
-                                <span>₱</span>
-                                <input type="number" name="withdraw_min_amount" step="0.01" min="0.01"
-                                       value="<?= $h($amt('withdraw_min_amount')) ?>" required>
-                            </div>
-                        </div>
-
                         <div class="settings-field money-field">
                             <label>Max Top-Up Per Request</label>
                             <small>Ceiling on a single top-up</small>
@@ -266,7 +260,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                     </div>
 
                     <div class="settings-note">
-                        These limits are enforced live on student transfers, withdrawal requests, and top-ups.
+                        These limits are enforced live on student transfers and top-ups.
                         Changing them takes effect on the next transaction — transactions already recorded are untouched.
                     </div>
 
@@ -367,6 +361,61 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
 
                     <button type="submit" class="save-settings-btn">
                         Save Waiver Limit
+                    </button>
+                </form>
+
+            </section>
+
+            <section class="settings-panel settings-pane" id="maintenance" role="tabpanel"
+                     aria-labelledby="tab-maintenance">
+
+                <div class="settings-panel-header">
+                    <h3>
+                        <i class="fa-solid fa-wallet"></i>
+                        Maintenance Fee
+                    </h3>
+                </div>
+
+                <form action="<?= ADMIN_URL ?>/save_settings.php" method="POST" class="settings-form">
+                    <input type="hidden" name="action" value="save_maintenance_fee">
+                    <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+
+                    <h4>Fee Rate Per Transaction</h4>
+
+                    <div class="settings-grid">
+                        <div class="settings-field money-field">
+                            <label>Fee Rate</label>
+                            <small>Percent of each student POS payment or transfer. 0 turns the fee off.</small>
+                            <div class="input-with-prefix">
+                                <span>%</span>
+                                <input type="number" name="maintenance_fee_rate_pct" step="0.01" min="0" max="10"
+                                       value="<?= $h($amt('maintenance_fee_rate_pct')) ?>" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-note">
+                        The fee applies to every student <strong>POS payment</strong> and every <strong>transfer sent</strong>
+                        (the sender is charged). It is never taken from the wallet: each fee is recorded against the student,
+                        collected in the <a href="<?= ADMIN_URL ?>/wallet.php">Admin Wallet</a>, and billed with tuition.
+                        Returned sales void their fee. Changing the rate only affects future transactions.
+                    </div>
+
+                    <?php $feeRate = (float) ($settings['maintenance_fee_rate_pct'] ?? 0); ?>
+                    <div class="settings-note">
+                        Each fee is the rate &times; the transaction amount, rounded to the centavo, and never less than
+                        &#8369;0.01.
+                        <?php if ($feeRate > 0): ?>
+                        At <strong><?= gjc_fee_rate_label($feeRate) ?></strong>: a &#8369;100.00 purchase or transfer costs
+                        <strong><?= gjc_money(max(0.01, round(100 * $feeRate / 100, 2))) ?></strong>, a &#8369;5,000.00 one
+                        <strong><?= gjc_money(max(0.01, round(5000 * $feeRate / 100, 2))) ?></strong>.
+                        <?php else: ?>
+                        The fee is currently <strong>off</strong>.
+                        <?php endif; ?>
+                    </div>
+
+                    <button type="submit" class="save-settings-btn">
+                        Save Maintenance Fee
                     </button>
                 </form>
 

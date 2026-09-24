@@ -112,7 +112,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr[role]:active {
 
 table.gjc-cards.gjc-cards--on > tbody > tr[role]:focus-visible {
   outline: none;
-  border-color: var(--gp-gold);
+  border-color: var(--gp-focus-border);
   box-shadow: var(--gp-focus-ring);
 }
 
@@ -380,10 +380,6 @@ table.gjc-cards.gjc-cards--on > tbody > tr.table-warning {
   background: var(--gp-warning-bg);
 }
 
-/* The parent ledger flags the parent's own wallet rows. */
-table.gjc-cards.gjc-cards--on > tbody > tr.pa-own-row {
-  border-left: 3px solid var(--gp-gold);
-}
 
 /* ---- Cell-level skins that still make sense in a card ------- */
 table.gjc-cards.gjc-cards--on td.sd-cell-mono {

@@ -12,9 +12,12 @@ $filters = [
 ];
 
 $transactions = gjc_fetch_admin_transactions($db, $filters, 150);
-$stats = gjc_admin_transaction_stats(gjc_fetch_admin_transactions($db, [], 0));
+$stats = gjc_admin_transaction_counts($db);
 $typeOptions = gjc_transaction_type_options();
 $statusOptions = gjc_transaction_status_options();
+
+$hasFilters = $filters['search'] !== '' || $filters['type'] !== '' || $filters['status'] !== '';
+$currentUser = gjc_current_user($db);
 
 $currentPage = 'transactions';
 ?>
@@ -31,9 +34,11 @@ $currentPage = 'transactions';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/transactions.css?v=12">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
@@ -56,7 +61,7 @@ $currentPage = 'transactions';
                 </div>
 
                 <div class="admin-user">
-                    <span>Admin</span>
+                    <span><?= htmlspecialchars($currentUser['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
                     <div class="avatar">
                         <i class="fa-solid fa-user-tie"></i>
                     </div>
@@ -152,6 +157,10 @@ $currentPage = 'transactions';
                         Filter
                     </button>
 
+                    <?php if ($hasFilters): ?>
+                    <a href="<?= ADMIN_URL ?>/transactions.php" class="btn btn-link">Clear filters</a>
+                    <?php endif; ?>
+
                 </form>
 
             </section>
@@ -161,21 +170,29 @@ $currentPage = 'transactions';
                 <div class="transactions-table-header">
                     <div>
                         <h3>All Transactions</h3>
-                        <p>Complete list of wallet movements across the system.</p>
+                        <p>
+                            <?= $hasFilters ? 'Matching' : 'The' ?> most recent
+                            <?= count($transactions) ?> wallet movement<?= count($transactions) === 1 ? '' : 's' ?>.
+                            Use the filters above to narrow this down, or Export for the full range.
+                        </p>
                     </div>
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table transactions-table align-middle js-datatable" id="transactionsTable" data-page-length="10">
+                    <table class="table transactions-table align-middle js-datatable" id="transactionsTable" data-page-length="10"
+                           data-hide-filter="true"
+                           data-empty-message="<?= $hasFilters
+                               ? 'No transactions match these filters. Clear them above to see everything.'
+                               : 'No wallet activity has been recorded yet.' ?>">
                         <thead>
                             <tr>
-                                <th>Reference</th>
+                                <th data-card="title">Reference</th>
                                 <th>Type</th>
-                                <th>Amount</th>
-                                <th>Sender</th>
-                                <th>Receiver</th>
+                                <th data-card="amount">Amount</th>
+                                <th data-card="hide">Sender</th>
+                                <th data-card="hide">Receiver</th>
                                 <th>Status</th>
-                                <th>Time</th>
+                                <th data-card="hide">Time</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -240,6 +257,8 @@ $currentPage = 'transactions';
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
+    <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 
     <script>
     function toggleSidebar() {

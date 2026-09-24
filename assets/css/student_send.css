@@ -1,5 +1,4 @@
-/* Shared extras for the Send GenCoin (student/transfer.php) and Withdraw
-   (student/withdraw.php) pages, on top of the sd-* shell and the shared
+/* Shared extras for the Send GenCoin (student/transfer.php) page, on top of the sd-* shell and the shared
    pf-* / tu-* primitives. */
 
 /* ===== SUCCESS CARD (transfer) ===== */
@@ -82,57 +81,8 @@
 }
 
 /* ===== STAT TILES (withdraw: pending / free to withdraw) ===== */
-.wd-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.wd-stat {
-  background: var(--sd-mint);
-  border: 1px solid var(--sd-line);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-
-.wd-stat span {
-  display: block;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.8px !important;
-  text-transform: uppercase;
-  color: var(--sd-muted);
-}
-
-.wd-stat strong {
-  display: block;
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--sd-forest-900);
-  margin-top: 2px;
-}
-
-.wd-stat.is-gold {
-  background: var(--sd-gold-soft);
-  border-color: rgba(240, 165, 0, 0.4);
-}
-
-.wd-stat.is-gold span {
-  color: var(--gp-gold-deep);
-}
 
 /* Monospace reference cells in the recent tables */
-.sg-ref {
-  font-family: var(--sd-mono);
-  font-size: 12px;
-  color: var(--sd-ink);
-}
 
 /* Peso equivalence inside the withdraw stat tiles */
-.wd-stat small {
-  display: block;
-  font-family: var(--sd-mono);
-  font-size: 11px;
-  color: var(--sd-muted);
-  margin-top: 1px;
-}
+

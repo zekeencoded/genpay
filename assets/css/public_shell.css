@@ -1,0 +1,108 @@
+/* Public-page chrome shared by index.php and stalls.php: the top bar
+   (includes/partials/public_navbar.php), the hero type and the footer.
+   Colours come from gjc-clear.css (loaded first on both pages); this file
+   only holds layout, so each page's own sheet keeps just its page body. */
+
+.navbar {
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    padding: 15px 50px;
+    position: fixed;
+    width: 100%;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+.navbar-brand {
+    font-weight: 800;
+    color: var(--gp-green-700) !important;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+.navbar-brand img {
+    width: 45px;
+    height: 45px;
+    object-fit: contain;
+}
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.nav-actions .btn-outline-custom {
+    padding: 10px 22px;
+    font-size: 15px;
+}
+.nav-actions .btn-login {
+    padding: 10px 25px;
+    font-size: 16px;
+}
+
+/* Hero: gjc-clear.css paints the photo + overlay and the gold <span>. */
+.hero {
+    display: flex;
+    align-items: center;
+    color: #ffffff;
+}
+.hero h1 {
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+}
+.hero p {
+    color: #e2e8f0;
+    line-height: 1.6;
+}
+
+.btn-primary-custom {
+    padding: 15px 40px;
+    font-size: 18px;
+    font-weight: 800;
+    border-radius: var(--gp-radius-pill);
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.2s ease;
+}
+
+/* The hero sits on a dark emerald overlay, where the house dark-green
+   button disappears. The one hero CTA per page (Get Started Now / Apply
+   Now) is a solid gold fill instead. !important to outrank gjc-clear.css. */
+.hero .btn-primary-custom {
+    background: var(--gp-gold) !important;
+    border-color: var(--gp-gold) !important;
+    color: var(--gp-green-950) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+}
+.hero .btn-primary-custom:hover,
+.hero .btn-primary-custom:focus-visible {
+    background: var(--gp-gold-light) !important;
+    border-color: var(--gp-gold-light) !important;
+    color: var(--gp-green-950) !important;
+}
+
+footer {
+    color: #ffffff;
+    text-align: center;
+    padding: 30px 20px;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+    .navbar { padding: 12px 20px; }
+    .navbar-brand { font-size: 19px; gap: 8px; }
+    .navbar-brand img { width: 36px; height: 36px; }
+    .nav-actions { gap: 8px; }
+    .nav-actions .btn-outline-custom,
+    .nav-actions .btn-login {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+}

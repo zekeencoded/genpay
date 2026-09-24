@@ -28,21 +28,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=21">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=13">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=16">
 </head>
 <body>
 
-    <nav class="navbar">
-        <a class="navbar-brand" href="#">
-            <img src="<?= ICONS_URL ?>/GenDeJesusFavicon.png" alt="GJC Logo" onerror="this.src='<?= ICONS_URL ?>/logo.png'">
-            GenPay
-        </a>
-        <div class="nav-actions">
-            <a href="<?= BASE_URL ?>/stalls" class="btn btn-primary-custom btn-outline-custom">View Stalls</a>
-            <a href="<?= BASE_URL ?>/login.php" class="btn btn-primary-custom btn-login">Login<span class="d-none d-sm-inline"> to Portal</span></a>
-        </div>
-    </nav>
+    <?php include __DIR__ . '/includes/partials/public_navbar.php'; ?>
 
     <div class="hero">
         <div class="hero-content">
@@ -146,9 +138,7 @@
         </div>
     </div>
 
-    <footer>
-        &copy; <?php echo date("Y"); ?> General de Jesus College. All rights reserved.
-    </footer>
+    <?php include __DIR__ . '/includes/partials/public_footer.php'; ?>
 
 </body>
 </html>

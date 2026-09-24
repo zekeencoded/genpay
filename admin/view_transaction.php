@@ -65,6 +65,12 @@ if ($transaction) {
 
     $sourceLabel = ucwords(str_replace('_', ' ', (string) $transaction['source']));
     $notes = trim((string) ($transaction['notes'] ?? ''));
+
+    // The maintenance fee charged on this payment/transfer (tuition-only, so it
+    // is a line here, not part of the wallet amount above).
+    $maintFee = $transaction['source'] === 'ledger'
+        ? gjc_maintenance_fee_for_reference($db, (string) $transaction['ref'])
+        : null;
 }
 ?>
 <!DOCTYPE html>
@@ -78,11 +84,11 @@ if ($transaction) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $transaction ? 'Transaction Details' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=37">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=11">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=20">
 </head>
 
 <body class="gp-theme">
@@ -144,6 +150,10 @@ if ($transaction) {
                         <div class="uv-field-value"><?= $esc($sourceLabel) ?></div>
                     </div>
                 </div>
+                <?php
+                $ftFee = $maintFee; $ftAmount = (float) $transaction['amount']; $ftShowAmount = true; $ftMerchant = false;
+                require __DIR__ . '/../includes/partials/detail_fee_fields.php';
+                ?>
                 <div class="uv-field">
                     <div class="uv-field-ic"><i class="fa-regular fa-clock"></i></div>
                     <div>
