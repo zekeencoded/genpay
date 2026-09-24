@@ -21,7 +21,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $firstName = trim((string) ($_POST['first_name'] ?? ''));
         $lastName = trim((string) ($_POST['last_name'] ?? ''));
-        $phone = trim((string) ($_POST['phone'] ?? ''));
+        // users has no `phone` column — the number lives in contact_number, a
+        // BIGINT, exactly as on the merchant Edit Profile.
+        $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? ''));
 
         // Sex / birth date / address / emergency contact, validated once in
         // app.php so this page and the parent portal can't disagree on what a
@@ -30,6 +32,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         if ($firstName === '' || $lastName === '') {
             $error = 'First name and last name are required.';
+        } elseif ($phone !== '' && !preg_match('/^0?9\d{9}$/', $phone)) {
+            $error = 'Enter an 11-digit mobile number, like 09171234567.';
         } elseif ($details['error'] !== null) {
             $error = $details['error'];
         } else {
@@ -40,7 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'first_name' => $firstName,
                 'last_name' => $lastName,
                 'name' => trim($firstName . ' ' . $lastName),
-                'phone' => $phone,
+                'contact_number' => $phone !== '' ? $phone : '0',
             ] + $details['values'] as $column => $value) {
                 if (in_array($column, $columns, true)) {
                     $updates[] = "{$column} = ?";
@@ -73,7 +77,12 @@ if ($firstName === '' && $lastName === '') {
 
 $studentName = $currentUser['name'];
 $email = (string) ($currentUser['email'] ?? '');
-$phone = (string) ($rawUser['phone'] ?? '');
+$phone = preg_replace('/\D+/', '', (string) ($_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['phone'] ?? '') : ($rawUser['contact_number'] ?? '')));
+if ($phone === '0') {
+    $phone = '';
+} elseif (strlen($phone) === 10 && $phone[0] === '9') {
+    $phone = '0' . $phone; // BIGINT ate the leading zero
+}
 $profileImg = (string) ($rawUser['profile_img'] ?? '');
 $profilePhotoUrl = ($profileImg !== '') ? (BASE_URL . '/' . ltrim($profileImg, '/')) : '';
 
@@ -151,8 +160,8 @@ $csrfToken = gjc_csrf_token();
                         </div>
 
                         <div class="pf-field">
-                            <label>Phone Number</label>
-                            <input type="text" name="phone" value="<?= $e($phone) ?>">
+                            <label>Mobile Number</label>
+                            <input type="tel" name="phone" value="<?= $e($phone) ?>" maxlength="13" placeholder="09XXXXXXXXX" inputmode="numeric" autocomplete="tel">
                         </div>
 
                         <div class="pf-field">

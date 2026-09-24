@@ -44,21 +44,23 @@ if (!isset($documents[$key])) {
     exit('Unknown document.');
 }
 
-// The column name is one of our own literals, chosen by the whitelist above —
-// it never comes from the request string itself.
-$stmt = $db->prepare(
-    "SELECT {$key}
-       FROM stall_applications
-      WHERE merchant_user_id = ?
-        AND status = 'awarded'
-        AND {$key} IS NOT NULL
-        AND {$key} <> ''
-      ORDER BY awarded_at DESC, id DESC
-      LIMIT 1"
-);
-$stmt->execute([$ownerId]);
-$relPath = (string) $stmt->fetchColumn();
-
+// The newest copy wins: one the owner uploaded from the Business Profile, else
+// the one captured with their awarded stall application. The column name is
+// one of our own literals, chosen by the whitelist above — never the request.
+$appRow = null;
+if (gjc_table_exists($db, 'stall_applications')) {
+    $appStmt = $db->prepare(
+        "SELECT {$key}, awarded_at
+           FROM stall_applications
+          WHERE merchant_user_id = ?
+            AND status = 'awarded'
+          ORDER BY awarded_at DESC, id DESC
+          LIMIT 1"
+    );
+    $appStmt->execute([$ownerId]);
+    $appRow = $appStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+$relPath = (string) (gjc_merchant_document_files($db, $ownerId, $appRow)[$key]['path'] ?? '');
 if ($relPath === '') {
     http_response_code(404);
     exit('That document is not on file.');

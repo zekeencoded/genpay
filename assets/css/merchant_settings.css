@@ -114,3 +114,10 @@
     .bp-actions .login-btn { flex: 1 1 auto; }
     .bp-logo-actions .merchant-view-btn { min-height: 44px; }
 }
+
+/* The listing now sits in a profile_hub.css card (.ph-card), which has no
+   padding of its own. */
+.ph-card .bp-edit { margin-top: 0; padding: 4px 20px 20px; }
+@media (max-width: 767.98px) {
+    .ph-card .bp-edit { padding: 4px 16px 16px; }
+}

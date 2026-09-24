@@ -53,13 +53,80 @@ if ($wallet['id'] > 0 && $wallet['source'] === 'student_wallets') {
 $accountStatus = $isFrozen ? 'Frozen' : ucfirst((string) ($rawUser['status'] ?? 'Active'));
 $transactionsEnabled = $wallet['id'] > 0 && !$isFrozen;
 
+// ── Hero figures ──────────────────────────────────────────────────────────
+// "Spent today" counts exactly what student/api/checkout.php counts against
+// the daily limit, so the bar here and the limit at the counter agree.
+$spentMonth = 0.0;
+$purchasesMonth = 0;
+$spentToday = 0.0;
+if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
+    $figStmt = $db->prepare(
+        "SELECT
+            COALESCE(SUM(CASE WHEN transaction_type IN ('payment', 'voucher_payment') THEN amount END), 0) AS spent_month,
+            COUNT(CASE WHEN transaction_type IN ('payment', 'voucher_payment') THEN 1 END) AS purchases_month,
+            COALESCE(SUM(CASE WHEN transaction_type IN ('payment', 'p2p_transfer') AND DATE(created_at) = CURDATE() THEN amount END), 0) AS spent_today
+           FROM transactions
+          WHERE student_wallet_id = ?
+            AND status = 'completed'
+            AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"
+    );
+    $figStmt->execute([$wallet['id']]);
+    if ($fig = $figStmt->fetch(PDO::FETCH_ASSOC)) {
+        $spentMonth = (float) $fig['spent_month'];
+        $purchasesMonth = (int) $fig['purchases_month'];
+        $spentToday = (float) $fig['spent_today'];
+    }
+}
+$leftToday = max(0.0, $dailyLimit - $spentToday);
+$limitUsedPct = $dailyLimit > 0 ? min(100, (int) round($spentToday / $dailyLimit * 100)) : 0;
+
+// ── Linked guardians ──────────────────────────────────────────────────────
+$guardians = [];
+if (gjc_table_exists($db, 'parent_student_links') && gjc_table_exists($db, 'parents')) {
+    $gStmt = $db->prepare(
+        "SELECT u.first_name, u.last_name, psl.linked_at
+           FROM parent_student_links psl
+           JOIN parents p ON p.id = psl.parent_id
+           JOIN users u ON u.userID = p.user_id
+          WHERE psl.student_user_id = ?
+          ORDER BY psl.linked_at, psl.id"
+    );
+    $gStmt->execute([(int) $currentUser['id']]);
+    $guardians = $gStmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 $waiverCredit = gjc_student_waiver_credit($db, (int) $currentUser['id']);
-$waiverPill = ['posted' => 'green', 'pending' => 'gold', 'claimed' => 'green'][$waiverCredit['status']] ?? 'gray';
+$waiverPill = ['posted' => 'is-ok', 'pending' => 'is-warn', 'claimed' => 'is-ok'][$waiverCredit['status']] ?? '';
 $waiverLabel = in_array($waiverCredit['status'], ['posted', 'claimed'], true)
-    ? gjc_money($waiverCredit['amount'])
+    ? gjc_gc_amount($waiverCredit['amount']) . ' GC'
     : ($waiverCredit['status'] === 'pending' ? 'Pending' : 'None');
 
 $maintFees = gjc_student_maintenance_fees($db, (int) $currentUser['id']);
+
+// ── Personal details + completeness ───────────────────────────────────────
+/** users.contact_number is a BIGINT, so a leading 0 comes back eaten. */
+$phoneDigits = preg_replace('/\D+/', '', (string) ($rawUser['contact_number'] ?? ''));
+if ($phoneDigits === '0') {
+    $phoneDigits = '';
+} elseif (strlen($phoneDigits) === 10 && $phoneDigits[0] === '9') {
+    $phoneDigits = '0' . $phoneDigits;
+}
+$sexOnFile = trim((string) ($rawUser['sex'] ?? ''));
+$addressOnFile = gjc_format_address($rawUser);
+$dobOnFile = $rawUser['date_of_birth'] ?? null;
+$dobAge = gjc_age_from_dob($dobOnFile);
+
+$editUrl = STUDENT_URL . '/profile_edit.php';
+$profileChecks = [
+    ['done' => $profilePhotoUrl !== '', 'label' => 'Add a photo',        'photo' => true],
+    ['done' => $phoneDigits !== '',     'label' => 'Add mobile number'],
+    ['done' => $sexOnFile !== '',       'label' => 'Add sex'],
+    ['done' => $dobAge !== null,        'label' => 'Add date of birth'],
+    ['done' => $addressOnFile !== '',   'label' => 'Add address'],
+];
+$checksDone = count(array_filter($profileChecks, static fn($c) => $c['done']));
+$checksTotal = count($profileChecks);
+$checksPct = (int) round($checksDone / $checksTotal * 100);
 
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $csrfToken = gjc_csrf_token();
@@ -80,7 +147,8 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=1">
 </head>
 
 <body class="sd-body">
@@ -93,12 +161,12 @@ $currentPage = 'profile';
 
             <?php
             $topbarTitle = 'My Profile';
-            $topbarSubtitle = 'Manage your student account details, status, and password security.';
+            $topbarSubtitle = 'Your account, wallet and security in one place.';
             $topbarAvatarPhotoUrl = $profilePhotoUrl;
             require __DIR__ . '/../includes/partials/topbar_student.php';
             ?>
 
-            <div class="sd-content">
+            <div class="sd-content ph">
 
                 <?php if ($notice): ?>
                 <div class="pf-alert">
@@ -107,269 +175,265 @@ $currentPage = 'profile';
                 </div>
                 <?php endif; ?>
 
-                <!-- Hero -->
-                <section class="pf-hero">
-                    <div class="pf-hero-left">
-                        <div class="pf-avatar-wrap">
-                            <div class="pf-avatar" id="avatarCircle">
-                                <?php if ($profilePhotoUrl): ?>
-                                    <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
-                                <?php else: ?>
-                                    <span id="avatarInitial"><?= $e($studentInitial) ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <label for="photoInput" class="pf-avatar-edit" title="Change photo">
+                <!-- Hero: who you are, and the three figures you check most -->
+                <section class="ph-hero" aria-label="Account summary">
+                    <div class="ph-hero-top">
+                        <div class="ph-avatar" id="avatarCircle">
+                            <?php if ($profilePhotoUrl): ?>
+                                <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
+                            <?php else: ?>
+                                <span id="avatarInitial"><?= $e($studentInitial) ?></span>
+                            <?php endif; ?>
+                            <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
                                 <i class="fa-solid fa-camera"></i>
                             </label>
-                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
+                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
                         </div>
 
-                        <div class="pf-identity">
-                            <span>Student Account</span>
-                            <h2><?= $e($studentName) ?></h2>
-                            <p><?= $e($email) ?> &middot; <?= $e($studentID) ?></p>
-                            <span class="sd-role-badge">STUDENT</span>
-                            <br>
-                            <a href="<?= STUDENT_URL ?>/profile_edit.php" class="pf-edit-btn">
-                                <i class="fa-solid fa-pen"></i> Edit Profile
+                        <div class="ph-identity">
+                            <span class="ph-eyebrow">Student account</span>
+                            <h2 class="ph-name"><?= $e($studentName) ?></h2>
+                            <p class="ph-meta"><?= $e($studentID) ?> &middot; <?= $e($email) ?> &middot; Member since <?= $e($memberSince) ?></p>
+                            <div class="ph-photo-msg" id="photoMsg"></div>
+                        </div>
+
+                        <div class="ph-hero-actions">
+                            <a href="<?= $e($editUrl) ?>" class="ph-btn-ghost">
+                                <i class="fa-solid fa-pen"></i> Edit profile
                             </a>
-                            <div class="pf-photo-msg" id="photoMsg"></div>
                         </div>
                     </div>
 
-                    <div class="pf-wallet-box">
-                        <span>Wallet Balance</span>
-                        <h3><?= gjc_gc_amount($walletBalance) ?> GC</h3>
-                        <p>&#8776; <?= gjc_money($walletBalance) ?> &middot; Member since <?= $e($memberSince) ?></p>
-                    </div>
-                </section>
-
-                <!-- Account status (read-only — managed by admin/parent, not the student) -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
-                        <div>
-                            <h3>Account Status</h3>
-                            <p>Current access and transaction settings.</p>
+                    <div class="ph-stats is-odd">
+                        <div class="ph-stat">
+                            <span class="ph-stat-k">Wallet balance</span>
+                            <span class="ph-stat-v"><?= gjc_gc_amount($walletBalance) ?> <small>GC</small></span>
+                            <span class="ph-stat-n">&#8776; <?= gjc_money($walletBalance) ?></span>
                         </div>
-                    </div>
-
-                    <div class="pf-status-list">
-                        <div>
-                            <span>Account Status</span>
-                            <strong class="pf-pill <?= $isFrozen ? 'red' : 'green' ?>"><?= $e($accountStatus) ?></strong>
+                        <div class="ph-stat">
+                            <span class="ph-stat-k">Spent this month</span>
+                            <span class="ph-stat-v"><?= gjc_gc_amount($spentMonth) ?> <small>GC</small></span>
+                            <span class="ph-stat-n">&#8776; <?= gjc_money($spentMonth) ?> &middot; <?= $purchasesMonth ?> purchase<?= $purchasesMonth === 1 ? '' : 's' ?> in <?= date('F') ?></span>
                         </div>
-
-                        <div>
-                            <span>Transactions</span>
-                            <strong class="pf-pill <?= $transactionsEnabled ? 'green' : 'gold' ?>">
-                                <?= $transactionsEnabled ? 'Enabled' : ($isFrozen ? 'Paused' : 'Wallet Pending') ?>
-                            </strong>
-                        </div>
-
-                        <div>
-                            <span>Spending Limit</span>
-                            <strong class="pf-pill <?= $dailyLimit > 0 ? 'gold' : 'gray' ?>">
-                                <?= $dailyLimit > 0 ? '&#8369;' . number_format($dailyLimit, 2) . ' / day' : 'No Limit' ?>
-                            </strong>
-                        </div>
-
-                        <div>
-                            <span>Fee Waiver Credit</span>
-                            <div style="display:flex;align-items:center;gap:8px;">
-                            <?php if (in_array($waiverCredit['status'], ['posted', 'claimed'], true) && $waiverCredit['waiver_file']): ?>
-                                <button type="button" class="pf-pill <?= $waiverPill ?>" style="border:none;cursor:pointer;" onclick="gjcViewWaiver('<?= ADMIN_URL ?>/doc.php?f=<?= urlencode($waiverCredit['waiver_file']) ?>')">
-                                    <?= $waiverLabel ?><?= $waiverCredit['status'] === 'claimed' ? ' &middot; Claimed' : '' ?>
-                                </button>
+                        <div class="ph-stat">
+                            <?php if ($isFrozen): ?>
+                                <span class="ph-stat-k">Spending today</span>
+                                <span class="ph-stat-v">Paused</span>
+                                <span class="ph-stat-n">Your wallet is frozen by your guardian</span>
+                            <?php elseif ($dailyLimit > 0): ?>
+                                <span class="ph-stat-k">Left to spend today</span>
+                                <span class="ph-stat-v"><?= gjc_gc_amount($leftToday) ?> <small>GC</small></span>
+                                <span class="ph-bar <?= $limitUsedPct >= 100 ? 'is-full' : '' ?>" role="progressbar" aria-label="Daily limit used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $limitUsedPct ?>"><span style="width: <?= $limitUsedPct ?>%"></span></span>
+                                <span class="ph-stat-n">&#8776; <?= gjc_money($leftToday) ?> &middot; <?= gjc_gc_amount($spentToday) ?> of your <?= gjc_gc_amount($dailyLimit) ?> GC daily limit used</span>
                             <?php else: ?>
-                                <strong class="pf-pill <?= $waiverPill ?>" <?= $waiverCredit['status'] === 'pending' ? 'title="Awaiting signed waiver upload by finance."' : '' ?>>
-                                    <?= $waiverLabel ?>
-                                </strong>
+                                <span class="ph-stat-k">Spent today</span>
+                                <span class="ph-stat-v"><?= gjc_gc_amount($spentToday) ?> <small>GC</small></span>
+                                <span class="ph-stat-n">&#8776; <?= gjc_money($spentToday) ?> &middot; No daily limit set</span>
                             <?php endif; ?>
-                            <?php if ($waiverCredit['status'] === 'posted'): ?>
-                                <button type="button" class="pf-pill green" id="fwcClaimOpen" style="border:none;cursor:pointer;" data-amount="<?= (float) $waiverCredit['amount'] ?>">
-                                    <i class="fa-solid fa-wallet me-1"></i>Add to My Wallet
-                                </button>
-                            <?php endif; ?>
-                            </div>
                         </div>
-
-                        <div>
-                            <span>Maintenance Fees</span>
-                            <strong class="pf-pill <?= $maintFees['accrued'] > 0 ? 'gold' : 'gray' ?>"
-                                    title="<?= $e($maintFees['rate_pct'] > 0 ? gjc_fee_rate_label($maintFees['rate_pct']) . ' of each payment or transfer (min ₱0.01), billed with your tuition — never taken from your wallet.' : 'No maintenance fee is currently charged.') ?>">
-                                <?= $maintFees['accrued'] > 0 ? gjc_money($maintFees['accrued']) . ' due' : 'None due' ?>
-                            </strong>
-                        </div>
-                    </div>
-
-                    <div class="pf-note">
-                        Some account settings are managed by the system administrator or your parent/guardian.
                     </div>
                 </section>
 
-                <!-- Personal details (editable from Edit Profile) -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
-                        <div>
-                            <h3>Personal Details</h3>
-                            <p>Your demographics on record.</p>
-                        </div>
+                <?php if ($checksDone < $checksTotal): ?>
+                <!-- Completeness nudge: disappears once everything is on file -->
+                <section class="ph-card ph-nudge" aria-label="Profile completeness">
+                    <div class="ph-ring" style="--ph-pct: <?= $checksPct ?>%"><span><?= $checksPct ?>%</span></div>
+                    <div class="ph-grow">
+                        <span class="ph-t">Your profile is <?= $checksDone ?> of <?= $checksTotal ?> complete</span>
+                        <span class="ph-s">The Finance Office uses these details to verify you at the counter.</span>
                     </div>
-
-                    <div class="pf-status-list">
-                        <?php
-                        $sexOnFile = trim((string) ($rawUser['sex'] ?? ''));
-                        $addressOnFile = gjc_format_address($rawUser);
-                        $dobOnFile = $rawUser['date_of_birth'] ?? null;
-                        $dobAge = gjc_age_from_dob($dobOnFile);
-                        foreach ([
-                            'Sex'           => $sexOnFile !== '' ? $sexOnFile : 'Not set',
-                            // Derived on read, so it is right on every birthday
-                            // without anyone having to update it.
-                            'Age'           => $dobAge !== null ? gjc_age_label($dobOnFile) : 'Not set',
-                            'Date of Birth' => $dobAge !== null ? gjc_dob_label($dobOnFile) : 'Not set',
-                            'Address'       => $addressOnFile !== '' ? $addressOnFile : 'Not set',
-                        ] as $pdLabel => $pdValue): ?>
-                        <div>
-                            <span><?= $e($pdLabel) ?></span>
-                            <!-- Plain text, not a pf-pill: an address is a value,
-                                 not a status, and a pill neither wraps nor fits one. -->
-                            <strong class="pf-detail-value <?= $pdValue === 'Not set' ? 'is-empty' : '' ?>"><?= $e($pdValue) ?></strong>
-                        </div>
+                    <div class="ph-chips">
+                        <?php foreach ($profileChecks as $check): if ($check['done']) continue; ?>
+                            <?php if (!empty($check['photo'])): ?>
+                                <label for="photoInput" role="button" tabindex="0" class="ph-chip"><i class="fa-solid fa-plus"></i><?= $e($check['label']) ?></label>
+                            <?php else: ?>
+                                <a href="<?= $e($editUrl) ?>" class="ph-chip"><i class="fa-solid fa-plus"></i><?= $e($check['label']) ?></a>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
-
-                    <div class="pf-note">
-                        Keep these up to date from <a href="<?= STUDENT_URL ?>/profile_edit.php">Edit Profile</a>.
-                        Your age is worked out from your date of birth, so it is never entered by hand.
-                    </div>
                 </section>
+                <?php endif; ?>
 
-                <!-- Settings menu -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
+                <div class="ph-grid">
+                <div class="ph-col">
+
+                <!-- Personal details (editable from Edit Profile) -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
                         <div>
-                            <h3>Settings</h3>
-                            <p>Manage your account and security.</p>
+                            <h3>Personal details</h3>
+                            <p>Your details on record</p>
                         </div>
+                        <a class="ph-link" href="<?= $e($editUrl) ?>"><i class="fa-solid fa-pen"></i>Edit</a>
                     </div>
 
-                    <div class="pf-menu">
-                        <a href="<?= STUDENT_URL ?>/profile_edit.php" class="pf-menu-item">
-                            <span class="pf-menu-item-icon"><i class="fa-solid fa-user-pen"></i></span>
-                            <span class="pf-menu-item-text">
-                                <strong>Edit Profile</strong>
-                                <span>Update your name and phone number</span>
-                            </span>
-                            <i class="fa-solid fa-chevron-right pf-menu-item-chevron"></i>
-                        </a>
-
-                        <a href="<?= STUDENT_URL ?>/security.php" class="pf-menu-item">
-                            <span class="pf-menu-item-icon"><i class="fa-solid fa-shield-halved"></i></span>
-                            <span class="pf-menu-item-text">
-                                <strong>Change Password</strong>
-                                <span>Update your login password</span>
-                            </span>
-                            <i class="fa-solid fa-chevron-right pf-menu-item-chevron"></i>
-                        </a>
-                    </div>
-                </section>
-
-                <!-- FAQs -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
+                    <?php
+                    $notSet = static fn(): string => 'Not set <a class="ph-link" href="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '">Add</a>';
+                    ?>
+                    <dl class="ph-dl">
                         <div>
-                            <h3>FAQs</h3>
-                            <p>Quick answers to common questions.</p>
+                            <dt>Sex</dt>
+                            <dd class="<?= $sexOnFile === '' ? 'is-empty' : '' ?>"><?= $sexOnFile !== '' ? $e($sexOnFile) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Mobile number</dt>
+                            <dd class="<?= $phoneDigits === '' ? 'is-empty' : '' ?>"><?= $phoneDigits !== '' ? $e($phoneDigits) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Date of birth</dt>
+                            <dd class="<?= $dobAge === null ? 'is-empty' : '' ?>"><?= $dobAge !== null ? $e(gjc_dob_label($dobOnFile)) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Age</dt>
+                            <!-- Derived on read, so it is right on every birthday
+                                 without anyone having to update it. -->
+                            <dd class="<?= $dobAge === null ? 'is-empty' : '' ?>"><?= $dobAge !== null ? $e(gjc_age_label($dobOnFile)) : 'Worked out from date of birth' ?></dd>
+                        </div>
+                        <div class="is-wide">
+                            <dt>Address</dt>
+                            <dd class="<?= $addressOnFile === '' ? 'is-empty' : '' ?>"><?= $addressOnFile !== '' ? $e($addressOnFile) : $notSet() ?></dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <!-- Linked guardian(s) -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div>
+                            <h3>Linked guardian<?= count($guardians) > 1 ? 's' : '' ?></h3>
+                            <p>Can send allowance, set limits and freeze your wallet</p>
+                        </div>
+                    </div>
+                    <?php if ($guardians): ?>
+                        <?php foreach ($guardians as $g):
+                            $gName = trim(($g['first_name'] ?? '') . ' ' . ($g['last_name'] ?? '')) ?: 'Guardian'; ?>
+                        <div class="ph-row">
+                            <span class="ph-ini"><?= $e(strtoupper(substr($gName, 0, 1))) ?></span>
+                            <span class="ph-grow">
+                                <span class="ph-t"><?= $e($gName) ?></span>
+                                <span class="ph-s">Parent / guardian<?= !empty($g['linked_at']) ? ' &middot; linked ' . $e(date('F Y', strtotime($g['linked_at']))) : '' ?></span>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="ph-row">
+                            <span class="ph-ic"><i class="fa-solid fa-link"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">No guardian linked yet</span>
+                                <span class="ph-s">Send your parent your Student ID, <strong><?= $e($studentID) ?></strong>. They link you from the Parent Portal.</span>
+                            </span>
+                            <button type="button" class="ph-mini-btn" id="copyStudentId" data-id="<?= $e($studentID) ?>">
+                                <i class="fa-regular fa-copy me-1"></i>Copy ID
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                </section>
+
+                </div><!-- /.ph-col -->
+                <div class="ph-col">
+
+                <!-- Account status (read-only — managed by admin/parent, not the student) -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div>
+                            <h3>Account status</h3>
+                            <p>Access, limits and school credits</p>
                         </div>
                     </div>
 
-                    <div class="pf-faq accordion" id="pfFaqAccordion">
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq1">
-                                    What is GenCoin (GC)?
-                                </button>
-                            </h2>
-                            <div id="pfFaq1" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. It's used to pay at the canteen, send money to other students, and top up your wallet &mdash; no separate balance is stored, it's just a display conversion of your peso balance.
-                                </div>
-                            </div>
+                    <div class="ph-kv">
+                        <span>Account</span>
+                        <div><span class="ph-pill has-dot <?= $isFrozen ? 'is-bad' : 'is-ok' ?>"><?= $e($accountStatus) ?></span></div>
+                    </div>
+                    <div class="ph-kv">
+                        <span>Payments &amp; transfers</span>
+                        <div><span class="ph-pill has-dot <?= $transactionsEnabled ? 'is-ok' : 'is-warn' ?>"><?= $transactionsEnabled ? 'Enabled' : ($isFrozen ? 'Paused' : 'Wallet pending') ?></span></div>
+                    </div>
+                    <div class="ph-kv">
+                        <span>Daily spending limit</span>
+                        <div><?= $dailyLimit > 0 ? gjc_gc_amount($dailyLimit) . ' GC / day <span class="gc-inline-peso">&asymp; ' . gjc_money($dailyLimit) . '</span>' : '<span class="is-empty">No limit</span>' ?></div>
+                    </div>
+                    <div class="ph-kv">
+                        <span>Fee waiver credit</span>
+                        <div>
+                        <?php if (in_array($waiverCredit['status'], ['posted', 'claimed'], true) && $waiverCredit['waiver_file']): ?>
+                            <button type="button" class="ph-pill <?= $waiverPill ?>" title="View the signed waiver" onclick="gjcViewWaiver('<?= ADMIN_URL ?>/doc.php?f=<?= urlencode($waiverCredit['waiver_file']) ?>')">
+                                <?= $waiverLabel ?><?= $waiverCredit['status'] === 'claimed' ? ' &middot; Claimed' : '' ?>
+                            </button>
+                        <?php else: ?>
+                            <span class="ph-pill <?= $waiverPill ?>" <?= $waiverCredit['status'] === 'pending' ? 'title="Awaiting signed waiver upload by finance."' : '' ?>>
+                                <?= $waiverLabel ?>
+                            </span>
+                        <?php endif; ?>
+                        <?php if (in_array($waiverCredit['status'], ['posted', 'claimed'], true)): ?>
+                            <span class="gc-inline-peso">&asymp; <?= gjc_money($waiverCredit['amount']) ?></span>
+                        <?php endif; ?>
+                        <?php if ($waiverCredit['status'] === 'posted'): ?>
+                            <button type="button" class="ph-mini-btn" id="fwcClaimOpen" data-amount="<?= (float) $waiverCredit['amount'] ?>">Add to wallet</button>
+                        <?php endif; ?>
                         </div>
+                    </div>
+                    <div class="ph-kv">
+                        <span>Maintenance fees</span>
+                        <div>
+                            <span class="ph-pill <?= $maintFees['accrued'] > 0 ? 'is-warn' : '' ?>"
+                                  title="<?= $e($maintFees['rate_pct'] > 0 ? gjc_fee_rate_label($maintFees['rate_pct']) . ' of each payment or transfer (min ₱0.01), billed with your tuition — never taken from your wallet.' : 'No maintenance fee is currently charged.') ?>">
+                                <?= $maintFees['accrued'] > 0 ? gjc_gc_amount($maintFees['accrued']) . ' GC due' : 'None due' ?>
+                            </span>
+                            <?php if ($maintFees['accrued'] > 0): ?>
+                                <span class="gc-inline-peso">&asymp; <?= gjc_money($maintFees['accrued']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
 
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq2">
-                                    How do I top up my wallet?
-                                </button>
-                            </h2>
-                            <div id="pfFaq2" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Hand your cash to the <strong>Finance Office</strong> or any participating canteen merchant. They load it straight into your wallet at the counter &mdash; there is nothing to submit beforehand, and the credit shows up in your History right away.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq3">
-                                    How do I send GenCoin to another student?
-                                </button>
-                            </h2>
-                            <div id="pfFaq3" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Go to <strong>Send GenCoin</strong>, enter their Student ID to look them up, then the amount. Transfers are instant and cannot be undone, so double-check the recipient before confirming.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq4">
-                                    Why is my wallet frozen or spending-limited?
-                                </button>
-                            </h2>
-                            <div id="pfFaq4" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    A parent or guardian linked to your account can freeze your wallet or set a daily spending limit from the Parent Portal. Check your <strong>Account Status</strong> above, or ask them directly if you think this is a mistake.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq5">
-                                    What is the Fee Waiver Credit?
-                                </button>
-                            </h2>
-                            <div id="pfFaq5" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    It's a school-managed credit that Finance applies toward your tuition once your signed waiver is on file &mdash; separate from your GenCoin wallet. Its status appears in <strong>Account Status</strong> above.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq6">
-                                    I forgot my password. What do I do?
-                                </button>
-                            </h2>
-                            <div id="pfFaq6" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Visit the Finance Office with a valid ID and request a password reset. If you're already logged in and just want to change it, use <strong>Change Password</strong> in Settings above instead.
-                                </div>
-                            </div>
-                        </div>
+                    <div class="ph-note">
+                        <i class="fa-solid fa-lock"></i>
+                        <span>Limits and freezes are set by your guardian or the Finance Office. Maintenance fees are billed with tuition, never taken from your wallet.</span>
                     </div>
                 </section>
 
-                <button type="button" class="pf-btn pf-btn--block is-danger" onclick="openLogoutModal(event);">
-                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Log Out
-                </button>
+                <!-- Settings -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div><h3>Settings</h3></div>
+                    </div>
 
-                <div class="pf-version">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
+                    <nav class="ph-menu" aria-label="Profile settings">
+                        <a href="<?= $e($editUrl) ?>" class="ph-menu-item">
+                            <span class="ph-ic"><i class="fa-solid fa-user-pen"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Edit profile</span>
+                                <span class="ph-s">Name, mobile number, address and personal details</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
+                        </a>
+                        <a href="<?= STUDENT_URL ?>/security.php" class="ph-menu-item">
+                            <span class="ph-ic"><i class="fa-solid fa-shield-halved"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Change password</span>
+                                <span class="ph-s">Update your login password</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
+                        </a>
+                        <button type="button" class="ph-menu-item" data-bs-toggle="modal" data-bs-target="#phHelpModal">
+                            <span class="ph-ic"><i class="fa-solid fa-circle-question"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Help &amp; FAQs</span>
+                                <span class="ph-s">GenCoin, top-ups, limits and passwords</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
+                        </button>
+                        <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
+                            <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                            <span class="ph-grow"><span class="ph-t">Log out</span></span>
+                        </button>
+                    </nav>
+                </section>
+
+                <div class="ph-foot">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
+
+                </div><!-- /.ph-col -->
+                </div><!-- /.ph-grid -->
 
             </div>
 
@@ -378,6 +442,44 @@ $currentPage = 'profile';
     </div>
 
     <?php require __DIR__ . '/../includes/partials/bottom_nav_student.php'; ?>
+
+    <!-- Help & FAQs (a bottom sheet on phones) -->
+    <div class="modal fade ph-sheet" id="phHelpModal" tabindex="-1" aria-labelledby="phHelpTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="phHelpTitle">Help &amp; FAQs</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <details class="ph-faq" open>
+                        <summary>What is GenCoin (GC)?</summary>
+                        <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. It's used to pay at the canteen, send money to other students, and top up your wallet &mdash; no separate balance is stored, it's just a display conversion of your peso balance.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>How do I top up my wallet?</summary>
+                        <p>Hand your cash to the <strong>Finance Office</strong> or any participating canteen merchant. They load it straight into your wallet at the counter &mdash; there is nothing to submit beforehand, and the credit shows up in your History right away.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>How do I send GenCoin to another student?</summary>
+                        <p>Go to <strong>Send GenCoin</strong>, enter their Student ID to look them up, then the amount. Transfers are instant and cannot be undone, so double-check the recipient before confirming.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>Why is my wallet frozen or spending-limited?</summary>
+                        <p>A parent or guardian linked to your account can freeze your wallet or set a daily spending limit from the Parent Portal. Check <strong>Account status</strong> on your profile, or ask them directly if you think this is a mistake.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>What is the Fee Waiver Credit?</summary>
+                        <p>It's a school-managed credit that Finance applies toward your tuition once your signed waiver is on file &mdash; separate from your GenCoin wallet. Its status appears in <strong>Account status</strong> on your profile.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>I forgot my password. What do I do?</summary>
+                        <p>Visit the Finance Office with a valid ID and request a password reset. If you're already logged in and just want to change it, use <strong>Change password</strong> in Settings instead.</p>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Signed Waiver Viewer (inline, no new tab/window) -->
     <div class="modal fade" id="gjcWaiverModal" tabindex="-1" aria-hidden="true">
@@ -452,7 +554,10 @@ $currentPage = 'profile';
         const confirmBtn = document.getElementById('fwcClaimConfirm');
 
         function fmt(n) {
-            return '₱' + (+n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            // GenCoin first, the peso amount as its conversion.
+            const gc = (+n / <?= (int) GJC_PESOS_PER_GC ?>).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+            const php = (+n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return gc + ' GC (≈ ₱' + php + ')';
         }
 
         openBtn.addEventListener('click', () => {
@@ -514,46 +619,59 @@ $currentPage = 'profile';
             const res  = await fetch(PHOTO_API, {method: 'POST', body: fd, credentials: 'same-origin'});
             const data = await res.json();
             if (data.success) {
-                const circle = document.getElementById('avatarCircle');
-                let img = document.getElementById('avatarImg');
-                const initial = document.getElementById('avatarInitial');
-                if (initial) initial.remove();
-                if (!img) {
-                    img = document.createElement('img');
-                    img.id = 'avatarImg';
-                    img.alt = 'Profile Photo';
-                    circle.appendChild(img);
-                }
-                img.src = data.photo_url;
-
-                // Also sync topbar avatar
-                const topbar = document.getElementById('topbarAvatar');
-                if (topbar) {
-                    topbar.style.overflow = 'hidden';
-                    let tImg = document.getElementById('topbarAvatarImg');
-                    if (!tImg) {
-                        topbar.textContent = '';
-                        tImg = document.createElement('img');
-                        tImg.id = 'topbarAvatarImg';
-                        tImg.alt = '';
-                        tImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-                        topbar.appendChild(tImg);
-                    }
-                    tImg.src = data.photo_url;
-                }
-
-                msg.innerHTML = '<i class="fa-solid fa-check"></i> Photo updated.';
-                msg.style.color = '#4ade80';
-                setTimeout(() => { msg.innerHTML = ''; }, 3000);
+                // A new photo can complete the profile, which changes the
+                // nudge — simplest honest refresh is a reload.
+                location.href = location.pathname + '?updated=1';
+                return;
             } else {
-                msg.innerHTML = data.error || 'Upload failed.';
+                msg.textContent = data.error || 'Upload failed.';
                 msg.style.color = '#fca5a5';
             }
         } catch(err) {
-            msg.innerHTML = 'Network error. Please try again.';
+            msg.textContent = 'Network error. Please try again.';
             msg.style.color = '#fca5a5';
         }
         this.value = '';
+    });
+    </script>
+
+    <script>
+    // "Copy ID" on the empty guardian card: the ID a parent needs to link.
+    (function () {
+        const btn = document.getElementById('copyStudentId');
+        if (!btn) return;
+        btn.addEventListener('click', async function () {
+            const id = btn.dataset.id;
+            let ok = false;
+            try {
+                await navigator.clipboard.writeText(id);
+                ok = true;
+            } catch (e) {
+                // Clipboard API needs a secure context; fall back for plain http.
+                const tmp = document.createElement('textarea');
+                tmp.value = id;
+                tmp.setAttribute('readonly', '');
+                tmp.style.position = 'fixed';
+                tmp.style.opacity = '0';
+                document.body.appendChild(tmp);
+                tmp.select();
+                ok = document.execCommand('copy');
+                tmp.remove();
+            }
+            btn.innerHTML = ok
+                ? '<i class="fa-solid fa-check me-1"></i>Copied'
+                : 'Copy failed';
+            setTimeout(() => { btn.innerHTML = '<i class="fa-regular fa-copy me-1"></i>Copy ID'; }, 2000);
+        });
+    })();
+    </script>
+
+    <script>
+    // Keyboard access for the <label> buttons that open a hidden file picker.
+    document.querySelectorAll('label[role="button"][for="photoInput"]').forEach(function (lbl) {
+        lbl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('photoInput').click(); }
+        });
     });
     </script>
 

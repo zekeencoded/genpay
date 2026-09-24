@@ -1,9 +1,11 @@
 <?php
 // ============================================================
 //  merchant/profile.php
-//  My Profile for merchant STAFF — the same hub the student portal uses
-//  (student/profile.php): hero with photo, status, personal details, a
-//  Settings menu into profile_edit.php / security.php, FAQs, log out.
+//  My Profile for merchant STAFF — the same profile system as the student
+//  portal (student/profile.php) and the owner's Business Profile
+//  (settings.php), all styled by profile_hub.css: identity hero with key
+//  figures, a completeness nudge, details / merchant admin on the left,
+//  status / settings on the right, FAQs in a Help sheet.
 //  Merchant admins have the Business Profile (settings.php) instead.
 // ============================================================
 require_once __DIR__ . '/../connection/config.php';
@@ -59,6 +61,7 @@ if ($ownerId > 0 && $ownerId !== $userId) {
 $stallName = trim((string) ($stall['stall_name'] ?? '')) ?: 'No stall linked';
 $stallOp = (string) ($stall['operational_status'] ?? 'active');
 $stallOpen = $stall && $stallOp === 'active';
+$posEnabled = $isActive && $stallOpen;
 $ownerName = $stall ? trim(($stall['first_name'] ?? '') . ' ' . ($stall['last_name'] ?? '')) : '';
 
 /** users.contact_number is a BIGINT, so a leading 0 comes back eaten. */
@@ -69,7 +72,27 @@ $phoneLabel = static function ($value): string {
     }
     return (strlen($digits) === 10 && $digits[0] === '9') ? '0' . $digits : $digits;
 };
-$ownerContact = $stall ? ($phoneLabel($stall['contact_number'] ?? '') ?: (string) ($stall['email'] ?? '')) : '';
+$ownerPhone = $stall ? $phoneLabel($stall['contact_number'] ?? '') : '';
+$ownerEmail = $stall ? trim((string) ($stall['email'] ?? '')) : '';
+
+// ── Personal details + completeness ───────────────────────────────────────
+$phoneOnFile = $phoneLabel($rawUser['contact_number'] ?? '');
+$sexOnFile = trim((string) ($rawUser['sex'] ?? ''));
+$addressOnFile = gjc_format_address($rawUser);
+$dobOnFile = $rawUser['date_of_birth'] ?? null;
+$dobAge = gjc_age_from_dob($dobOnFile);
+
+$editUrl = MERCHANT_URL . '/profile_edit.php';
+$profileChecks = [
+    ['done' => $profilePhotoUrl !== '', 'label' => 'Add a photo',        'photo' => true],
+    ['done' => $phoneOnFile !== '',     'label' => 'Add mobile number'],
+    ['done' => $sexOnFile !== '',       'label' => 'Add sex'],
+    ['done' => $dobAge !== null,        'label' => 'Add date of birth'],
+    ['done' => $addressOnFile !== '',   'label' => 'Add address'],
+];
+$checksDone = count(array_filter($profileChecks, static fn($c) => $c['done']));
+$checksTotal = count($profileChecks);
+$checksPct = (int) round($checksDone / $checksTotal * 100);
 
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $currentPage = 'profile';
@@ -90,6 +113,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=1">
 </head>
 
 <body class="sd-body">
@@ -102,12 +126,12 @@ $currentPage = 'profile';
 
             <?php
             $topbarTitle = 'My Profile';
-            $topbarSubtitle = 'Manage your staff account details, status, and password security.';
+            $topbarSubtitle = 'Your staff account, the stall you work at, and your security.';
             $topbarAvatarPhotoUrl = $profilePhotoUrl;
             require __DIR__ . '/../includes/partials/topbar_merchant.php';
             ?>
 
-            <div class="sd-content">
+            <div class="sd-content ph">
 
                 <?php if ($notice): ?>
                 <div class="pf-alert">
@@ -117,244 +141,214 @@ $currentPage = 'profile';
                 <?php endif; ?>
 
                 <!-- Hero -->
-                <section class="pf-hero">
-                    <div class="pf-hero-left">
-                        <div class="pf-avatar-wrap">
-                            <div class="pf-avatar" id="avatarCircle">
-                                <?php if ($profilePhotoUrl): ?>
-                                    <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
-                                <?php else: ?>
-                                    <span id="avatarInitial"><?= $e($staffInitial) ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <label for="photoInput" class="pf-avatar-edit" title="Change photo">
+                <section class="ph-hero" aria-label="Account summary">
+                    <div class="ph-hero-top">
+                        <div class="ph-avatar" id="avatarCircle">
+                            <?php if ($profilePhotoUrl): ?>
+                                <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
+                            <?php else: ?>
+                                <span id="avatarInitial"><?= $e($staffInitial) ?></span>
+                            <?php endif; ?>
+                            <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
                                 <i class="fa-solid fa-camera"></i>
                             </label>
-                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
+                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
                         </div>
 
-                        <div class="pf-identity">
-                            <span>Staff Account</span>
-                            <h2><?= $e($staffName) ?></h2>
-                            <p><?= $e($email) ?> &middot; <?= $e($staffID) ?></p>
-                            <span class="sd-role-badge"><?= $e(strtoupper($position)) ?></span>
-                            <br>
-                            <a href="<?= MERCHANT_URL ?>/profile_edit.php" class="pf-edit-btn">
-                                <i class="fa-solid fa-pen"></i> Edit Profile
+                        <div class="ph-identity">
+                            <span class="ph-eyebrow">Staff account</span>
+                            <h2 class="ph-name"><?= $e($staffName) ?></h2>
+                            <p class="ph-meta"><?= $e($staffID) ?> &middot; <?= $e($email) ?> &middot; Member since <?= $e($memberSince) ?></p>
+                            <div class="ph-photo-msg" id="photoMsg"></div>
+                        </div>
+
+                        <div class="ph-hero-actions">
+                            <a href="<?= $e($editUrl) ?>" class="ph-btn-ghost">
+                                <i class="fa-solid fa-pen"></i> Edit profile
                             </a>
-                            <div class="pf-photo-msg" id="photoMsg"></div>
                         </div>
                     </div>
 
-                    <div class="pf-wallet-box">
-                        <span>Works At</span>
-                        <h3><?= $e($stallName) ?></h3>
-                        <p><?= $stall && $stall['stall_id'] ? 'Stall ' . $e($stall['stall_id']) . ' &middot; ' : '' ?>Member since <?= $e($memberSince) ?></p>
+                    <div class="ph-stats is-odd">
+                        <div class="ph-stat">
+                            <span class="ph-stat-k">Works at</span>
+                            <span class="ph-stat-v is-text"><?= $e($stallName) ?></span>
+                            <span class="ph-stat-n"><?= $stall && $stall['stall_id'] ? 'Stall ' . $e($stall['stall_id']) : 'Ask your merchant admin to link you' ?></span>
+                        </div>
+                        <div class="ph-stat">
+                            <span class="ph-stat-k">Position</span>
+                            <span class="ph-stat-v is-text"><?= $e($position) ?></span>
+                            <span class="ph-stat-n">Set by your merchant admin</span>
+                        </div>
+                        <div class="ph-stat">
+                            <span class="ph-stat-k">POS access</span>
+                            <span class="ph-stat-v"><?= $posEnabled ? 'Enabled' : 'Paused' ?></span>
+                            <span class="ph-stat-n"><?= $posEnabled ? 'You can ring up sales' : (!$isActive ? 'Your account is inactive' : 'The stall is not open') ?></span>
+                        </div>
                     </div>
                 </section>
 
-                <div class="pf-cols">
-                <div class="pf-col">
-
-                <!-- Personal details (editable from Edit Profile) -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
-                        <div>
-                            <h3>Personal Details</h3>
-                            <p>Your details on record.</p>
-                        </div>
+                <?php if ($checksDone < $checksTotal): ?>
+                <section class="ph-card ph-nudge" aria-label="Profile completeness">
+                    <div class="ph-ring" style="--ph-pct: <?= $checksPct ?>%"><span><?= $checksPct ?>%</span></div>
+                    <div class="ph-grow">
+                        <span class="ph-t">Your profile is <?= $checksDone ?> of <?= $checksTotal ?> complete</span>
+                        <span class="ph-s">Your merchant admin and the Finance Office use these to reach you.</span>
                     </div>
-
-                    <div class="pf-status-list">
-                        <?php
-                        $sexOnFile = trim((string) ($rawUser['sex'] ?? ''));
-                        $addressOnFile = gjc_format_address($rawUser);
-                        $dobOnFile = $rawUser['date_of_birth'] ?? null;
-                        $dobAge = gjc_age_from_dob($dobOnFile);
-                        $phoneOnFile = $phoneLabel($rawUser['contact_number'] ?? '');
-                        foreach ([
-                            'Contact Number' => $phoneOnFile !== '' ? $phoneOnFile : 'Not set',
-                            'Sex'            => $sexOnFile !== '' ? $sexOnFile : 'Not set',
-                            'Age'            => $dobAge !== null ? gjc_age_label($dobOnFile) : 'Not set',
-                            'Date of Birth'  => $dobAge !== null ? gjc_dob_label($dobOnFile) : 'Not set',
-                            'Address'        => $addressOnFile !== '' ? $addressOnFile : 'Not set',
-                        ] as $pdLabel => $pdValue): ?>
-                        <div>
-                            <span><?= $e($pdLabel) ?></span>
-                            <strong class="pf-detail-value <?= $pdValue === 'Not set' ? 'is-empty' : '' ?>"><?= $e($pdValue) ?></strong>
-                        </div>
+                    <div class="ph-chips">
+                        <?php foreach ($profileChecks as $check): if ($check['done']) continue; ?>
+                            <?php if (!empty($check['photo'])): ?>
+                                <label for="photoInput" role="button" tabindex="0" class="ph-chip"><i class="fa-solid fa-plus"></i><?= $e($check['label']) ?></label>
+                            <?php else: ?>
+                                <a href="<?= $e($editUrl) ?>" class="ph-chip"><i class="fa-solid fa-plus"></i><?= $e($check['label']) ?></a>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
-
-                    <div class="pf-note">
-                        Keep these up to date from <a href="<?= MERCHANT_URL ?>/profile_edit.php">Edit Profile</a>.
-                        Your age is worked out from your date of birth, so it is never entered by hand.
-                    </div>
                 </section>
+                <?php endif; ?>
+
+                <div class="ph-grid">
+                <div class="ph-col">
+
+                <!-- Personal details (editable from Edit Profile) -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div>
+                            <h3>Personal details</h3>
+                            <p>Your details on record</p>
+                        </div>
+                        <a class="ph-link" href="<?= $e($editUrl) ?>"><i class="fa-solid fa-pen"></i>Edit</a>
+                    </div>
+
+                    <?php
+                    $notSet = static fn(): string => 'Not set <a class="ph-link" href="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '">Add</a>';
+                    ?>
+                    <dl class="ph-dl">
+                        <div>
+                            <dt>Sex</dt>
+                            <dd class="<?= $sexOnFile === '' ? 'is-empty' : '' ?>"><?= $sexOnFile !== '' ? $e($sexOnFile) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Mobile number</dt>
+                            <dd class="<?= $phoneOnFile === '' ? 'is-empty' : '' ?>"><?= $phoneOnFile !== '' ? $e($phoneOnFile) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Date of birth</dt>
+                            <dd class="<?= $dobAge === null ? 'is-empty' : '' ?>"><?= $dobAge !== null ? $e(gjc_dob_label($dobOnFile)) : $notSet() ?></dd>
+                        </div>
+                        <div>
+                            <dt>Age</dt>
+                            <dd class="<?= $dobAge === null ? 'is-empty' : '' ?>"><?= $dobAge !== null ? $e(gjc_age_label($dobOnFile)) : 'Worked out from date of birth' ?></dd>
+                        </div>
+                        <div class="is-wide">
+                            <dt>Address</dt>
+                            <dd class="<?= $addressOnFile === '' ? 'is-empty' : '' ?>"><?= $addressOnFile !== '' ? $e($addressOnFile) : $notSet() ?></dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <!-- Merchant admin (the owner this account works for) -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div>
+                            <h3>Your merchant admin</h3>
+                            <p>Manages your position, access and password resets</p>
+                        </div>
+                    </div>
+                    <?php if ($ownerName !== ''): ?>
+                        <div class="ph-row">
+                            <span class="ph-ini"><?= $e(strtoupper(substr($ownerName, 0, 1))) ?></span>
+                            <span class="ph-grow">
+                                <span class="ph-t"><?= $e($ownerName) ?></span>
+                                <span class="ph-s"><?= $e($stallName) ?></span>
+                            </span>
+                        </div>
+                        <div class="ph-kv">
+                            <span>Mobile number</span>
+                            <div><?= $ownerPhone !== '' ? '<a class="ph-link" href="tel:' . $e($ownerPhone) . '">' . $e($ownerPhone) . '</a>' : '<span class="is-empty">Not set</span>' ?></div>
+                        </div>
+                        <div class="ph-kv">
+                            <span>Email</span>
+                            <div><?= $ownerEmail !== '' ? '<a class="ph-link" href="mailto:' . $e($ownerEmail) . '">' . $e($ownerEmail) . '</a>' : '<span class="is-empty">Not set</span>' ?></div>
+                        </div>
+                    <?php else: ?>
+                        <div class="ph-note">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>This account is not linked to a stall yet.</span>
+                        </div>
+                    <?php endif; ?>
+                </section>
+
+                </div><!-- /.ph-col -->
+                <div class="ph-col">
 
                 <!-- Account status (read-only — managed by the merchant admin) -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
+                <section class="ph-card">
+                    <div class="ph-card-head">
                         <div>
-                            <h3>Account Status</h3>
-                            <p>Current access and stall settings.</p>
+                            <h3>Account status</h3>
+                            <p>Your access and the stall's standing</p>
                         </div>
                     </div>
-
-                    <div class="pf-status-list">
-                        <div>
-                            <span>Account Status</span>
-                            <strong class="pf-pill <?= $isActive ? 'green' : 'red' ?>"><?= $isActive ? 'Active' : 'Inactive' ?></strong>
-                        </div>
-                        <div>
-                            <span>POS Access</span>
-                            <strong class="pf-pill <?= $isActive && $stallOpen ? 'green' : 'gold' ?>">
-                                <?= $isActive && $stallOpen ? 'Enabled' : 'Paused' ?>
-                            </strong>
-                        </div>
-                        <div>
-                            <span>Position</span>
-                            <strong class="pf-detail-value"><?= $e($position) ?></strong>
-                        </div>
-                        <div>
-                            <span>Stall Status</span>
-                            <strong class="pf-pill <?= $stallOpen ? 'green' : ($stall ? 'gold' : 'gray') ?>">
-                                <?= $stall ? $e(ucwords(str_replace('_', ' ', $stallOp))) : 'Not linked' ?>
-                            </strong>
-                        </div>
-                        <div>
-                            <span>Merchant Admin</span>
-                            <strong class="pf-detail-value <?= $ownerName === '' ? 'is-empty' : '' ?>"><?= $e($ownerName !== '' ? $ownerName : 'Not set') ?></strong>
-                        </div>
-                        <div>
-                            <span>Admin Contact</span>
-                            <strong class="pf-detail-value <?= $ownerContact === '' ? 'is-empty' : '' ?>"><?= $e($ownerContact !== '' ? $ownerContact : 'Not set') ?></strong>
-                        </div>
+                    <div class="ph-kv">
+                        <span>Account</span>
+                        <div><span class="ph-pill has-dot <?= $isActive ? 'is-ok' : 'is-bad' ?>"><?= $isActive ? 'Active' : 'Inactive' ?></span></div>
                     </div>
-
-                    <div class="pf-note">
-                        Your position and account status are managed by your merchant admin.
+                    <div class="ph-kv">
+                        <span>POS access</span>
+                        <div><span class="ph-pill has-dot <?= $posEnabled ? 'is-ok' : 'is-warn' ?>"><?= $posEnabled ? 'Enabled' : 'Paused' ?></span></div>
+                    </div>
+                    <div class="ph-kv">
+                        <span>Stall status</span>
+                        <div><span class="ph-pill has-dot <?= $stallOpen ? 'is-ok' : ($stall ? 'is-warn' : '') ?>"><?= $stall ? $e(ucwords(str_replace('_', ' ', $stallOp))) : 'Not linked' ?></span></div>
+                    </div>
+                    <div class="ph-note">
+                        <i class="fa-solid fa-lock"></i>
+                        <span>Your position and account status are managed by your merchant admin.</span>
                     </div>
                 </section>
 
-                </div><!-- /.pf-col -->
-                <div class="pf-col">
-
-                <!-- Settings menu -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
-                        <div>
-                            <h3>Settings</h3>
-                            <p>Manage your account and security.</p>
-                        </div>
+                <!-- Settings -->
+                <section class="ph-card">
+                    <div class="ph-card-head">
+                        <div><h3>Settings</h3></div>
                     </div>
-
-                    <div class="pf-menu">
-                        <a href="<?= MERCHANT_URL ?>/profile_edit.php" class="pf-menu-item">
-                            <span class="pf-menu-item-icon"><i class="fa-solid fa-user-pen"></i></span>
-                            <span class="pf-menu-item-text">
-                                <strong>Edit Profile</strong>
-                                <span>Update your name and contact number</span>
+                    <nav class="ph-menu" aria-label="Profile settings">
+                        <a href="<?= $e($editUrl) ?>" class="ph-menu-item">
+                            <span class="ph-ic"><i class="fa-solid fa-user-pen"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Edit profile</span>
+                                <span class="ph-s">Name, mobile number, address and personal details</span>
                             </span>
-                            <i class="fa-solid fa-chevron-right pf-menu-item-chevron"></i>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
                         </a>
-
-                        <a href="<?= MERCHANT_URL ?>/security.php" class="pf-menu-item">
-                            <span class="pf-menu-item-icon"><i class="fa-solid fa-shield-halved"></i></span>
-                            <span class="pf-menu-item-text">
-                                <strong>Change Password</strong>
-                                <span>Update your login password</span>
+                        <a href="<?= MERCHANT_URL ?>/security.php" class="ph-menu-item">
+                            <span class="ph-ic"><i class="fa-solid fa-shield-halved"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Change password</span>
+                                <span class="ph-s">Update your login password</span>
                             </span>
-                            <i class="fa-solid fa-chevron-right pf-menu-item-chevron"></i>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
                         </a>
-                    </div>
+                        <button type="button" class="ph-menu-item" data-bs-toggle="modal" data-bs-target="#phHelpModal">
+                            <span class="ph-ic"><i class="fa-solid fa-circle-question"></i></span>
+                            <span class="ph-grow">
+                                <span class="ph-t">Help &amp; FAQs</span>
+                                <span class="ph-s">Staff access, GenCoin, the POS and passwords</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right ph-chev"></i>
+                        </button>
+                        <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
+                            <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                            <span class="ph-grow"><span class="ph-t">Log out</span></span>
+                        </button>
+                    </nav>
                 </section>
 
-                <!-- FAQs -->
-                <section class="sd-panel">
-                    <div class="sd-panel-head">
-                        <div>
-                            <h3>FAQs</h3>
-                            <p>Quick answers to common questions.</p>
-                        </div>
-                    </div>
+                <div class="ph-foot">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
 
-                    <div class="pf-faq accordion" id="pfFaqAccordion">
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq1">
-                                    What can I do with a staff account?
-                                </button>
-                            </h2>
-                            <div id="pfFaq1" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    You can ring up sales on the <strong>POS</strong> and update stock on <strong>Inventory</strong> for your stall. Encashment, rent, staff and the business profile are handled by your merchant admin.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq2">
-                                    What is GenCoin (GC)?
-                                </button>
-                            </h2>
-                            <div id="pfFaq2" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. Students pay with it at your stall, and every sale goes straight to your stall's wallet &mdash; never to your staff account.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq3">
-                                    Why does my POS say it's paused?
-                                </button>
-                            </h2>
-                            <div id="pfFaq3" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Either your account was set to inactive by your merchant admin, or the stall itself is suspended by the finance office. Check <strong>Account Status</strong> above and ask your merchant admin.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq4">
-                                    How do I change my position or email?
-                                </button>
-                            </h2>
-                            <div id="pfFaq4" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Only your merchant admin can change those, from their Staff Management page. You can update your own name, contact number and personal details from <strong>Edit Profile</strong>.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pf-faq-item accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#pfFaq5">
-                                    I forgot my password. What do I do?
-                                </button>
-                            </h2>
-                            <div id="pfFaq5" class="accordion-collapse collapse" data-bs-parent="#pfFaqAccordion">
-                                <div class="accordion-body">
-                                    Ask your merchant admin to reset it. You will be asked to choose a new one the next time you sign in. If you're already logged in and just want to change it, use <strong>Change Password</strong> in Settings above.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                </div><!-- /.pf-col -->
-                </div><!-- /.pf-cols -->
-
-                <button type="button" class="pf-btn pf-btn--block is-danger" onclick="openLogoutModal(event);">
-                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Log Out
-                </button>
-
-                <div class="pf-version">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
+                </div><!-- /.ph-col -->
+                </div><!-- /.ph-grid -->
 
             </div>
 
@@ -363,6 +357,40 @@ $currentPage = 'profile';
     </div>
 
     <?php require __DIR__ . '/../includes/partials/bottom_nav_merchant.php'; ?>
+
+    <!-- Help & FAQs (a bottom sheet on phones) -->
+    <div class="modal fade ph-sheet" id="phHelpModal" tabindex="-1" aria-labelledby="phHelpTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="phHelpTitle">Help &amp; FAQs</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <details class="ph-faq" open>
+                        <summary>What can I do with a staff account?</summary>
+                        <p>You can ring up sales on the <strong>POS</strong> and update stock on <strong>Inventory</strong> for your stall. Encashment, rent, staff and the business profile are handled by your merchant admin.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>What is GenCoin (GC)?</summary>
+                        <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. Students pay with it at your stall, and every sale goes straight to your stall's wallet &mdash; never to your staff account.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>Why does my POS say it's paused?</summary>
+                        <p>Either your account was set to inactive by your merchant admin, or the stall itself is suspended by the finance office. Check <strong>Account status</strong> on your profile and ask your merchant admin.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>How do I change my position or email?</summary>
+                        <p>Only your merchant admin can change those, from their Staff Management page. You can update your own name, mobile number and personal details from <strong>Edit profile</strong>.</p>
+                    </details>
+                    <details class="ph-faq">
+                        <summary>I forgot my password. What do I do?</summary>
+                        <p>Ask your merchant admin to reset it. You will be asked to choose a new one the next time you sign in. If you're already logged in and just want to change it, use <strong>Change password</strong> in Settings.</p>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 
@@ -386,45 +414,28 @@ $currentPage = 'profile';
             const res  = await fetch(PHOTO_API, {method: 'POST', body: fd, credentials: 'same-origin'});
             const data = await res.json();
             if (data.success) {
-                const circle = document.getElementById('avatarCircle');
-                let img = document.getElementById('avatarImg');
-                const initial = document.getElementById('avatarInitial');
-                if (initial) initial.remove();
-                if (!img) {
-                    img = document.createElement('img');
-                    img.id = 'avatarImg';
-                    img.alt = 'Profile Photo';
-                    circle.appendChild(img);
-                }
-                img.src = data.photo_url;
-
-                const topbar = document.getElementById('topbarAvatar');
-                if (topbar) {
-                    topbar.style.overflow = 'hidden';
-                    let tImg = document.getElementById('topbarAvatarImg');
-                    if (!tImg) {
-                        topbar.textContent = '';
-                        tImg = document.createElement('img');
-                        tImg.id = 'topbarAvatarImg';
-                        tImg.alt = '';
-                        tImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-                        topbar.appendChild(tImg);
-                    }
-                    tImg.src = data.photo_url;
-                }
-
-                msg.innerHTML = '<i class="fa-solid fa-check"></i> Photo updated.';
-                msg.style.color = '#4ade80';
-                setTimeout(() => { msg.innerHTML = ''; }, 3000);
+                // A new photo can complete the profile, which changes the
+                // nudge — simplest honest refresh is a reload.
+                location.href = location.pathname + '?updated=1';
+                return;
             } else {
                 msg.textContent = data.error || 'Upload failed.';
                 msg.style.color = '#fca5a5';
             }
         } catch(err) {
-            msg.innerHTML = 'Network error. Please try again.';
+            msg.textContent = 'Network error. Please try again.';
             msg.style.color = '#fca5a5';
         }
         this.value = '';
+    });
+    </script>
+
+    <script>
+    // Keyboard access for the <label> buttons that open a hidden file picker.
+    document.querySelectorAll('label[role="button"][for="photoInput"]').forEach(function (lbl) {
+        lbl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('photoInput').click(); }
+        });
     });
     </script>
 

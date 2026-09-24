@@ -1,0 +1,571 @@
+/* ============================================================
+   profile_hub.css — the shared profile layout (2026-09-25).
+   Used by student/profile.php, merchant/profile.php (staff) and
+   merchant/settings.php (owner's Business Profile), so all three read as
+   one system: a dark identity hero with its key figures inside, a
+   completeness nudge, then a two-column body that stacks on phones.
+   Layout-agnostic (works inside .sd-content and .merchant-main); colours
+   come from the --gp-* tokens in theme.css. No gold lines anywhere —
+   gold is only ever a fill or text here.
+   ============================================================ */
+
+.ph {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.ph-hero {
+    background: var(--gp-green-950);
+    color: #fff;
+    border-radius: 6px;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.ph-hero-top {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.ph-avatar {
+    position: relative;
+    flex: none;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--gp-green-700);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+}
+.ph-avatar > img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    display: block;
+}
+/* Stalls get a square logo, people a round photo. */
+.ph-avatar.is-logo {
+    border-radius: 6px;
+    background: var(--gp-green-700) center / cover no-repeat;
+    font-size: 30px;
+    font-weight: 800;
+}
+
+.ph-avatar-edit {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--gp-green-950);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    box-shadow: 0 1px 3px rgba(13, 36, 24, .35);
+    cursor: pointer;
+    margin: 0;
+}
+.ph-avatar-edit:hover { background: var(--gp-cream); }
+
+.ph-identity { flex: 1; min-width: 0; }
+
+.ph-eyebrow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.ph-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--gjc-gold-100);
+}
+
+.ph-name {
+    margin: 4px 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+
+.ph-meta {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, .74);
+    overflow-wrap: anywhere;
+}
+
+.ph-photo-msg { font-size: 12px; margin-top: 6px; min-height: 0; }
+.ph-photo-msg:empty { display: none; }
+
+.ph-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+
+.ph-btn-ghost,
+.ph-btn-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.ph-btn-ghost {
+    background: rgba(255, 255, 255, .08);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .22);
+}
+.ph-btn-ghost:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+.ph-btn-gold {
+    background: var(--gp-gold);
+    color: var(--gp-ink);
+    border: 0;
+    font-weight: 700;
+}
+.ph-btn-gold:hover { background: var(--gp-gold-light); color: var(--gp-ink); }
+
+/* Key figures, inside the hero. */
+.ph-stats {
+    display: grid;
+    grid-template-columns: repeat(var(--ph-stat-cols, 3), minmax(0, 1fr));
+    background: rgba(255, 255, 255, .06);
+    border-radius: 4px;
+}
+.ph-stat { padding: 18px 22px; min-width: 0; }
+.ph-stat + .ph-stat { border-left: 1px solid rgba(255, 255, 255, .1); }
+
+.ph-stat-k {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .72);
+}
+.ph-stat-v {
+    display: block;
+    margin-top: 6px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* GenCoin first, pesos as the conversion (gjc_gc_inline()). */
+.ph .gc-inline-peso { font-size: 12px; font-weight: 500; color: var(--gp-muted); white-space: nowrap; }
+
+/* Words (a stall name, a position) wrap; amounts stay on one line. */
+.ph-stat-v.is-text { white-space: normal; overflow-wrap: anywhere; }
+.ph-stat-v small { font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, .74); }
+.ph-stat-n { display: block; margin-top: 4px; font-size: 12px; color: rgba(255, 255, 255, .74); }
+.ph-stat-n a { color: var(--gjc-gold-100); font-weight: 600; }
+.ph-stat-n a:hover { color: #fff; }
+
+.ph-bar {
+    display: block;
+    height: 6px;
+    margin-top: 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .14);
+    overflow: hidden;
+}
+.ph-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--gp-gold-light); }
+.ph-bar.is-full > span { background: #f48b82; }
+
+/* Status pills that sit on the dark hero. */
+.ph-pill-dark {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(159, 224, 181, .16);
+    color: #a8e6bd;
+}
+.ph-pill-dark.is-off { background: rgba(253, 226, 226, .14); color: #f7b4ad; }
+.ph-pill-dark::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.ph-card {
+    background: var(--gp-card);
+    border: 1px solid var(--gp-line);
+    border-radius: 6px;
+    box-shadow: var(--gp-shadow-card);
+    overflow: hidden;
+    min-width: 0;
+}
+
+.ph-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 20px 14px;
+}
+.ph-card-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--gp-ink); }
+.ph-card-head p { margin: 2px 0 0; font-size: 12px; color: var(--gp-muted); }
+
+.ph-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gp-green-700);
+    text-decoration: none;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    padding: 0;
+}
+.ph-link:hover { color: var(--gp-green-950); text-decoration: underline; text-underline-offset: 2px; }
+.ph-link > i { font-size: 11px; }
+
+.ph-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--gp-line-soft);
+    min-height: 60px;
+}
+
+.ph-ic,
+.ph-ini {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+.ph-ic { background: var(--gp-cream); color: var(--gp-green-700); }
+.ph-ic.is-bad { background: var(--gp-danger-bg); color: var(--gp-danger); }
+.ph-ini { background: var(--gp-green-850); color: #fff; font-weight: 700; }
+
+.ph-grow { flex: 1; min-width: 0; }
+.ph-t {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ph-s { display: block; margin-top: 2px; font-size: 12px; color: var(--gp-muted); }
+
+.ph-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--gp-line-soft);
+    font-size: 13px;
+}
+.ph-kv > span { color: var(--gp-muted); flex: none; }
+.ph-kv > div {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    text-align: right;
+    font-weight: 600;
+    color: var(--gp-ink);
+    overflow-wrap: anywhere;
+}
+.ph-kv .is-empty { color: var(--gp-subtle); font-weight: 500; }
+
+.ph-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: var(--gp-line-soft);
+    color: var(--gp-muted);
+}
+.ph-pill.has-dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ph-pill.is-ok { background: var(--gp-success-bg); color: var(--gp-success); }
+.ph-pill.is-warn { background: var(--gp-warning-bg); color: var(--gp-warning); }
+.ph-pill.is-bad { background: var(--gp-danger-bg); color: var(--gp-danger); }
+button.ph-pill { cursor: pointer; }
+
+.ph-mini-btn {
+    height: 30px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--gp-green-700);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.ph-mini-btn:hover { background: var(--gp-green-850); }
+
+.ph-note {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 12px 20px;
+    background: var(--gp-row-hover);
+    border-top: 1px solid var(--gp-line-soft);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--gp-muted);
+}
+.ph-note > i { margin-top: 3px; }
+
+/* Label-over-value grid for personal details. */
+.ph-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.ph-dl > div { padding: 12px 20px; border-top: 1px solid var(--gp-line-soft); min-width: 0; }
+.ph-dl > .is-wide { grid-column: 1 / -1; }
+.ph-dl dt {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--gp-muted);
+}
+.ph-dl dd {
+    margin: 4px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    overflow-wrap: anywhere;
+}
+.ph-dl dd.is-empty { color: var(--gp-subtle); font-weight: 500; display: flex; gap: 10px; align-items: center; }
+
+/* Settings list. Rows are links or buttons; same look either way. */
+.ph-menu { display: flex; flex-direction: column; }
+.ph-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 60px;
+    padding: 12px 20px;
+    border: 0;
+    border-top: 1px solid var(--gp-line-soft);
+    background: none;
+    color: var(--gp-ink);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.ph-menu-item:hover { background: var(--gp-row-hover); color: var(--gp-ink); }
+.ph-menu-item .ph-chev { color: var(--gp-subtle); font-size: 12px; }
+.ph-menu-item.is-danger .ph-t { color: var(--gp-danger); }
+
+/* ── Completeness nudge ────────────────────────────────────── */
+.ph-nudge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 18px;
+    padding: 16px 20px;
+}
+.ph-ring {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: conic-gradient(var(--gp-green-700) 0 var(--ph-pct, 0%), var(--gp-line) 0);
+}
+.ph-ring > span {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--gp-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gp-ink);
+}
+/* The sentence keeps a readable width; when the chips do not fit beside it
+   they drop to their own line instead of squeezing it. */
+.ph-nudge > .ph-grow { flex: 1 1 280px; }
+.ph-nudge .ph-t { white-space: normal; }
+.ph-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 auto; }
+.ph-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--gp-cream);
+    color: var(--gp-ink);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    margin: 0;
+}
+.ph-chip:hover { background: var(--gp-line); color: var(--gp-ink); }
+.ph-chip > i { color: var(--gp-green-700); font-size: 11px; }
+
+/* ── Body grid ─────────────────────────────────────────────── */
+.ph-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+.ph-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.ph-foot { text-align: center; font-size: 12px; color: var(--gp-subtle); }
+
+/* ── Help & FAQs (a centred dialog; a bottom sheet on phones) ─ */
+.ph-sheet .modal-content { border: 0; border-radius: 12px; overflow: hidden; }
+.ph-sheet .modal-header { border: 0; padding: 18px 20px 12px; }
+.ph-sheet .modal-title { font-size: 17px; font-weight: 700; }
+.ph-sheet .modal-body { padding: 0; }
+.ph-faq { border-top: 1px solid var(--gp-line-soft); }
+.ph-faq > summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 14px 20px;
+    list-style: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    cursor: pointer;
+}
+.ph-faq > summary::-webkit-details-marker { display: none; }
+.ph-faq > summary::after {
+    content: "\f078";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 11px;
+    margin-left: auto;
+    color: var(--gp-subtle);
+    transition: transform .15s ease;
+}
+.ph-faq[open] > summary::after { transform: rotate(180deg); }
+.ph-faq > p { margin: 0; padding: 0 20px 16px; font-size: 13px; line-height: 1.6; color: var(--gjc-slate); }
+
+/* ── Focus ─────────────────────────────────────────────────── */
+/* The house focus style (dark neutral), set explicitly so no browser's
+   default ring colour — gold in some — ever shows up as a highlight line. */
+.ph a:focus-visible,
+.ph button:focus-visible,
+.ph label:focus-visible,
+.ph-sheet summary:focus-visible,
+.ph-sheet .btn-close:focus-visible {
+    outline: 2px solid var(--gp-focus-border);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+.ph-menu-item:focus-visible,
+.ph-sheet summary:focus-visible { outline-offset: -2px; }
+.ph-hero a:focus-visible,
+.ph-hero button:focus-visible,
+.ph-hero label:focus-visible { outline-color: #fff; }
+
+/* ── Breakpoints ───────────────────────────────────────────── */
+/* Four figures (the Business Profile) only fit in one row on a wide screen;
+   below that they go 2 × 2 so a large balance never gets cut off. */
+@media (max-width: 1279.98px) {
+    .ph-stats.is-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ph-stats.is-four .ph-stat + .ph-stat { border-left: 0; }
+    .ph-stats.is-four .ph-stat:nth-child(even) { border-left: 1px solid rgba(255, 255, 255, .1); }
+    .ph-stats.is-four .ph-stat:nth-child(-n+2) { border-bottom: 1px solid rgba(255, 255, 255, .1); }
+}
+
+@media (min-width: 992px) {
+    .ph-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+
+@media (max-width: 767.98px) {
+    .ph { gap: 16px; }
+    .ph-hero { padding: 20px; gap: 18px; }
+    .ph-hero-top { flex-wrap: wrap; gap: 16px; }
+    .ph-avatar { width: 60px; height: 60px; font-size: 24px; }
+    .ph-name { font-size: 21px; }
+    .ph-hero-actions { width: 100%; order: 3; }
+    .ph-btn-ghost,
+    .ph-btn-gold { flex: 1; height: 44px; }
+
+    /* Two figures per row; an odd first figure (the balance) spans the row. */
+    .ph-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ph-stat { padding: 14px 16px; }
+    .ph-stat + .ph-stat { border-left: 0; }
+    .ph-stats.is-odd .ph-stat:first-child { grid-column: 1 / -1; }
+    .ph-stats.is-odd .ph-stat:nth-child(odd):not(:first-child),
+    .ph-stats:not(.is-odd) .ph-stat:nth-child(even) { border-left: 1px solid rgba(255, 255, 255, .1); }
+    .ph-stats.is-odd .ph-stat:first-child,
+    .ph-stats:not(.is-odd) .ph-stat:nth-child(-n+2) { border-bottom: 1px solid rgba(255, 255, 255, .1); }
+    .ph-stat-v { font-size: 19px; }
+    .ph-stats.is-odd .ph-stat:first-child .ph-stat-v { font-size: 28px; }
+
+    .ph-nudge { flex-wrap: wrap; padding: 16px; }
+    .ph-chips { width: 100%; justify-content: flex-start; }
+
+    .ph-card-head { padding: 16px 16px 12px; }
+    .ph-row, .ph-kv, .ph-note, .ph-menu-item, .ph-dl > div { padding-left: 16px; padding-right: 16px; }
+    .ph-kv { flex-wrap: wrap; }
+    .ph-dl { grid-template-columns: minmax(0, 1fr); }
+
+    .ph-sheet .modal-dialog {
+        margin: 0;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-width: none;
+        /* Undo .modal-dialog-centered / -scrollable sizing, which would
+           otherwise float the sheet mid-screen. */
+        height: auto;
+        min-height: 0;
+        max-height: 85vh;
+        transform: translateY(100%);
+    }
+    .ph-sheet.show .modal-dialog { transform: none; }
+    .ph-sheet .modal-content { border-radius: 12px 12px 0 0; max-height: 85vh; }
+    .ph-sheet .modal-body { overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+}

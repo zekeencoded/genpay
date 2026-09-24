@@ -153,6 +153,13 @@ function gjc_gc_amount($pesos): string
     return rtrim(rtrim(number_format($gc, 2), '0'), '.');
 }
 
+// One-line GC value with its peso equivalent trailing it, for table-like rows
+// ("50 GC ≈ ₱500.00"). Style .gc-inline-peso where it is used.
+function gjc_gc_inline($pesos): string
+{
+    return gjc_gc_amount($pesos) . ' GC <span class="gc-inline-peso">&asymp; ' . gjc_money($pesos) . '</span>';
+}
+
 // Two-line price tag: GC as the primary value, peso equivalent beneath.
 function gjc_gc_price($pesos): string
 {
@@ -5853,4 +5860,67 @@ function gjc_enforce_student_lock(PDO $db): void
 
     header('Location: ' . STUDENT_URL . '/dashboard.php');
     exit();
+}
+
+// ─── Merchant compliance documents ───────────────────────────────────────────
+// Permits a stall owner uploads from the Business Profile. The awarded stall
+// application may already hold a copy (captured at apply time), but owners
+// onboarded directly have no application row at all, and permits expire and
+// get renewed — so uploads live in their own table, one current file per
+// document, and the newest copy of each document wins.
+
+/** The documents a stall is expected to keep on file: key => [label, hint]. */
+function gjc_merchant_compliance_docs(): array
+{
+    return [
+        'business_permit'  => ['Business permit', 'Mayor or business permit for the stall'],
+        'sanitary_permit'  => ['Sanitary permit', 'Health and sanitation clearance'],
+        'clearance'        => ['Barangay clearance', 'Clearance from your barangay'],
+        'gjc_requirements' => ['GJC requirements', 'School-specific documents'],
+    ];
+}
+
+function gjc_ensure_merchant_documents_schema(PDO $db): void
+{
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS merchant_documents (
+            id               INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            merchant_user_id INT UNSIGNED NOT NULL,
+            doc_key          VARCHAR(40)  NOT NULL,
+            file_path        VARCHAR(500) NOT NULL,
+            original_name    VARCHAR(255) NULL,
+            uploaded_by      INT UNSIGNED NOT NULL,
+            uploaded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_merchant_doc (merchant_user_id, doc_key)
+        ) ENGINE=InnoDB"
+    );
+}
+
+/**
+ * The current file for each compliance document of one stall owner:
+ * key => ['path' => relative path, 'source' => 'upload'|'application',
+ *         'uploaded_at' => ?string]. Documents with no file are absent.
+ * Pass the awarded application row when the caller already has it.
+ */
+function gjc_merchant_document_files(PDO $db, int $ownerId, ?array $application = null): array
+{
+    $files = [];
+    foreach (array_keys(gjc_merchant_compliance_docs()) as $key) {
+        $path = trim((string) ($application[$key] ?? ''));
+        if ($path !== '' && $path !== 'pending_path') {
+            $files[$key] = ['path' => $path, 'source' => 'application', 'uploaded_at' => $application['awarded_at'] ?? null];
+        }
+    }
+
+    if ($ownerId > 0 && gjc_table_exists($db, 'merchant_documents')) {
+        $stmt = $db->prepare("SELECT doc_key, file_path, uploaded_at FROM merchant_documents WHERE merchant_user_id = ?");
+        $stmt->execute([$ownerId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if (isset(gjc_merchant_compliance_docs()[$row['doc_key']])) {
+                $files[$row['doc_key']] = ['path' => $row['file_path'], 'source' => 'upload', 'uploaded_at' => $row['uploaded_at']];
+            }
+        }
+    }
+
+    return $files;
 }

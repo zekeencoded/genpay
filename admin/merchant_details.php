@@ -632,6 +632,37 @@ if ($summary) {
                         </div>
                     <?php endif; ?>
                 <?php endif; ?>
+
+                <?php
+                // Permits the owner uploaded themselves from their Business
+                // Profile (merchant/api/business_profile.php) — newer than, or
+                // instead of, anything captured with the application above.
+                $ownerUploads = [];
+                if (!empty($merchantUserId) && gjc_table_exists($db, 'merchant_documents')) {
+                    $upStmt = $db->prepare(
+                        "SELECT doc_key, file_path, uploaded_at FROM merchant_documents
+                          WHERE merchant_user_id = ? ORDER BY uploaded_at DESC"
+                    );
+                    $upStmt->execute([(int) $merchantUserId]);
+                    $ownerUploads = $upStmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                $docLabels = gjc_merchant_compliance_docs();
+                ?>
+                <h6 class="gp-subhead">Uploaded by the merchant</h6>
+                <?php if (!$ownerUploads): ?>
+                    <p class="gp-pane-hint mb-0">Nothing uploaded from the merchant's Business Profile yet.</p>
+                <?php else: ?>
+                    <div class="gp-doc-links">
+                        <?php foreach ($ownerUploads as $up): ?>
+                            <a class="gp-doc-link" href="<?= $docUrl((string) $up['file_path']) ?>" target="_blank" rel="noopener"
+                               title="Uploaded <?= md_e(date('M j, Y g:i A', strtotime((string) $up['uploaded_at']))) ?>">
+                                <i class="fa-regular fa-file-lines"></i>
+                                <span><?= md_e($docLabels[$up['doc_key']][0] ?? $up['doc_key']) ?> &middot; <?= md_e(date('M j, Y', strtotime((string) $up['uploaded_at']))) ?></span>
+                                <i class="fa-solid fa-up-right-from-square gp-doc-link-out"></i>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </section>
             <?php endif; ?>
 
