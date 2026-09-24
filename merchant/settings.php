@@ -73,7 +73,7 @@ $team = [];
 if (in_array('merchant_owner_id', gjc_table_columns($db, 'users'), true)) {
     gjc_ensure_staff_position_schema($db);
     $q = $db->prepare(
-        "SELECT first_name, last_name, position
+        "SELECT first_name, last_name, position, profile_img
            FROM users
           WHERE merchant_owner_id = ? AND staff_removed_at IS NULL
           ORDER BY first_name, last_name"
@@ -208,7 +208,7 @@ $ordinal = static function (int $n): string {
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=12">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=2">
 </head>
 <body class="gp-theme">
 <div class="merchant-layout">
@@ -475,7 +475,14 @@ $ordinal = static function (int $n): string {
                 <?php foreach ($team as $member):
                     $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Staff member'; ?>
                     <div class="ph-row">
-                        <span class="ph-ini"><?= htmlspecialchars(mb_strtoupper(mb_substr($memberName, 0, 1))) ?></span>
+                        <?php $memberPhoto = trim((string) ($member['profile_img'] ?? '')); ?>
+                        <span class="ph-ini">
+                            <?php if ($memberPhoto !== ''): ?>
+                                <img src="<?= htmlspecialchars(BASE_URL . '/' . ltrim($memberPhoto, '/')) ?>" alt="" loading="lazy">
+                            <?php else: ?>
+                                <?= htmlspecialchars(mb_strtoupper(mb_substr($memberName, 0, 1))) ?>
+                            <?php endif; ?>
+                        </span>
                         <span class="ph-grow">
                             <span class="ph-t"><?= htmlspecialchars($memberName) ?></span>
                             <span class="ph-s"><?= htmlspecialchars(trim((string) ($member['position'] ?? '')) ?: 'Merchant Staff') ?></span>

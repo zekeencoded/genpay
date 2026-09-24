@@ -113,7 +113,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=2">
 </head>
 
 <body class="sd-body">

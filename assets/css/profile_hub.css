@@ -266,7 +266,9 @@
 }
 .ph-ic { background: var(--gp-cream); color: var(--gp-green-700); }
 .ph-ic.is-bad { background: var(--gp-danger-bg); color: var(--gp-danger); }
-.ph-ini { background: var(--gp-green-850); color: #fff; font-weight: 700; }
+.ph-ini { background: var(--gp-green-850); color: #fff; font-weight: 700; overflow: hidden; }
+/* A person's photo, when they have one, fills the initial's circle. */
+.ph-ini > img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .ph-grow { flex: 1; min-width: 0; }
 .ph-t {
