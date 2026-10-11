@@ -4,6 +4,7 @@ require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/audit_logger.php';
 require_once __DIR__ . '/../connection/mailer.php';
+require_once __DIR__ . '/../connection/student_import_schema.php';
 
 gjc_require_role(['finance']);
 gjc_ensure_audit_table($db);
@@ -28,17 +29,19 @@ function maintenance_csv_template_marker(string $kind, array $columns): string
     return '#genpay-template:' . $kind . ':' . $sig;
 }
 
-/** Streams a starter CSV (signed marker + header + one example row) and exits.
+/** Streams a CSV template (signed marker + header + optional example row) and exits.
  *  Must run before any other output — called immediately below, before any
  *  HTML rendering. */
-function maintenance_stream_csv_template(string $filename, string $kind, array $header, array $exampleRow): never
+function maintenance_stream_csv_template(string $filename, string $kind, array $header, array $exampleRow = []): never
 {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     $out = fopen('php://output', 'w');
     fwrite($out, maintenance_csv_template_marker($kind, $header) . "\n");
     fputcsv($out, $header);
-    fputcsv($out, $exampleRow);
+    if ($exampleRow !== []) {
+        fputcsv($out, $exampleRow);
+    }
     fclose($out);
     exit;
 }
@@ -52,8 +55,7 @@ if (($_GET['download_template'] ?? '') === 'students') {
     maintenance_stream_csv_template(
         'bulk_student_import_template.csv',
         'students',
-        array_merge($cols['required'], $cols['optional']),
-        ['GJC2026-0001', 'Juan', 'Dela Cruz', 'BS Information Technology', 'juan.delacruz@example.com', '09171234567', '', 'Maria Dela Cruz', 'maria.delacruz@example.com', '09179876543']
+        array_merge($cols['required'], $cols['optional'])
     );
 }
 if (($_GET['download_template'] ?? '') === 'fee_waiver') {
@@ -118,14 +120,15 @@ function maintenance_ensure_student_registry(PDO $db): void
             }
         }
     }
+    gjc_ensure_student_import_fields($db);
 }
 
-/** Required student columns and the optional ones (suffix + guardian details). */
+/** Optional values still have fixed columns in the downloaded template. */
 function maintenance_student_csv_columns(): array
 {
     return [
         'required' => ['student_id_number', 'first_name', 'last_name', 'course_program', 'email', 'phone_number'],
-        'optional' => ['suffix', 'parent_name', 'parent_email', 'parent_contact'],
+        'optional' => ['middle_name', 'suffix', 'year_level', 'sex', 'date_of_birth', 'address_barangay', 'address_city', 'address_province', 'parent_name', 'parent_email', 'parent_contact'],
     ];
 }
 
@@ -215,6 +218,10 @@ function maintenance_parse_student_csv(string $path): array
         if (count(array_filter($data, static fn($value) => trim((string) $value) !== '')) === 0) {
             continue;
         }
+        if (count($data) !== count($known)) {
+            fclose($handle);
+            throw new RuntimeException('Row ' . $rowNumber . ' must contain exactly ' . count($known) . ' cells. Keep blank optional cells in place.');
+        }
 
         // Pull each known column by its header position; absent optional columns
         // default to '' so downstream code can rely on every key existing.
@@ -274,6 +281,12 @@ function maintenance_validate_student_rows(PDO $db, array $rows): array
 
     foreach ($rows as $row) {
         $counts['total']++;
+        $fieldError = null;
+        try {
+            $row = gjc_normalize_student_import_row($row);
+        } catch (InvalidArgumentException $e) {
+            $fieldError = $e->getMessage();
+        }
         $studentId = (string) $row['student_id_number'];
         $email     = strtolower((string) $row['email']);
         $status    = 'ready';
@@ -292,7 +305,10 @@ function maintenance_validate_student_rows(PDO $db, array $rows): array
                 $missing[] = $label;
             }
         }
-        if ($missing) {
+        if ($fieldError !== null) {
+            $status = 'error';
+            $message = $fieldError;
+        } elseif ($missing) {
             $status  = 'error';
             $message = 'Missing required field(s): ' . implode(', ', $missing) . '.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -587,7 +603,7 @@ function maintenance_provision_parent(PDO $db, array $parent, array &$cache): ar
             'force_password_change' => 1,
             'is_first_login'        => 1,
             'password_changed'      => 0,
-            'temp_password'         => $tempPassword,
+            'temp_password'         => null,
         ];
 
         $insert = [];
@@ -650,12 +666,12 @@ function maintenance_course_id(PDO $db, string $courseProgram): int
 
 function maintenance_insert_student_user(PDO $db, array $row): int
 {
-    $columns = gjc_table_columns($db, 'users');
+    $columns = gjc_table_columns($db, 'users', true);
     $studentId = (string) $row['student_id_number'];
     $payload = [
         'last_name' => $row['last_name'],
         'first_name' => $row['first_name'],
-        'middle_name' => '',
+        'middle_name' => ($row['middle_name'] ?? '') !== '' ? $row['middle_name'] : null,
         'suffix' => (string) ($row['suffix'] ?? ''),
         'contact_number' => maintenance_phone_digits((string) $row['phone_number']),
         'phone' => $row['phone_number'],
@@ -668,8 +684,13 @@ function maintenance_insert_student_user(PDO $db, array $row): int
         'force_password_change' => 1,
         'is_first_login' => 1,
         'password_changed' => 0,
-        'temp_password' => $studentId,
+        'temp_password' => null,
     ];
+    $details = gjc_collect_profile_details($row, $columns);
+    if ($details['error'] !== null) {
+        throw new RuntimeException($details['error']);
+    }
+    $payload = array_merge($payload, array_intersect_key($details['values'], array_flip($columns)));
 
     $insert = [];
     $values = [];
@@ -684,7 +705,9 @@ function maintenance_insert_student_user(PDO $db, array $row): int
     $stmt = $db->prepare($sql);
     $stmt->execute($values);
 
-    return (int) $db->lastInsertId();
+    $userId = (int) $db->lastInsertId();
+    gjc_sync_user_address($db, $userId, $details['values']);
+    return $userId;
 }
 
 function maintenance_table_columns_fresh(PDO $db, string $table): array
@@ -725,7 +748,7 @@ function maintenance_insert_merchant_user(PDO $db, array $data): int
         'force_password_change' => 1,
         'is_first_login' => 1,
         'password_changed' => 0,
-        'temp_password' => $data['temp_password'],
+        'temp_password' => null,
     ];
 
     $insert = [];
@@ -845,33 +868,15 @@ function maintenance_insert_approved_application(PDO $db, array $data, int $user
     $stallId = $data['stall_id'] !== '' ? $data['stall_id'] : null;
 
     // Address + document columns are left to their '' defaults (not collected here).
-    $stmt = $db->prepare(
-        "INSERT INTO stall_applications
-            (business_name, proprietor_name, first_name, middle_name, last_name, suffix, sex,
-             contact_number, email, preferred_stall_id, stall_id,
-             profile_picture, business_permit, sanitary_permit, gjc_requirements, clearance,
-             terms_accepted, status, current_step, reviewed_by, reviewed_at,
-             merchant_user_id, temp_password_plain)
-         VALUES (?, ?, ?, ?, ?, ?, ?,  ?, ?, ?, ?,  '', '', '', '', '',  1, 'awarded', 5, ?, NOW(),  ?, ?)"
-    );
-    $stmt->execute([
-        $data['business_name'],
-        $proprietorName,
-        $data['first_name'],
-        $data['middle_name'] !== '' ? $data['middle_name'] : null,
-        $data['last_name'],
-        $data['suffix'] !== '' ? $data['suffix'] : null,
-        $data['sex'],
-        $data['phone'],
-        $data['email'],
-        $stallId,
-        $stallId,
-        $adminId,
-        $userId,
-        $data['temp_password'],
+    return gjc_stall_application_create($db,[
+        'business_name'=>$data['business_name'],'first_name'=>$data['first_name'],
+        'middle_name'=>$data['middle_name']!==''?$data['middle_name']:null,'last_name'=>$data['last_name'],
+        'suffix'=>$data['suffix']!==''?$data['suffix']:null,'sex'=>$data['sex'],
+        'contact_number'=>$data['phone'],'email'=>$data['email'],'preferred_stall_id'=>$stallId,'stall_id'=>$stallId,
+        'profile_picture'=>'','business_permit'=>'','sanitary_permit'=>'','gjc_requirements'=>'','clearance'=>'',
+        'terms_accepted'=>1,'status'=>'awarded','current_step'=>5,'reviewed_by'=>$adminId,
+        'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$userId,'temp_password_plain'=>null,
     ]);
-
-    return (int) $db->lastInsertId();
 }
 
 function maintenance_ensure_restricted_products_schema(PDO $db): void
@@ -991,14 +996,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $guardianEmailQueue = [];
 
             $studentInfoInsert = $db->prepare(
-                "INSERT INTO student_info (userID, studentID, yr_lvl, courseID) VALUES (?, ?, '1', ?)"
+                "INSERT INTO student_info (userID, studentID, yr_lvl, courseID) VALUES (?, ?, ?, ?)"
             );
+            $historyFields = array_keys(gjc_student_import_history_columns());
             $registryInsert = $db->prepare(
                 "INSERT INTO imported_student_registry
                     (import_batch_id, user_id, student_id_number, first_name, last_name,
                      course_program, email, phone_number, parent_name, parent_email,
-                     parent_contact, parent_user_id, parent_status, import_status, message, imported_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                     parent_contact, parent_user_id, parent_status, import_status, message, imported_by, "
+                     . implode(', ', $historyFields) . ") VALUES ("
+                     . implode(', ', array_fill(0, 16 + count($historyFields), '?')) . ")"
             );
             $linkInsert = $db->prepare(
                 "INSERT IGNORE INTO parent_student_links (parent_id, student_user_id) VALUES (?, ?)"
@@ -1023,7 +1030,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         // status === 'ready' (error rows were rejected above)
                         $courseId = maintenance_course_id($db, (string) $row['course_program']);
                         $userId   = maintenance_insert_student_user($db, $row);
-                        $studentInfoInsert->execute([$userId, $studentId, $courseId]);
+                        $studentInfoInsert->execute([$userId, $studentId, $row['year_level'], $courseId]);
                         gjc_student_wallet($db, $userId);
 
                         // Fee Waiver Credit: freshly-created student only, never touched again on
@@ -1075,7 +1082,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         }
                     }
 
-                    $registryInsert->execute([
+                    $historyValues = array_map(static fn($field) => ($row[$field] ?? '') !== '' ? $row[$field] : null, $historyFields);
+                    $registryInsert->execute(array_merge([
                         $batchId,
                         $userId,
                         $studentId,
@@ -1092,7 +1100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         $registryStatus,
                         substr($message, 0, 255),
                         (int) $currentUser['id'],
-                    ]);
+                    ], $historyValues));
                 }
                 $db->commit();
             } catch (Throwable $importFailure) {
@@ -1385,9 +1393,8 @@ $vacantStalls = $db->query(
                 <span class="section-tag">Students</span>
                 <h3>Bulk Student Import</h3>
                 <p class="maintenance-help">
-                    Only the downloaded template is accepted — same columns, same order:
-                    <strong>student_id_number, first_name, last_name, course_program, email, phone_number, suffix, parent_name, parent_email, parent_contact</strong>.
-                    The last four may be left blank per row (guardian is auto-created &amp; linked when filled in), but the columns themselves must stay.
+                    Add multiple students at once using a CSV file. Download the template, fill in the student details,
+                    then upload it to review the records before importing. You can also include guardian details to link their accounts.
                 </p>
 
                 <?php if ($importError !== ''): ?>
@@ -1524,6 +1531,10 @@ $vacantStalls = $db->query(
                                         <th>Student ID</th>
                                         <th>Name</th>
                                         <th>Course</th>
+                                        <th>Year</th>
+                                        <th>Sex / Birth Date</th>
+                                        <th>Address</th>
+                                        <th>Phone</th>
                                         <th>Email</th>
                                         <th>Guardian</th>
                                         <th>Notes</th>
@@ -1543,8 +1554,12 @@ $vacantStalls = $db->query(
                                             <?php endif; ?>
                                         </td>
                                         <td><?= maintenance_e($r['student_id_number']) ?></td>
-                                        <td><?= maintenance_e(trim(preg_replace('/\s+/', ' ', $r['first_name'] . ' ' . $r['last_name'] . ' ' . ($r['suffix'] ?? '')))) ?></td>
+                                        <td><?= maintenance_e(trim(preg_replace('/\s+/', ' ', $r['first_name'] . ' ' . ($r['middle_name'] ?? '') . ' ' . $r['last_name'] . ' ' . ($r['suffix'] ?? '')))) ?></td>
                                         <td><?= maintenance_e($r['course_program']) ?></td>
+                                        <td><?= maintenance_e($r['year_level'] ?? '1') ?></td>
+                                        <td><?= maintenance_e(($r['sex'] ?? '') ?: '—') ?><br><?= maintenance_e(($r['date_of_birth'] ?? '') ?: '—') ?></td>
+                                        <td><?= maintenance_e(gjc_format_address($r) ?: '—') ?></td>
+                                        <td><?= maintenance_e($r['phone_number'] ?: '—') ?></td>
                                         <td><?= maintenance_e($r['email']) ?></td>
                                         <td>
                                             <?php if ($entry['parent_action'] === 'link'): ?>

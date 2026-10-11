@@ -74,6 +74,8 @@ if ($summary) {
     $ownerStmt = $db->prepare("SELECT * FROM users WHERE userID = ? LIMIT 1");
     $ownerStmt->execute([$merchantUserId]);
     $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $owner = gjc_with_user_address($db, $owner, $merchantUserId);
+    $owner = gjc_with_user_suspension($db, $owner, $merchantUserId);
 
     // ── The merchant row itself (notes, registration date, stall code) ───
     $merchantStmt = $db->prepare("SELECT * FROM merchant WHERE merchantID = ? LIMIT 1");
@@ -101,7 +103,7 @@ if ($summary) {
     $application = null;
     if (gjc_table_exists($db, 'stall_applications')) {
         $appStmt = $db->prepare(
-            "SELECT * FROM stall_applications
+            "SELECT * FROM " . gjc_stall_application_source($db) . "
               WHERE merchant_user_id = ? OR (merchant_user_id IS NULL AND stall_id = ? AND stall_id <> '')
               ORDER BY (merchant_user_id = ?) DESC, awarded_at DESC, id DESC
               LIMIT 1"

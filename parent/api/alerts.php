@@ -46,7 +46,8 @@ $alertsStmt = $db->prepare(
     "SELECT pa.id, pa.balance_at_alert, pa.threshold, pa.is_read, pa.created_at,
             u.first_name, u.last_name, si.studentID
        FROM parent_alerts pa
-       JOIN users u ON u.userID = pa.student_user_id
+       JOIN student_wallets sw ON sw.id = pa.student_wallet_id
+       JOIN users u ON u.userID = sw.user_id
        LEFT JOIN student_info si ON si.userID = u.userID
       WHERE pa.parent_id = ?
       ORDER BY pa.created_at DESC

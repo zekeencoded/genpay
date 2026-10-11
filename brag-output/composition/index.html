@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=block"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --g950: #0d2418;
+        --g900: #123524;
+        --g850: #17402c;
+        --g700: #1e5c3a;
+        --gold: #f0a500;
+        --gold-light: #f6b81f;
+        --gold-deep: #8a6a10;
+        --gold-soft: rgba(240, 165, 0, 0.14);
+        --cream: #eef4ef;
+        --card: #ffffff;
+        --line: #e2eae3;
+        --ink: #14251b;
+        --muted: #5d6c62;
+        --ok: #15803d;
+        --ok-bg: #dcf3e4;
+        --warn: #b45309;
+        --warn-bg: #fdf1d8;
+        --danger: #b42318;
+        --sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden;
+        background: var(--g950);
+        font-family: var(--sans);
+        font-variant-numeric: tabular-nums;
+      }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+      .scene { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+      .mono { font-family: var(--mono); }
+      .eyebrow {
+        font-size: 18px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+
+      /* ---------- Scene 1: hook ---------- */
+      #s1 { z-index: 1; background: var(--g950); }
+      #s1 .photo {
+        position: absolute; inset: -40px;
+        background: url("assets/img/GenSimeon-Bldg.jpg") center / cover no-repeat;
+      }
+      #s1 .wash { position: absolute; inset: 0; background: rgba(13, 36, 24, 0.88); }
+      #s1 .brand {
+        position: absolute; left: 140px; top: 96px; display: flex; align-items: center; gap: 18px;
+        color: #fff; font-size: 34px; font-weight: 800;
+      }
+      #s1 .brand img { width: 60px; height: 60px; }
+      #s1 h1 {
+        position: absolute; left: 140px; top: 330px;
+        color: #fff; font-size: 128px; line-height: 1.04; font-weight: 800; letter-spacing: -0.035em;
+      }
+      #s1 h1 .l2 { color: var(--gold); display: block; }
+      #s1 h1 span { display: block; }
+      #s1 .rate {
+        position: absolute; left: 140px; top: 690px; display: flex; align-items: center; gap: 22px;
+        background: var(--gold); color: var(--g950);
+        padding: 20px 40px 20px 22px; border-radius: 999px;
+        font-size: 44px; font-weight: 800;
+      }
+      #s1 .coin {
+        width: 64px; height: 64px; border-radius: 50%; background: var(--g950); color: var(--gold);
+        display: grid; place-items: center; font-size: 26px; font-weight: 800; font-family: var(--mono);
+      }
+
+      /* ---------- Scene 2: Scan & Pay (student phone) ---------- */
+      #s2 { z-index: 3; background: var(--cream); }
+      #s2 .phone {
+        position: absolute; left: 250px; top: 60px; width: 500px; height: 1020px;
+        background: var(--g950); border-radius: 56px 56px 0 0; overflow: hidden;
+        border: 12px solid var(--ink); border-bottom: none;
+        box-shadow: 0 30px 60px rgba(13, 36, 24, 0.22);
+      }
+      #s2 .ph-head { position: absolute; left: 0; right: 0; top: 40px; height: 64px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; font-weight: 800; }
+      #s2 .ph-head .circ { position: absolute; top: 4px; width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); display: grid; place-items: center; }
+      #s2 .cam { position: absolute; left: 0; right: 0; top: 120px; bottom: 0; background: radial-gradient(circle at 50% 38%, #1d3a2a 0%, #0d2418 70%); }
+      #s2 .vf { position: absolute; left: 88px; top: 170px; width: 300px; height: 300px; }
+      #s2 .vf i { position: absolute; width: 56px; height: 56px; border-color: #ffffff; border-style: solid; border-width: 0; }
+      #s2 .vf .c1 { left: 0; top: 0; border-left-width: 6px; border-top-width: 6px; border-top-left-radius: 14px; }
+      #s2 .vf .c2 { right: 0; top: 0; border-right-width: 6px; border-top-width: 6px; border-top-right-radius: 14px; }
+      #s2 .vf .c3 { left: 0; bottom: 0; border-left-width: 6px; border-bottom-width: 6px; border-bottom-left-radius: 14px; }
+      #s2 .vf .c4 { right: 0; bottom: 0; border-right-width: 6px; border-bottom-width: 6px; border-bottom-right-radius: 14px; }
+      #s2 .vf .qrwrap { position: absolute; left: 30px; top: 30px; width: 240px; height: 240px; background: #fff; border-radius: 6px; padding: 14px; }
+      #s2 .vf .qrwrap svg { width: 100%; height: 100%; display: block; }
+      #s2 .scanline { position: absolute; left: 20px; right: 20px; top: 20px; height: 4px; border-radius: 2px; background: #4ade80; box-shadow: 0 0 18px 4px rgba(74, 222, 128, 0.55); }
+      #s2 .lockring { position: absolute; left: 30px; top: 30px; width: 240px; height: 240px; border-radius: 6px; background: rgba(74, 222, 128, 0.35); opacity: 0; }
+      #s2 .hint { position: absolute; left: 0; right: 0; top: 640px; text-align: center; color: #fff; }
+      #s2 .hint b { display: block; font-size: 26px; font-weight: 700; }
+      #s2 .hint span { display: block; font-size: 19px; color: #b8c7bd; margin-top: 8px; }
+      #s2 .dim { position: absolute; inset: 0; background: rgba(5, 15, 10, 0.55); opacity: 0; }
+      #s2 .sheet {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 600px; background: #fff; border-radius: 26px 26px 0 0; padding: 34px 32px;
+      }
+      #s2 .sheet h5 { font-size: 28px; font-weight: 800; color: var(--ink); }
+      #s2 .sheet .amt { margin-top: 20px; background: var(--cream); border-radius: 8px; padding: 22px 24px; display: flex; justify-content: space-between; align-items: center; }
+      #s2 .sheet .amt span { font-size: 21px; color: var(--muted); font-weight: 600; }
+      #s2 .sheet .amt strong { font-family: var(--mono); font-size: 50px; color: var(--ink); font-weight: 700; }
+      #s2 .sheet .r { display: flex; justify-content: space-between; padding: 16px 4px; border-bottom: 1px solid var(--line); font-size: 21px; }
+      #s2 .sheet .r label { color: var(--muted); font-weight: 500; }
+      #s2 .sheet .r strong { color: var(--ink); font-weight: 700; }
+      #s2 .sheet .btns { position: absolute; left: 32px; right: 32px; bottom: 44px; display: flex; gap: 14px; }
+      #s2 .sheet .btns div { height: 72px; border-radius: 999px; display: grid; place-items: center; font-size: 22px; font-weight: 700; position: relative; overflow: hidden; }
+      #s2 .sheet .cancel { flex: 0 0 150px; background: var(--cream); color: var(--ink); }
+      #s2 .sheet .pay { flex: 1; background: var(--g700); color: #fff; }
+      #s2 .ripple { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); opacity: 0; }
+      #s2 .done { position: absolute; inset: 0; background: var(--g950); display: flex; flex-direction: column; align-items: center; padding-top: 190px; color: #fff; }
+      #s2 .done .ck { width: 150px; height: 150px; border-radius: 50%; background: #22c55e; display: grid; place-items: center; }
+      #s2 .done .t { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; margin-top: 34px; }
+      #s2 .done .m { font-size: 21px; color: #b8c7bd; margin-top: 10px; }
+      #s2 .done .a { font-family: var(--mono); font-size: 56px; color: var(--gold); font-weight: 700; margin-top: 26px; }
+      #s2 .done .nb { margin-top: 44px; width: 400px; background: var(--g850); border-radius: 8px; padding: 26px; text-align: center; }
+      #s2 .done .nb .eyebrow { color: #cfdad2; font-size: 15px; letter-spacing: 0.2em; }
+      #s2 .done .nb .v { font-family: var(--mono); font-size: 58px; font-weight: 700; margin-top: 8px; }
+      #s2 .done .nb .v small { font-size: 28px; color: #cfdad2; }
+      #s2 .done .ref { font-family: var(--mono); font-size: 17px; color: #a9b9ae; margin-top: 22px; }
+      #s2 .copy { position: absolute; left: 880px; top: 300px; width: 940px; }
+      #s2 .copy .eyebrow { color: var(--g700); }
+      #s2 .copy h2 { font-size: 96px; line-height: 1.05; letter-spacing: -0.035em; font-weight: 800; color: var(--ink); margin-top: 18px; }
+      #s2 .copy h2 span { color: var(--g700); }
+      #s2 .copy p { font-size: 34px; color: var(--muted); margin-top: 28px; font-weight: 500; }
+      #s2 .steps { position: absolute; left: 880px; top: 760px; display: flex; gap: 14px; }
+      #s2 .steps div { padding: 14px 26px; border-radius: 4px; background: #fff; border: 1px solid var(--line); font-size: 24px; font-weight: 700; color: var(--muted); }
+      #s2 .steps div b { font-family: var(--mono); color: var(--g700); margin-right: 10px; }
+
+      /* ---------- Scene 3: POS ---------- */
+      #s3 { z-index: 2; background: var(--cream); }
+      #s3 .side { position: absolute; left: 0; top: 0; width: 300px; height: 1080px; background: var(--g950); padding: 34px 22px; }
+      #s3 .side .b { display: flex; align-items: center; gap: 14px; color: #fff; font-weight: 800; font-size: 26px; }
+      #s3 .side .b img { width: 50px; height: 50px; }
+      #s3 .side .b small { display: block; font-size: 15px; font-weight: 500; color: #a9b9ae; }
+      #s3 .nav { margin-top: 44px; display: flex; flex-direction: column; gap: 6px; }
+      #s3 .nav div { color: #cfdad2; font-size: 20px; font-weight: 600; padding: 14px 18px; border-radius: 4px; }
+      #s3 .nav .on { background: rgba(240, 165, 0, 0.16); color: var(--gold); }
+      #s3 .top { position: absolute; left: 300px; top: 0; right: 0; height: 110px; background: var(--g950); padding: 24px 48px; color: #fff; }
+      #s3 .top h3 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; }
+      #s3 .top p { font-size: 18px; color: #b8c7bd; margin-top: 2px; }
+      #s3 .chips { position: absolute; left: 348px; top: 150px; display: flex; gap: 12px; }
+      #s3 .chips div { padding: 10px 22px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 18px; font-weight: 600; color: var(--ink); }
+      #s3 .chips .on { background: var(--g950); color: #fff; border-color: var(--g950); }
+      #s3 .prod {
+        position: absolute; width: 241px; height: 170px; background: #fff; border: 1px solid var(--line);
+        border-radius: 8px; padding: 18px 20px;
+      }
+      #s3 .prod .cat { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); background: var(--cream); padding: 3px 8px; border-radius: 2px; }
+      #s3 .prod .nm { font-size: 21px; font-weight: 700; color: var(--ink); margin-top: 12px; }
+      #s3 .prod .pr { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--g700); margin-top: 6px; }
+      #s3 .prod .ps { font-size: 15px; color: var(--muted); }
+      #s3 .prod.hit { background: #f3faf5; border-color: var(--g700); }
+      #s3 .order {
+        position: absolute; left: 1404px; top: 150px; width: 468px; height: 880px;
+        background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 30px 30px;
+      }
+      #s3 .order h4 { font-size: 26px; font-weight: 800; color: var(--ink); }
+      #s3 .row {
+        display: flex; justify-content: space-between; align-items: center; padding: 18px 0;
+        border-bottom: 1px solid var(--line); font-size: 21px; font-weight: 600; color: var(--ink);
+      }
+      #s3 .row .mono { color: var(--g700); font-weight: 700; }
+      #s3 .rows { margin-top: 16px; height: 330px; }
+      #s3 .tot { position: absolute; left: 30px; right: 30px; top: 560px; display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 26px; }
+      #s3 .tot b { font-size: 30px; color: var(--ink); }
+      #s3 .tot .v { text-align: right; }
+      #s3 .tot .v .mono { font-size: 48px; font-weight: 700; color: var(--ink); }
+      #s3 .tot .v small { display: block; font-size: 18px; color: var(--muted); font-family: var(--mono); }
+      #s3 .qrbtn {
+        position: absolute; left: 30px; right: 30px; top: 720px; height: 76px; border-radius: 999px;
+        background: var(--g700); color: #fff; font-size: 24px; font-weight: 700; display: grid; place-items: center;
+      }
+      #s3 .qrpanel {
+        position: absolute; left: 1404px; top: 150px; width: 468px; height: 880px; border-radius: 8px;
+        background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding-top: 44px;
+      }
+      #s3 .qrpanel h4 { font-size: 28px; font-weight: 800; color: var(--ink); }
+      #s3 .qrpanel .sub { font-size: 18px; color: var(--muted); margin-top: 6px; }
+      #s3 .qrpanel .code { width: 340px; height: 340px; margin-top: 34px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+      #s3 .qrpanel .code svg { width: 100%; height: 100%; display: block; }
+      #s3 .qrpanel .a { font-family: var(--mono); font-size: 52px; font-weight: 700; color: var(--ink); margin-top: 34px; }
+      #s3 .qrpanel .p { font-family: var(--mono); font-size: 20px; color: var(--muted); }
+      #s3 .qrpanel .w { margin-top: 30px; display: flex; align-items: center; gap: 12px; font-size: 20px; color: var(--warn); font-weight: 700; background: var(--warn-bg); padding: 10px 20px; border-radius: 4px; }
+      #s3 .qrpanel .w i { width: 12px; height: 12px; border-radius: 50%; background: var(--warn); display: inline-block; }
+      #s3 .cap { position: absolute; left: 348px; top: 830px; }
+      #s3 .cap h2 { font-size: 88px; font-weight: 800; letter-spacing: -0.035em; color: var(--ink); line-height: 1; }
+      #s3 .cap p { font-size: 30px; color: var(--muted); margin-top: 16px; font-weight: 500; }
+      #s3 .cursor { position: absolute; left: 0; top: 0; width: 44px; height: 54px; z-index: 5; }
+
+      /* ---------- Scene 4: closed loop ---------- */
+      #s4 { z-index: 4; background: var(--cream); }
+      #s4 .hd { position: absolute; left: 160px; top: 96px; }
+      #s4 .hd .eyebrow { color: var(--g700); }
+      #s4 .hd h2 { font-size: 84px; font-weight: 800; letter-spacing: -0.035em; color: var(--ink); line-height: 1.04; margin-top: 14px; }
+      #s4 .hd h2 span { color: var(--g700); }
+      #s4 .card {
+        position: absolute; left: 160px; top: 370px; width: 1600px; height: 420px;
+        background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 48px 56px;
+        box-shadow: 0 1px 3px rgba(13, 36, 24, 0.08);
+      }
+      #s4 .card .eyebrow { color: var(--muted); font-size: 20px; }
+      #s4 .big { font-family: var(--mono); font-size: 104px; font-weight: 700; color: var(--ink); letter-spacing: -0.03em; line-height: 1.2; margin-top: 6px; }
+      #s4 .sub { margin-top: 14px; font-size: 24px; color: var(--muted); font-family: var(--mono); }
+      #s4 .bar { position: absolute; left: 56px; right: 56px; top: 300px; height: 30px; border-radius: 4px; background: var(--cream); overflow: hidden; display: flex; }
+      #s4 .bar div { height: 100%; transform-origin: left center; }
+      #s4 .legend { position: absolute; left: 56px; top: 352px; display: flex; gap: 44px; font-size: 22px; color: var(--muted); font-weight: 500; }
+      #s4 .legend span { display: inline-flex; align-items: center; gap: 10px; }
+      #s4 .legend i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+      #s4 .legend b { color: var(--ink); font-family: var(--mono); }
+      #s4 .badge {
+        position: absolute; right: 56px; top: 52px; display: flex; align-items: center; gap: 14px;
+        background: var(--ok-bg); color: var(--ok); padding: 18px 28px; border-radius: 4px; font-size: 26px; font-weight: 700;
+      }
+      #s4 .eq { position: absolute; left: 160px; top: 850px; display: flex; align-items: center; gap: 18px; }
+      #s4 .tok { font-family: var(--mono); font-size: 34px; font-weight: 700; padding: 14px 24px; border-radius: 4px; background: #fff; border: 1px solid var(--line); color: var(--ink); }
+      #s4 .tok.cap { background: var(--g950); color: #fff; border-color: var(--g950); }
+      #s4 .op { font-family: var(--mono); font-size: 40px; font-weight: 700; color: var(--g700); }
+      #s4 .note { position: absolute; left: 160px; top: 966px; font-size: 26px; color: var(--muted); font-weight: 500; }
+      #s4 .note b { color: var(--ink); }
+
+      /* ---------- Scene 5: stalls ---------- */
+      #s5 { z-index: 5; background: var(--cream); }
+      #s5 .hero { position: absolute; left: 0; top: 0; width: 1920px; height: 360px; background: var(--g900); text-align: center; padding-top: 70px; }
+      #s5 .pill { display: inline-block; padding: 10px 26px; border-radius: 999px; background: rgba(74, 222, 128, 0.12); color: #86efac; font-size: 22px; font-weight: 600; }
+      #s5 .hero h2 { color: #fff; font-size: 92px; font-weight: 800; letter-spacing: -0.035em; margin-top: 26px; }
+      #s5 .hero h2 span { color: #4ade80; }
+      #s5 .rl { position: absolute; left: 262px; font-size: 20px; font-weight: 700; letter-spacing: 0.14em; color: var(--g700); }
+      #s5 .stall {
+        position: absolute; width: 260px; height: 168px; border-radius: 8px;
+        background: #ecfbf1; border: 2px solid #9fe3b6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      }
+      #s5 .stall .id { font-size: 44px; font-weight: 800; color: var(--g700); }
+      #s5 .tag { padding: 5px 16px; border-radius: 999px; font-size: 15px; font-weight: 800; letter-spacing: 0.1em; color: #fff; background: #15803d; }
+      #s5 .stall.occ { background: var(--g950); border-color: var(--g950); }
+      #s5 .stall.occ .id { color: #fff; font-size: 36px; }
+      #s5 .stall.occ .nm { color: #cfdad2; font-size: 19px; font-weight: 600; }
+      #s5 .stall.occ .tag { background: #dc2626; }
+      #s5 .stall.pend { background: var(--warn-bg); border-color: #f5cf85; }
+      #s5 .stall.pend .id { color: var(--warn); }
+      #s5 .stall.pend .tag { background: var(--warn); }
+      #s5 .flip { position: absolute; inset: -2px; border-radius: 8px; background: var(--g950); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+      #s5 .stall.pend .flip .id { color: #fff; font-size: 36px; }
+      #s5 .stall.pend .flip .nm { color: #cfdad2; font-size: 19px; font-weight: 600; }
+      #s5 .stall.pend .flip .tag { background: var(--gold); color: var(--g950); }
+      #s5 .rent {
+        position: absolute; left: 50%; top: 948px; transform: translateX(-50%);
+        display: flex; gap: 28px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 4px;
+        padding: 18px 32px; font-size: 24px; color: var(--ink); font-weight: 600; white-space: nowrap;
+      }
+      #s5 .rent .mono { font-weight: 700; color: var(--g700); }
+      #s5 .rent .st { background: var(--ok-bg); color: var(--ok); padding: 4px 14px; border-radius: 2px; font-size: 18px; font-weight: 700; }
+
+      /* ---------- Scene 6: features ---------- */
+      #s6 { z-index: 6; background: var(--g950); }
+      #s6 h2 { position: absolute; left: 152px; top: 170px; color: #fff; font-size: 96px; font-weight: 800; letter-spacing: -0.035em; }
+      #s6 h2 span { color: var(--gold); }
+      #s6 .ft {
+        position: absolute; top: 420px; width: 380px; height: 420px; background: var(--g850); border-radius: 8px; padding: 40px 34px;
+      }
+      #s6 .ft .ic { width: 84px; height: 84px; border-radius: 8px; background: var(--gold-soft); display: grid; place-items: center; }
+      #s6 .ft h4 { color: #fff; font-size: 36px; font-weight: 800; letter-spacing: -0.02em; margin-top: 40px; line-height: 1.12; }
+      #s6 .ft p { color: #c3d1c7; font-size: 24px; margin-top: 16px; line-height: 1.35; font-weight: 500; }
+
+      /* ---------- Scene 7: outro ---------- */
+      #s7 { z-index: 7; background: var(--g950); }
+      #s7 .glow { position: absolute; left: 960px; top: 400px; width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%; background: radial-gradient(circle, rgba(30, 92, 58, 0.75) 0%, rgba(13, 36, 24, 0) 65%); }
+      #s7 .logo { position: absolute; left: 960px; top: 330px; width: 260px; height: 260px; margin: -130px 0 0 -130px; }
+      #s7 .name { position: absolute; left: 0; right: 0; top: 500px; text-align: center; color: #fff; font-size: 104px; font-weight: 800; letter-spacing: -0.04em; }
+      #s7 .tag { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-size: 60px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; color: #fff; }
+      #s7 .tag span { color: var(--gold); display: block; }
+      #s7 .tag .l1 { display: block; color: #fff; }
+      #s7 .foot { position: absolute; left: 0; right: 0; top: 900px; text-align: center; font-size: 26px; font-weight: 600; color: #b8c7bd; letter-spacing: 0.04em; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="26" data-width="1920" data-height="1080">
+      <!-- ================= Scene 1: Hook ================= -->
+      <section id="s1" class="scene clip" data-start="0" data-duration="3.5" data-track-index="0">
+        <div class="photo"></div>
+        <div class="wash"></div>
+        <div class="brand"><img src="assets/img/gp_logo.png" alt="" />GenPay</div>
+        <h1><span class="l1">This canteen has</span><span class="l2">its own currency.</span></h1>
+        <div class="rate"><div class="coin">GC</div><span>₱10 = 1 GenCoin</span></div>
+      </section>
+
+      <!-- ================= Scene 2: Scan & Pay ================= -->
+      <section id="s2" class="scene clip" data-start="7" data-duration="5.3" data-track-index="2">
+        <div class="phone">
+          <div class="cam"></div>
+          <div class="ph-head">
+            <div class="circ" style="left:24px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+            Scan &amp; Pay
+          </div>
+          <div class="vf" id="vf">
+            <div class="qrwrap" id="camQr"><svg class="qr" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg></div>
+            <div class="lockring" id="lockring"></div>
+            <div class="scanline" id="scanline"></div>
+            <i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i>
+          </div>
+          <div class="hint" id="hint"><b>Align the merchant's QR code</b><span>Payment details appear automatically</span></div>
+          <div class="dim" id="dim"></div>
+          <div class="sheet" id="sheet">
+            <h5>Confirm Payment</h5>
+            <div class="amt"><span>Total to pay</span><strong>11 GC</strong></div>
+            <div class="r"><label>Merchant</label><strong>Tita Nena's Silog</strong></div>
+            <div class="r"><label>Items</label><strong>3</strong></div>
+            <div class="r"><label>Peso value</label><strong class="mono">₱110.00</strong></div>
+            <div class="btns"><div class="cancel">Cancel</div><div class="pay" id="payBtn">Confirm Payment<span class="ripple" id="ripple"></span></div></div>
+          </div>
+          <div class="done" id="done">
+            <div class="ck"><svg width="84" height="84" viewBox="0 0 24 24" fill="none" stroke="#0d2418" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+            <div class="t">Payment successful</div>
+            <div class="m">Paid to Tita Nena's Silog</div>
+            <div class="a">−11.00 GC</div>
+            <div class="nb"><div class="eyebrow">New balance</div><div class="v"><span id="nbNum">62.58</span> <small>GC</small></div></div>
+            <div class="ref">CART-20260925-7F2A1C</div>
+          </div>
+        </div>
+        <div class="copy">
+          <div class="eyebrow" id="s2e">Student · Scan &amp; Pay</div>
+          <h2 id="s2h">Scan the stall's QR.<br /><span>One tap. Paid.</span></h2>
+          <p id="s2p">Payment details appear automatically.</p>
+        </div>
+        <div class="steps" id="steps"><div><b>1</b>Scan</div><div><b>2</b>Confirm</div><div><b>3</b>Paid</div></div>
+      </section>
+
+      <!-- ================= Scene 3: Merchant POS ================= -->
+      <section id="s3" class="scene clip" data-start="3" data-duration="4.5" data-track-index="1">
+        <div class="side">
+          <div class="b"><img src="assets/img/gp_logo.png" alt="" /><div>GenPay<small>Merchant Admin</small></div></div>
+          <div class="nav">
+            <div>Dashboard</div><div>Inventory</div><div class="on">POS</div><div>Staff</div><div>Encash</div><div>Sales History</div><div>Rent &amp; Lease</div>
+          </div>
+        </div>
+        <div class="top"><h3>POS Terminal</h3><p>Select items and process student wallet payments.</p></div>
+        <div class="chips"><div class="on">All</div><div>Beverage</div><div>Food</div><div>Snack</div><div>Street Food</div></div>
+
+        <div class="prod" style="left:348px;top:222px"><span class="cat">BEVERAGE</span><div class="nm">Bottled Water</div><div class="pr">1.5 GC</div><div class="ps">≈ ₱15.00</div></div>
+        <div class="prod" id="pTaps" style="left:609px;top:222px"><span class="cat">FOOD</span><div class="nm">Tapsilog</div><div class="pr">5.5 GC</div><div class="ps">≈ ₱55.00</div></div>
+        <div class="prod" style="left:870px;top:222px"><span class="cat">FOOD</span><div class="nm">Pancit Canton</div><div class="pr">4 GC</div><div class="ps">≈ ₱40.00</div></div>
+        <div class="prod" style="left:1131px;top:222px"><span class="cat">SNACK</span><div class="nm">Turon</div><div class="pr">2 GC</div><div class="ps">≈ ₱20.00</div></div>
+        <div class="prod" style="left:348px;top:412px"><span class="cat">STREET FOOD</span><div class="nm">Calamares</div><div class="pr">5 GC</div><div class="ps">≈ ₱50.00</div></div>
+        <div class="prod" id="pKwek" style="left:609px;top:412px"><span class="cat">STREET FOOD</span><div class="nm">Kwek-Kwek</div><div class="pr">3.5 GC</div><div class="ps">≈ ₱35.00</div></div>
+        <div class="prod" id="pFish" style="left:870px;top:412px"><span class="cat">STREET FOOD</span><div class="nm">Fishball</div><div class="pr">2 GC</div><div class="ps">≈ ₱20.00</div></div>
+        <div class="prod" style="left:1131px;top:412px"><span class="cat">STREET FOOD</span><div class="nm">Kikiam</div><div class="pr">2.5 GC</div><div class="ps">≈ ₱25.00</div></div>
+        <div class="prod" style="left:348px;top:602px"><span class="cat">STREET FOOD</span><div class="nm">Chicken Skin</div><div class="pr">1.5 GC</div><div class="ps">≈ ₱15.00</div></div>
+        <div class="prod" style="left:609px;top:602px"><span class="cat">STREET FOOD</span><div class="nm">Tokneneng</div><div class="pr">3 GC</div><div class="ps">≈ ₱30.00</div></div>
+        <div class="prod" style="left:870px;top:602px"><span class="cat">SNACK</span><div class="nm">Banana Cue</div><div class="pr">2 GC</div><div class="ps">≈ ₱20.00</div></div>
+        <div class="prod" style="left:1131px;top:602px"><span class="cat">BEVERAGE</span><div class="nm">Iced Tea</div><div class="pr">2 GC</div><div class="ps">≈ ₱20.00</div></div>
+
+        <div class="order">
+          <h4>Current Order</h4>
+          <div class="rows">
+            <div class="row" id="r1"><span>Tapsilog × 1</span><span class="mono">5.5 GC</span></div>
+            <div class="row" id="r2"><span>Kwek-Kwek × 1</span><span class="mono">3.5 GC</span></div>
+            <div class="row" id="r3"><span>Fishball × 1</span><span class="mono">2 GC</span></div>
+          </div>
+          <div class="tot"><b>Total</b><div class="v"><span class="mono"><span id="totNum">0</span> GC</span><small>≈ ₱<span id="totPeso">0.00</span></small></div></div>
+          <div class="qrbtn" id="qrbtn">Generate Payment QR</div>
+        </div>
+        <div class="qrpanel" id="qrpanel">
+          <h4>Scan to pay</h4>
+          <div class="sub">Tita Nena's Silog · Stall A2</div>
+          <div class="code"><svg class="qr" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg></div>
+          <div class="a">11 GC</div>
+          <div class="p">≈ ₱110.00</div>
+          <div class="w"><i id="waitDot"></i>Waiting for student to scan…</div>
+        </div>
+        <div class="cap" id="s3cap"><h2>Every stall gets a POS.</h2><p>Tap the items, show the QR, get paid in seconds.</p></div>
+        <svg class="cursor" id="cursor" viewBox="0 0 44 54"><path d="M4 3l0 40 11-10 7 16 7-3-7-15 15-1z" fill="#ffffff" stroke="#14251b" stroke-width="3" stroke-linejoin="round"/></svg>
+      </section>
+
+      <!-- ================= Scene 4: Closed loop ================= -->
+      <section id="s4" class="scene clip" data-start="11.8" data-duration="5.1" data-track-index="3">
+        <div class="hd">
+          <div class="eyebrow">Closed-loop GenCoin</div>
+          <h2 id="s4h">A closed loop. <span>Every coin<br />accounted for.</span></h2>
+        </div>
+        <div class="card" id="s4card">
+          <div class="eyebrow">Total money in system</div>
+          <div class="big"><span id="capNum">0.0</span> GC</div>
+          <div class="sub">≈ ₱255,000.00 · ₱10 = 1 GenCoin</div>
+          <div class="badge" id="badge">
+            <svg width="30" height="30" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#15803d"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            All money accounted for
+          </div>
+          <div class="bar">
+            <div id="seg1" style="width:90.7%;background:#1e5c3a"></div>
+            <div id="seg2" style="width:7.4%;background:#f0a500"></div>
+            <div id="seg3" style="width:1.1%;background:#5d6c62"></div>
+            <div id="seg4" style="width:0.8%;background:#2563eb"></div>
+          </div>
+          <div class="legend" id="legend">
+            <span><i style="background:#1e5c3a"></i>Cashier Vault <b>90.7%</b></span>
+            <span><i style="background:#f0a500"></i>Student Wallets <b>7.4%</b></span>
+            <span><i style="background:#5d6c62"></i>Merchant Wallets <b>1.1%</b></span>
+            <span><i style="background:#2563eb"></i>Parent Wallets <b>0.8%</b></span>
+          </div>
+        </div>
+        <div class="eq" id="eq">
+          <div class="tok cap">Cap</div><div class="op">=</div>
+          <div class="tok">Vault</div><div class="op">+</div>
+          <div class="tok">Students</div><div class="op">+</div>
+          <div class="tok">Merchants</div><div class="op">+</div>
+          <div class="tok">Parents</div>
+        </div>
+        <div class="note" id="note">Checked in PHP on every transfer, then again by <b>MySQL triggers</b>. A coin can't leak.</div>
+      </section>
+
+      <!-- ================= Scene 5: Stall management ================= -->
+      <section id="s5" class="scene clip" data-start="16.4" data-duration="4.5" data-track-index="4">
+        <div class="hero">
+          <div class="pill" id="s5pill">Stall Directory · Live Occupancy</div>
+          <h2 id="s5h">And it runs the <span>canteen's stalls.</span></h2>
+        </div>
+        <div class="rl" style="top:410px">ROW A</div>
+        <div class="rl" style="top:646px">ROW B</div>
+        <div class="stall" style="left:262px;top:446px"><div class="id">A1</div><div class="tag">VACANT</div></div>
+        <div class="stall occ" style="left:546px;top:446px"><div class="id">A2</div><div class="nm">Tita Nena's Silog</div><div class="tag">OCCUPIED</div></div>
+        <div class="stall" style="left:830px;top:446px"><div class="id">A3</div><div class="tag">VACANT</div></div>
+        <div class="stall" style="left:1114px;top:446px"><div class="id">A4</div><div class="tag">VACANT</div></div>
+        <div class="stall" style="left:1398px;top:446px"><div class="id">A5</div><div class="tag">VACANT</div></div>
+        <div class="stall occ" style="left:262px;top:682px"><div class="id">B1</div><div class="nm">Kuya Jun's Street Food</div><div class="tag">OCCUPIED</div></div>
+        <div class="stall" style="left:546px;top:682px"><div class="id">B2</div><div class="tag">VACANT</div></div>
+        <div class="stall pend" id="b3" style="left:830px;top:682px">
+          <div class="id">B3</div><div class="tag">PENDING</div>
+          <div class="flip" id="b3flip"><div class="id">B3</div><div class="nm">Ate Lorna's Merienda</div><div class="tag">LEASED</div></div>
+        </div>
+        <div class="stall" style="left:1114px;top:682px"><div class="id">B4</div><div class="tag">VACANT</div></div>
+        <div class="stall" style="left:1398px;top:682px"><div class="id">B5</div><div class="tag">VACANT</div></div>
+        <div class="rent" id="rent"><span>Application approved · Stall B3</span><span class="mono">Rent ₱3,500 / mo</span><span class="st">Lease active</span></div>
+      </section>
+
+      <!-- ================= Scene 6: Everything else ================= -->
+      <section id="s6" class="scene clip" data-start="20.4" data-duration="3.1" data-track-index="5">
+        <h2 id="s6h">Built for the <span>whole campus.</span></h2>
+        <div class="ft" id="f1" style="left:152px">
+          <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="#f0a500"><path d="M9 4a3.5 3.5 0 110 7 3.5 3.5 0 010-7zm7.5 2a3 3 0 110 6 3 3 0 010-6zM9 13c4 0 7 1.8 7 4.2V20H2v-2.8C2 14.8 5 13 9 13zm8.5.6c2.8.3 4.5 1.6 4.5 3.4V20h-4v-2.8c0-1.4-.2-2.6-.5-3.6z"/></svg></div>
+          <h4>Parent controls</h4><p>Send allowance, set daily spending limits.</p>
+        </div>
+        <div class="ft" id="f2" style="left:564px">
+          <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="#f0a500"><path d="M2 6h20v12H2V6zm2 2v8h16V8H4zm8 1.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM5 9h2v2H5V9zm12 4h2v2h-2v-2z"/></svg></div>
+          <h4>Top-ups &amp; encashments</h4><p>Cash in and out at the cashier.</p>
+        </div>
+        <div class="ft" id="f3" style="left:976px">
+          <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="#f0a500"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3zm-1 13.2l5.7-5.7-1.4-1.4L11 12.4 8.7 10.1l-1.4 1.4 3.7 3.7z"/></svg></div>
+          <h4>Audit log</h4><p>Every approval and transfer, on record.</p>
+        </div>
+        <div class="ft" id="f4" style="left:1388px">
+          <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="#f0a500"><path d="M3 5h18v5a2 2 0 000 4v5H3v-5a2 2 0 000-4V5zm6 3v2h2V8H9zm0 4v2h2v-2H9zm0 4v1h2v-1H9z"/></svg></div>
+          <h4>QR vouchers</h4><p>Issue, redeem, auto-expire back to the vault.</p>
+        </div>
+      </section>
+
+      <!-- ================= Scene 7: Outro ================= -->
+      <section id="s7" class="scene clip" data-start="23" data-duration="3" data-track-index="6">
+        <div class="glow" id="glow"></div>
+        <img class="logo" id="logo" src="assets/img/gp_logo.png" alt="GenPay" />
+        <div class="name" id="oname">GenPay</div>
+        <div class="tag" id="otag"><span class="l1">The Future of Campus</span><span>Cashless Payments</span></div>
+        <div class="foot" id="ofoot">General de Jesus College</div>
+      </section>
+
+      <!-- ================= Audio ================= -->
+      <audio id="music" data-start="0" data-duration="26" data-track-index="10" data-volume="0.32" data-fade-in="0.4" data-fade-out="1.6" src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3"></audio>
+      <audio id="sx1" data-start="0.3" data-duration="0.18" data-track-index="11" data-volume="0.7" src="assets/sfx/impactSoft_medium_001.ogg"></audio>
+      <audio id="sx2" data-start="1.75" data-duration="0.11" data-track-index="12" data-volume="0.7" src="assets/sfx/drop_001.ogg"></audio>
+      <audio id="sx3" data-start="3.52" data-duration="0.06" data-track-index="13" data-volume="0.7" src="assets/sfx/mouseclick1.ogg"></audio>
+      <audio id="sx4" data-start="4.53" data-duration="0.06" data-track-index="14" data-volume="0.7" src="assets/sfx/mouseclick1.ogg"></audio>
+      <audio id="sx5" data-start="5.53" data-duration="0.06" data-track-index="15" data-volume="0.7" src="assets/sfx/mouseclick1.ogg"></audio>
+      <audio id="sx6" data-start="6.25" data-duration="0.01" data-track-index="16" data-volume="0.75" src="assets/sfx/click_002.ogg"></audio>
+      <audio id="sx7" data-start="6.35" data-duration="0.19" data-track-index="17" data-volume="0.55" src="assets/sfx/drop_002.ogg"></audio>
+      <audio id="sx8" data-start="8.3" data-duration="0.05" data-track-index="18" data-volume="0.75" src="assets/sfx/select_008.ogg"></audio>
+      <audio id="sx9" data-start="8.5" data-duration="0.6" data-track-index="19" data-volume="0.55" src="assets/sfx/card-slide-1.ogg"></audio>
+      <audio id="sx10" data-start="9.6" data-duration="0.01" data-track-index="20" data-volume="0.75" src="assets/sfx/click_002.ogg"></audio>
+      <audio id="sx11" data-start="9.8" data-duration="0.26" data-track-index="21" data-volume="0.65" src="assets/sfx/chips-collide-1.ogg"></audio>
+      <audio id="sx12" data-start="10.05" data-duration="0.17" data-track-index="22" data-volume="0.5" src="assets/sfx/chips-stack-2.ogg"></audio>
+      <audio id="sx13" data-start="12.6" data-duration="0.19" data-track-index="23" data-volume="0.6" src="assets/sfx/drop_002.ogg"></audio>
+      <audio id="sx14" data-start="14.8" data-duration="1.48" data-track-index="24" data-volume="0.6" src="assets/sfx/impactBell_heavy_000.ogg"></audio>
+      <audio id="sx15" data-start="17.2" data-duration="0.6" data-track-index="25" data-volume="0.6" src="assets/sfx/card-slide-1.ogg"></audio>
+      <audio id="sx16" data-start="18.9" data-duration="0.61" data-track-index="26" data-volume="0.7" src="assets/sfx/switch_002.ogg"></audio>
+      <audio id="sx17" data-start="20.9" data-duration="0.11" data-track-index="27" data-volume="0.6" src="assets/sfx/drop_001.ogg"></audio>
+      <audio id="sx18" data-start="21.65" data-duration="0.19" data-track-index="28" data-volume="0.6" src="assets/sfx/drop_002.ogg"></audio>
+      <audio id="sx19" data-start="23.47" data-duration="1.48" data-track-index="29" data-volume="0.7" src="assets/sfx/impactBell_heavy_000.ogg"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Deterministic QR-style code (seeded), drawn identically on the POS and in the phone camera
+      (function drawQr() {
+        let seed = 20260925;
+        const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+        const N = 25, cells = [];
+        const inFinder = (x, y) => (x < 8 && y < 8) || (x > 16 && y < 8) || (x < 8 && y > 16);
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+          if (inFinder(x, y)) continue;
+          if (rnd() > 0.52) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+        }
+        const finder = (fx, fy) =>
+          `<rect x="${fx}" y="${fy}" width="7" height="7"/><rect x="${fx + 1}" y="${fy + 1}" width="5" height="5" fill="#fff"/><rect x="${fx + 2}" y="${fy + 2}" width="3" height="3"/>`;
+        const markup = `<g fill="#0d2418">${cells.join("")}${finder(0, 0)}${finder(18, 0)}${finder(0, 18)}</g>`;
+        document.querySelectorAll("svg.qr").forEach((el) => (el.innerHTML = markup));
+      })();
+
+      // count-up helper: deterministic, driven by the timeline's own progress
+      function countTo(target, fmt, from, to, dur, at, ease) {
+        const o = { v: from };
+        tl.to(o, { v: to, duration: dur, ease: ease || "power2.out", onUpdate: () => {
+          const el = document.getElementById(target);
+          if (el) el.textContent = fmt(o.v);
+        } }, at);
+      }
+      const f2 = (v) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const f1 = (v) => v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      const fgc = (v) => (Math.round(v * 2) / 2).toString();
+
+      // Scene transitions: each new scene pushes in from the right over the last
+      function pushIn(sel, at) {
+        tl.fromTo(sel, { xPercent: 100 }, { xPercent: 0, duration: 0.5, ease: "power3.inOut" }, at);
+      }
+
+      /* ---------- Scene 1: Hook (0 – 3) ---------- */
+      tl.fromTo("#s1 .photo", { scale: 1.08 }, { scale: 1, duration: 3.5, ease: "none" }, 0);
+      tl.fromTo("#s1 .brand", { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.1);
+      tl.fromTo("#s1 h1 .l1", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.25);
+      tl.fromTo("#s1 h1 .l2", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.45);
+      tl.fromTo("#s1 .rate", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 1.8);
+      tl.fromTo("#s1 .coin", { rotation: -180 }, { rotation: 0, duration: 0.6, ease: "power3.out" }, 1.8);
+
+      /* ---------- Scene 3: Merchant POS rings up, shows payment QR (3 – 7) ---------- */
+      pushIn("#s3", 3.0);
+      gsap.set(["#r1", "#r2", "#r3"], { opacity: 0, x: 30 });
+      gsap.set("#qrpanel", { opacity: 0, scale: 0.94 });
+      tl.fromTo("#s3cap", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 3.35);
+      // beat-grid: taps on beats 3.52 / 4.53 / 5.53 (~1s apart so each item reads)
+      tl.fromTo("#cursor", { x: 1500, y: 980 }, { x: 720, y: 300, duration: 0.42, ease: "power2.inOut" }, 3.08);
+      const taps = [
+        { t: 3.52, card: "#pTaps", row: "#r1", tot: [0, 5.5] },
+        { t: 4.53, card: "#pKwek", row: "#r2", tot: [5.5, 9] },
+        { t: 5.53, card: "#pFish", row: "#r3", tot: [9, 11] },
+      ];
+      const moves = [null, { x: 720, y: 490 }, { x: 980, y: 490 }];
+      taps.forEach((p, i) => {
+        if (moves[i]) tl.to("#cursor", { x: moves[i].x, y: moves[i].y, duration: 0.4, ease: "power2.inOut" }, p.t - 0.45);
+        tl.to("#cursor", { scale: 0.85, duration: 0.08 }, p.t);
+        tl.to("#cursor", { scale: 1, duration: 0.15 }, p.t + 0.08);
+        tl.to(p.card, { scale: 0.95, duration: 0.08 }, p.t);
+        tl.to(p.card, { scale: 1, duration: 0.25, ease: "back.out(3)" }, p.t + 0.08);
+        tl.to(p.card, { backgroundColor: "#f3faf5", borderColor: "#1e5c3a", duration: 0.15 }, p.t);
+        tl.to(p.row, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, p.t + 0.05);
+        countTo("totNum", fgc, p.tot[0], p.tot[1], 0.3, p.t + 0.05, "none");
+        countTo("totPeso", f2, p.tot[0] * 10, p.tot[1] * 10, 0.3, p.t + 0.05, "none");
+      });
+      tl.to("#cursor", { x: 1630, y: 910, duration: 0.4, ease: "power2.inOut" }, 5.8);
+      tl.to("#qrbtn", { scale: 0.96, duration: 0.08 }, 6.25);
+      tl.to("#qrbtn", { scale: 1, duration: 0.2 }, 6.33);
+      tl.to("#cursor", { scale: 0.85, duration: 0.08 }, 6.25);
+      tl.to("#cursor", { scale: 1, opacity: 0, duration: 0.3 }, 6.4);
+      tl.to("#s3 .order", { opacity: 0, duration: 0.2 }, 6.3);
+      tl.to("#qrpanel", { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.6)" }, 6.35);
+      tl.fromTo("#waitDot", { opacity: 1 }, { opacity: 0.25, duration: 0.3, yoyo: true, repeat: 1, ease: "sine.inOut" }, 6.5);
+
+      /* ---------- Scene 2: Student scans the QR, confirms, paid (7 – 11.8) ---------- */
+      pushIn("#s2", 7.0);
+      gsap.set("#sheet", { yPercent: 105 });
+      gsap.set("#done", { opacity: 0 });
+      tl.fromTo("#s2e", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, 7.25);
+      tl.fromTo("#s2h", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 7.35);
+      tl.fromTo("#s2p", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 7.8);
+      tl.fromTo("#steps > div", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.1 }, 8.0);
+      // camera finds the code: drifts into square, scan line sweeps, then locks
+      tl.fromTo("#camQr", { rotation: -9, scale: 1.14, x: 26, y: -18 }, { rotation: 0, scale: 1, x: 0, y: 0, duration: 1.1, ease: "power2.out" }, 7.1);
+      tl.fromTo("#scanline", { y: 0 }, { y: 250, duration: 0.55, ease: "sine.inOut", yoyo: true, repeat: 1 }, 7.2);
+      tl.to("#scanline", { opacity: 0, duration: 0.1 }, 8.3);
+      tl.to("#vf i", { scale: 0.9, duration: 0.12, ease: "power2.in" }, 8.28);
+      tl.to("#vf i", { scale: 1, duration: 0.25, ease: "back.out(3)" }, 8.4);
+      tl.to("#vf i", { borderColor: "#4ade80", duration: 0.1 }, 8.3);
+      tl.fromTo("#lockring", { opacity: 0 }, { opacity: 1, duration: 0.1, yoyo: true, repeat: 1 }, 8.3);
+      // Confirm Payment sheet (cart.php modal copy)
+      tl.to("#dim", { opacity: 1, duration: 0.3 }, 8.5);
+      tl.to("#hint", { opacity: 0, duration: 0.2 }, 8.5);
+      tl.to("#sheet", { yPercent: 0, duration: 0.45, ease: "power3.out" }, 8.5);
+      tl.to("#payBtn", { scale: 0.95, duration: 0.08 }, 9.6);
+      tl.to("#payBtn", { scale: 1, duration: 0.2, ease: "back.out(3)" }, 9.68);
+      tl.fromTo("#ripple", { opacity: 0.9, scale: 0.2 }, { opacity: 0, scale: 6, duration: 0.5, ease: "power2.out" }, 9.6);
+      tl.to("#done", { opacity: 1, duration: 0.25 }, 9.8);
+      tl.set(["#sheet", "#vf", "#dim"], { opacity: 0 }, 10.05);
+      tl.fromTo("#done .ck", { scale: 0 }, { scale: 1, duration: 0.45, ease: "back.out(2.2)" }, 9.82);
+      tl.fromTo(["#done .t", "#done .m", "#done .a", "#done .nb", "#done .ref"], { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.07 }, 9.9);
+      countTo("nbNum", f2, 62.58, 51.58, 0.8, 10.05);
+      tl.to("#steps > div:nth-child(3)", { backgroundColor: "#dcf3e4", color: "#15803d", borderColor: "#dcf3e4", duration: 0.2 }, 9.8);
+
+      /* ---------- Scene 4: Closed loop (11.8 – 16.4) ---------- */
+      pushIn("#s4", 11.8);
+      gsap.set(["#seg1", "#seg2", "#seg3", "#seg4"], { scaleX: 0 });
+      tl.fromTo("#s4 .hd", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 12.05);
+      tl.fromTo("#s4card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 12.2);
+      countTo("capNum", f1, 0, 25500, 1.1, 12.3, "power3.out");
+      tl.to("#seg1", { scaleX: 1, duration: 0.55, ease: "power2.out" }, 12.6);
+      tl.to("#seg2", { scaleX: 1, duration: 0.3, ease: "power2.out" }, 13.1);
+      tl.to("#seg3", { scaleX: 1, duration: 0.2 }, 13.35);
+      tl.to("#seg4", { scaleX: 1, duration: 0.2 }, 13.5);
+      tl.fromTo("#legend span", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.12 }, 12.8);
+      tl.fromTo("#eq > *", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.06, ease: "power2.out" }, 13.8);
+      tl.fromTo("#badge", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, 14.8);
+      tl.fromTo("#note", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4 }, 14.95);
+
+      /* ---------- Scene 5: Stalls (16.4 – 20.4) ---------- */
+      pushIn("#s5", 16.4);
+      gsap.set("#b3flip", { opacity: 0, rotationY: -90 });
+      tl.fromTo("#s5pill", { opacity: 0, y: -14 }, { opacity: 1, y: 0, duration: 0.4 }, 16.7);
+      tl.fromTo("#s5h", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 17.02); // beat-locked: 17.02s
+      tl.fromTo(["#s5 .rl", "#s5 .stall"], { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.06, ease: "power3.out" }, 17.2);
+      tl.to("#b3", { scale: 1.08, duration: 0.2, ease: "power2.out" }, 18.8);
+      tl.set(["#b3 > .id", "#b3 > .tag"], { opacity: 0 }, 18.9);
+      tl.set("#b3flip", { opacity: 1 }, 18.9);
+      tl.to("#b3flip", { rotationY: 0, duration: 0.4, ease: "power3.out" }, 18.9);
+      tl.to("#b3", { scale: 1, duration: 0.3, ease: "power2.out" }, 19.2);
+      tl.fromTo("#rent", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 19.15);
+
+      /* ---------- Scene 6: Features (20.4 – 23) ---------- */
+      pushIn("#s6", 20.4);
+      tl.fromTo("#s6h", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 20.62);
+      // beat-grid: first tile on the 21.01 strong beat region; quick reveal, then the full set holds
+      ["#f1", "#f2", "#f3", "#f4"].forEach((id, i) => {
+        tl.fromTo(id, { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 20.9 + i * 0.25);
+      });
+
+      /* ---------- Scene 7: Outro (23 – 26) ---------- */
+      tl.fromTo("#s7", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 23.0);
+      tl.fromTo("#glow", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 1.2, ease: "power2.out" }, 23.3);
+      tl.fromTo("#logo", { opacity: 0, scale: 0.4, rotation: -30 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.55, ease: "back.out(1.8)" }, 22.97); // beat-locked: lands 23.52s
+      tl.fromTo("#oname", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 23.5);
+      tl.fromTo("#otag .l1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 23.75);
+      tl.fromTo("#otag span:last-child", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 23.9);
+      tl.fromTo("#ofoot", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 24.2);
+      tl.to("#glow", { scale: 1.08, duration: 1.4, ease: "sine.inOut" }, 24.0);
+
+      tl.set({}, {}, 26);
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

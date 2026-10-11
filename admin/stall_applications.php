@@ -36,7 +36,7 @@ gjc_expire_overdue_stall_applications($db, $adminId);
 $apps = $db
     ->query(
         "SELECT sa.*, s.label AS stall_label, s.monthly_rate AS stall_rate
-       FROM stall_applications sa
+       FROM " . gjc_stall_application_source($db, 'sa') . "
        LEFT JOIN stalls s ON s.stall_id = sa.stall_id
       WHERE sa.status IN ('pending_verification','rejected','cancelled','expired')
       ORDER BY sa.created_at DESC",
@@ -45,7 +45,7 @@ $apps = $db
 
 // Awarded applications leave the list above; keep just a running total for the KPI.
 $awardedCount = (int) $db
-    ->query("SELECT COUNT(*) FROM stall_applications WHERE status = 'awarded'")
+    ->query("SELECT COUNT(*) FROM " . gjc_stall_application_source($db) . " WHERE status = 'awarded'")
     ->fetchColumn();
 
 // Vacant stalls available for assignment at award.

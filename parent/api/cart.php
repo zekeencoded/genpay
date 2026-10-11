@@ -19,6 +19,7 @@ header('Content-Type: application/json');
 gjc_require_role(['parent']);
 gjc_ensure_inventory_sku_index($db);
 gjc_ensure_cart_orders_schema($db);
+gjc_ensure_order_items_schema($db);
 
 $action = trim((string) ($_POST['action'] ?? ''));
 
@@ -140,7 +141,11 @@ try {
             $parentUserId = gjc_user_id();
 
             $existingStmt = $db->prepare(
-                "SELECT id FROM cart_orders WHERE parent_user_id = ? AND status = 'pending' LIMIT 1"
+                "SELECT id FROM cart_orders
+                  WHERE parent_wallet_id IN (
+                        SELECT pw.id FROM parent_wallets pw JOIN parents p ON p.id = pw.parent_id
+                         WHERE p.user_id = ?)
+                    AND status = 'pending' LIMIT 1"
             );
             $existingStmt->execute([$parentUserId]);
             if ($existingStmt->fetchColumn()) {
@@ -180,22 +185,36 @@ try {
                 $snapshot['lines']
             ));
             $refNo = gjc_reference('CART');
+            $legacyItemsJson = gjc_order_has_legacy_items_json($db, 'cart');
 
-            $db->prepare(
-                "INSERT INTO cart_orders
-                    (reference_no, buyer_role, parent_user_id, parent_wallet_id, merchant_user_id, merchant_wallet_id,
-                     description, items_json, amount, status)
-                 VALUES (?, 'parent', ?, ?, ?, ?, ?, ?, ?, 'pending')"
-            )->execute([
-                $refNo,
-                $parentUserId,
-                (int) $parentWallet['id'],
-                $merchantUserId,
-                $merchantWallet['id'],
-                $itemsSummary,
-                json_encode($snapshot['lines'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                $snapshot['total'],
-            ]);
+            $db->beginTransaction();
+            try {
+                $legacyUserIds = gjc_has_legacy_wallet_user_ids($db, 'cart_orders');
+                $db->prepare(
+                    "INSERT INTO cart_orders
+                        (reference_no, buyer_role" . ($legacyUserIds ? ", parent_user_id" : "") . ", parent_wallet_id"
+                        . ($legacyUserIds ? ", merchant_user_id" : "") . ", merchant_wallet_id,
+                         description" . ($legacyItemsJson ? ", items_json" : "") . ", amount, status)
+                     VALUES (?, 'parent', ". ($legacyUserIds ? "?, " : "") . "?, " . ($legacyUserIds ? "?, " : "") . "?, ?, " . ($legacyItemsJson ? "?, " : "") . "?, 'pending')"
+                )->execute([
+                    $refNo,
+                    ...($legacyUserIds ? [$parentUserId] : []),
+                    (int) $parentWallet['id'],
+                    ...($legacyUserIds ? [$merchantUserId] : []),
+                    $merchantWallet['id'],
+                    $itemsSummary,
+                    ...($legacyItemsJson
+                        ? [json_encode($snapshot['lines'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]
+                        : []),
+                    $snapshot['total'],
+                ]);
+                $orderId = (int) $db->lastInsertId();
+                gjc_store_order_items($db, 'cart', $orderId, $snapshot['lines']);
+                $db->commit();
+            } catch (Throwable $e) {
+                $db->rollBack();
+                throw $e;
+            }
 
             $_SESSION['cart'] = ['merchant_user_id' => null, 'items' => []];
 
@@ -216,10 +235,15 @@ try {
 
         case 'get_pending_order': {
             $stmt = $db->prepare(
-                "SELECT reference_no, merchant_user_id, items_json, amount, status
-                   FROM cart_orders
-                  WHERE parent_user_id = ? AND status = 'pending'
-                  ORDER BY created_at DESC
+                "SELECT o.id, o.reference_no,
+                        (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id,
+                        o.amount, o.status
+                   FROM cart_orders o
+                  WHERE o.parent_wallet_id IN (
+                        SELECT pw.id FROM parent_wallets pw JOIN parents p ON p.id = pw.parent_id
+                         WHERE p.user_id = ?)
+                    AND o.status = 'pending'
+                  ORDER BY o.created_at DESC
                   LIMIT 1"
             );
             $stmt->execute([gjc_user_id()]);
@@ -230,7 +254,7 @@ try {
                 exit;
             }
 
-            $lines = json_decode((string) $row['items_json'], true);
+            $lines = gjc_order_item_lines($db, 'cart', (int) $row['id']);
             echo json_encode([
                 'success' => true,
                 'order' => [
@@ -248,7 +272,11 @@ try {
         case 'cancel_my_order': {
             $parentUserId = gjc_user_id();
             $stmt = $db->prepare(
-                "SELECT * FROM cart_orders WHERE parent_user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
+                "SELECT * FROM cart_orders
+                  WHERE parent_wallet_id IN (
+                        SELECT pw.id FROM parent_wallets pw JOIN parents p ON p.id = pw.parent_id
+                         WHERE p.user_id = ?)
+                    AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
             );
             $stmt->execute([$parentUserId]);
             $order = $stmt->fetch(PDO::FETCH_ASSOC);

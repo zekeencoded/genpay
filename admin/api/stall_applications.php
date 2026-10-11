@@ -62,9 +62,7 @@ function stall_app_temp_password(int $length = 10): string
 /** Fetch one application row by id, or null. */
 function stall_app_fetch(PDO $db, int $appId): ?array
 {
-    $stmt = $db->prepare("SELECT * FROM stall_applications WHERE id = ? LIMIT 1");
-    $stmt->execute([$appId]);
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    return gjc_stall_application_fetch($db,$appId);
 }
 
 /** True when the payment section is fully recorded for an application row. */
@@ -139,11 +137,7 @@ try {
                 if (is_file($old)) { @unlink($old); }
             }
             $rel = 'uploads/stall_applications/' . $appId . '/' . $fname;
-            $db->prepare(
-                "UPDATE stall_applications
-                    SET contract_file = ?, contract_uploaded_at = NOW(), contract_uploaded_by = ?
-                  WHERE id = ?"
-            )->execute([$rel, $adminId, $appId]);
+            if(!gjc_stall_application_update($db,$appId,['contract_file'=>$rel,'contract_uploaded_at'=>GJC_APPLICATION_DB_NOW,'contract_uploaded_by'=>$adminId],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
             // The signed contract is the document the award is justified by.
             // Uploading (or silently replacing) one was not recorded anywhere.
@@ -188,12 +182,7 @@ try {
                 stall_app_json(['success' => false, 'message' => 'Choose a payment schedule — every 15th or every 30th.']);
             }
 
-            $db->prepare(
-                "UPDATE stall_applications
-                    SET deposit_amount = ?, advance_amount = ?, rental_start_date = ?, payment_schedule_day = ?,
-                        payment_method = 'cash', payment_ref_no = NULL
-                  WHERE id = ?"
-            )->execute([$deposit, $advance, $startDate, $scheduleDay, $appId]);
+            if(!gjc_stall_application_update($db,$appId,['deposit_amount'=>$deposit,'advance_amount'=>$advance,'rental_start_date'=>$startDate,'payment_schedule_day'=>$scheduleDay,'payment_method'=>'cash','payment_ref_no'=>null],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
             // Money the applicant handed over at the counter. Recording it moved
             // the application forward and left no audit entry at all.
@@ -258,6 +247,8 @@ try {
 
             $db->beginTransaction();
             try {
+                $app=gjc_stall_application_fetch($db,$appId,true);
+                if(!$app||$app['status']!=='pending_verification'||empty($app['contract_file'])||!stall_app_payment_complete($app))throw new RuntimeException('APPLICATION_CHANGED');
                 // Named columns, not SELECT * — this row is written to the audit
                 // log as old_value/new_value, and a whole-row dump silently logs
                 // any column added to `stalls` later.
@@ -280,7 +271,7 @@ try {
                           roleID, sub_role, password, profile_img,
                           force_password_change, is_first_login, password_changed, temp_password)
                      VALUES (?, ?, ?, ?, 2, 'merchant_admin', ?, '', 1, 1, 0, ?)"
-                )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw, $tempPassword]);
+                )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw, null]);
                 $newUserId = (int) $db->lastInsertId();
 
                 $db->prepare(
@@ -314,6 +305,7 @@ try {
                 $nextDue = stall_app_next_due_date($app['rental_start_date'], $scheduleDay);
                 $newLeaseId = null;
                 if (gjc_table_exists($db, 'merchant_leases')) {
+                    if (in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true)) {
                     $db->prepare(
                         "INSERT INTO merchant_leases
                             (merchant_user_id, stall_number, stall_id, stall_name, monthly_rent,
@@ -325,19 +317,25 @@ try {
                         'Payment every ' . $scheduleDay . 'th. 2-month deposit + 1-month advance collected on award.',
                         $adminId,
                     ]);
+                    } else {
+                    $db->prepare(
+                        "INSERT INTO merchant_leases
+                            (merchant_user_id, stall_number, stall_id, stall_name, monthly_rent,
+                             deposit_amount, lease_start, lease_end, status, contract_notes, created_by, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 1 YEAR), 'active', ?, ?, NOW())"
+                    )->execute([
+                        $newUserId, $stallId, $stallId, $app['business_name'], $monthlyRent,
+                        $app['deposit_amount'], $app['rental_start_date'], $app['rental_start_date'],
+                        'Payment every ' . $scheduleDay . 'th. 2-month deposit + 1-month advance collected on award.',
+                        $adminId,
+                    ]);
+                    }
                     // Captured so the MERCHANT_ONBOARDING entry below can name the
                     // lease this award created, not just the user and merchant.
                     $newLeaseId = (int) $db->lastInsertId();
                 }
 
-                $db->prepare(
-                    "UPDATE stall_applications
-                        SET stall_id = ?, status = 'awarded',
-                            awarded_by = ?, awarded_at = NOW(),
-                            reviewed_by = ?, reviewed_at = NOW(),
-                            merchant_user_id = ?, temp_password_plain = ?
-                      WHERE id = ?"
-                )->execute([$stallId, $adminId, $adminId, $newUserId, $tempPassword, $appId]);
+                if(!gjc_stall_application_update($db,$appId,['stall_id'=>$stallId,'status'=>'awarded','awarded_by'=>$adminId,'awarded_at'=>GJC_APPLICATION_DB_NOW,'reviewed_by'=>$adminId,'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$newUserId,'temp_password_plain'=>null],['status'=>'pending_verification']))throw new RuntimeException('APPLICATION_CHANGED');
 
                 if (gjc_table_exists($db, 'merchant_accounts')) {
                     $db->prepare(
@@ -348,7 +346,7 @@ try {
                              user_id = VALUES(user_id),
                              temp_password_plain = VALUES(temp_password_plain),
                              created_by = VALUES(created_by)"
-                    )->execute([$appId, $newUserId, $tempPassword, $adminId]);
+                    )->execute([$appId, $newUserId, null, $adminId]);
                 }
 
                 $db->commit();
@@ -445,11 +443,7 @@ try {
                 stall_app_json(['success' => false, 'message' => 'A rejection reason is required.']);
             }
 
-            $db->prepare(
-                "UPDATE stall_applications
-                    SET status = 'rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW()
-                  WHERE id = ?"
-            )->execute([$reason, $adminId, $appId]);
+            if(!gjc_stall_application_update($db,$appId,['status'=>'rejected','rejection_reason'=>$reason,'reviewed_by'=>$adminId,'reviewed_at'=>GJC_APPLICATION_DB_NOW],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
             // The rejection reason was already required, shown to the applicant
             // and emailed to them — but never written to the audit trail.
@@ -492,7 +486,7 @@ try {
             // Times already held on that date by any other live application.
             $bookedStmt = $db->prepare(
                 "SELECT TIME_FORMAT(meetup_scheduled_at, '%H:%i')
-                   FROM stall_applications
+                   FROM " . gjc_stall_application_source($db) . "
                   WHERE meetup_scheduled_at IS NOT NULL
                     AND status NOT IN ('cancelled', 'expired', 'rejected')
                     AND DATE(meetup_scheduled_at) = ?
@@ -548,10 +542,10 @@ try {
             // submission can never be handed the slot finance is taking.
             // (stall_app_json exits, which skips finally — respond after release.)
             $slotTaken = false;
-            $db->prepare("SELECT GET_LOCK('gjc_stall_scheduler', 10)")->execute();
+            if((int)$db->query("SELECT GET_LOCK('gjc_stall_scheduler',10)")->fetchColumn()!==1)throw new RuntimeException('Meeting scheduler is busy.');
             try {
                 $clash = $db->prepare(
-                    "SELECT COUNT(*) FROM stall_applications
+                    "SELECT COUNT(*) FROM " . gjc_stall_application_source($db) . "
                       WHERE meetup_scheduled_at = ?
                         AND status NOT IN ('cancelled', 'expired', 'rejected')
                         AND id <> ?"
@@ -559,11 +553,7 @@ try {
                 $clash->execute([$newScheduledAt, $appId]);
                 $slotTaken = (int) $clash->fetchColumn() > 0;
                 if (!$slotTaken) {
-                    $db->prepare(
-                        "UPDATE stall_applications
-                            SET meetup_scheduled_at = ?, meetup_scheduled_email_sent_at = NOW()
-                          WHERE id = ?"
-                    )->execute([$newScheduledAt, $appId]);
+                    if(!gjc_stall_application_update($db,$appId,['meetup_scheduled_at'=>$newScheduledAt,'meetup_scheduled_email_sent_at'=>GJC_APPLICATION_DB_NOW],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
                 }
             } finally {
                 $db->prepare("SELECT RELEASE_LOCK('gjc_stall_scheduler')")->execute();
@@ -601,11 +591,7 @@ try {
             if ($appId <= 0) {
                 stall_app_json(['success' => false, 'message' => 'Application not found.']);
             }
-            $db->prepare(
-                "UPDATE stall_applications
-                    SET first_viewed_at = NOW(), first_viewed_by = ?
-                  WHERE id = ? AND first_viewed_at IS NULL"
-            )->execute([$adminId, $appId]);
+            gjc_stall_application_update($db,$appId,['first_viewed_at'=>GJC_APPLICATION_DB_NOW,'first_viewed_by'=>$adminId],['first_viewed_at'=>null]);
             stall_app_json(['success' => true]);
         }
 

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -147,7 +147,7 @@ try {
                 exit;
             }
 
-            $db->prepare("UPDATE users SET restricted_suspended_until = NULL WHERE userID = ?")->execute([$userId]);
+            gjc_clear_product_suspension($db, $userId);
 
             logAudit(
                 $db, $adminId, gjc_current_role(),

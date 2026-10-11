@@ -88,8 +88,8 @@ CREATE TABLE IF NOT EXISTS student_wallets (
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS merchant_wallets (
     id              INT           UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id         INT           UNSIGNED NOT NULL UNIQUE
-        COMMENT 'FK → users.id (merchant role)',
+    user_id         INT NOT NULL UNIQUE
+        COMMENT 'FK -> users.userID (merchant role)',
     balance         DECIMAL(15,2) NOT NULL DEFAULT 0.00
         COMMENT 'Collected points pending settlement',
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -97,52 +97,46 @@ CREATE TABLE IF NOT EXISTS merchant_wallets (
                                   ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_merchant_wallets   PRIMARY KEY (id),
+    CONSTRAINT fk_core_merchant_wallets_user_id
+        FOREIGN KEY (user_id) REFERENCES users(userID)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT chk_merchant_balance  CHECK (balance >= 0)
 ) ENGINE=InnoDB COMMENT='Merchant wallets — points flow in from students, out to vault on settlement';
 
 
 -- ────────────────────────────────────────────────────────────
---  4.  VOUCHERS  (Visitor / Guest One-Time QR Codes)
---  These are NON-REFUNDABLE by design.
---  Points are pulled from the vault on creation and returned
---  to the vault only when the voucher EXPIRES (unspent balance).
+--  4.  HISTORICAL VOUCHERS
+--  Retained for historical ledger records; issuance is no longer active.
+--  initial_value and is_refundable preserve the recorded contract facts.
+--  Canonical PHP definition: gjc_ensure_historical_vouchers_schema().
 -- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS vouchers (
-    id                  INT           UNSIGNED NOT NULL AUTO_INCREMENT,
-
-    -- QR payload — UUID-style unique code printed/scanned at entry
-    voucher_code        VARCHAR(64)   NOT NULL UNIQUE,
-
-    -- Who issued and authorized the voucher
-    issued_by           INT           UNSIGNED NOT NULL
-        COMMENT 'FK → users.id (cashier or admin who created it)',
-    visitor_name        VARCHAR(120)  NOT NULL,
-    visitor_contact     VARCHAR(60)   NULL,
-
-    -- Economy values
-    original_amount     DECIMAL(10,2) NOT NULL
-        COMMENT 'Points pulled from the vault at creation time',
-    remaining_balance   DECIMAL(10,2) NOT NULL
-        COMMENT 'Unspent points — stays in the economy, non-refundable',
-
-    -- Lifecycle
-    status              ENUM('active','used','expired','void') NOT NULL DEFAULT 'active',
-    is_non_refundable   TINYINT(1)    NOT NULL DEFAULT 1
-        COMMENT 'Always 1 — architectural constant, never override',
-
-    expires_at          DATETIME      NOT NULL
-        COMMENT 'Cashier sets validity window (e.g. school event day)',
-    created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
-                                      ON UPDATE CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_vouchers          PRIMARY KEY (id),
-    CONSTRAINT chk_voucher_amount   CHECK (original_amount > 0),
-    CONSTRAINT chk_voucher_balance  CHECK (remaining_balance >= 0),
-    CONSTRAINT chk_voucher_lte_orig CHECK (remaining_balance <= original_amount),
-    -- Hard rule: is_non_refundable must always be 1 (architectural constant)
-    CONSTRAINT chk_non_refundable   CHECK (is_non_refundable = 1)
-) ENGINE=InnoDB COMMENT='Visitor one-time QR vouchers — pulled from vault, non-refundable';
+CREATE TABLE IF NOT EXISTS `vouchers` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `qr_code_hash` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `voucher_code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+  `issued_by` int NOT NULL COMMENT 'FK -> users.id (cashier or admin who created it)',
+  `is_refundable` tinyint(1) NOT NULL DEFAULT '0',
+  `visitor_name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `visitor_contact` varchar(60) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `initial_value` decimal(15,2) DEFAULT NULL,
+  `remaining_balance` decimal(10,2) NOT NULL COMMENT 'Unspent points -- stays in the economy, non-refundable',
+  `status` enum('active','used','expired','void') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `expires_at` datetime NOT NULL,
+  `expired_at` datetime DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `last_used_at` datetime DEFAULT NULL,
+  `use_count` smallint unsigned NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `voucher_code` (`voucher_code`),
+  UNIQUE KEY `qr_code_hash` (`qr_code_hash`),
+  KEY `idx_v_hash` (`qr_code_hash`),
+  KEY `idx_v_status` (`status`),
+  KEY `idx_v_expiry` (`expires_at`,`status`),
+  KEY `fk_core_vouchers_issued_by` (`issued_by`),
+  CONSTRAINT `fk_core_vouchers_issued_by` FOREIGN KEY (`issued_by`) REFERENCES `users` (`userID`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 -- ────────────────────────────────────────────────────────────
@@ -204,20 +198,19 @@ CREATE INDEX idx_txn_created    ON transactions (created_at);
 --  Separate, append-only audit trail for every time a
 --  super-admin increases the total_circulation_cap.
 -- ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS cap_increase_log (
-    id              INT           UNSIGNED NOT NULL AUTO_INCREMENT,
-    super_admin_id  INT           UNSIGNED NOT NULL
-        COMMENT 'FK → users.id — must be super-admin role',
-    old_cap         DECIMAL(15,2) NOT NULL,
-    new_cap         DECIMAL(15,2) NOT NULL,
-    amount_added    DECIMAL(15,2) NOT NULL,
-    reason          TEXT          NOT NULL
-        COMMENT 'Mandatory justification for audit compliance',
-    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_cap_increase_log PRIMARY KEY (id),
-    CONSTRAINT chk_new_cap_gt_old  CHECK (new_cap > old_cap)
-) ENGINE=InnoDB COMMENT='Append-only log of every money-supply increase';
+-- Canonical PHP definition: gjc_ensure_cap_increase_log_schema().
+-- amount_added is derived as new_cap - old_cap.
+CREATE TABLE IF NOT EXISTS `cap_increase_log` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `super_admin_id` int unsigned NOT NULL COMMENT 'FK -> users.id -- must be super-admin role',
+  `old_cap` decimal(15,2) NOT NULL,
+  `new_cap` decimal(15,2) NOT NULL,
+  `reason` text COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Mandatory justification for audit compliance',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `source` enum('super_admin_mint','tuition_credit','fee_waiver_claim') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `source_ref_id` int unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 -- ────────────────────────────────────────────────────────────

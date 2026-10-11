@@ -30,7 +30,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
     <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=2">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=16">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=17">
 </head>
 <body>
 

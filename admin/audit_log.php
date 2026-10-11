@@ -219,13 +219,17 @@ if ($transactionRefs && gjc_table_exists($db, "p2p_transfers")) {
     $placeholders = implode(",", array_fill(0, count($transactionRefs), "?"));
     $p2pStmt = $db->prepare(
         "SELECT p.*,
+                from_wallet.user_id AS from_user_id,
+                to_wallet.user_id AS to_user_id,
                 TRIM(CONCAT(COALESCE(from_user.first_name, ''), ' ', COALESCE(from_user.last_name, ''))) AS from_name,
                 from_user.email AS from_email,
                 TRIM(CONCAT(COALESCE(to_user.first_name, ''), ' ', COALESCE(to_user.last_name, ''))) AS to_name,
                 to_user.email AS to_email
            FROM p2p_transfers p
-           LEFT JOIN users from_user ON from_user.userID = p.from_user_id
-           LEFT JOIN users to_user ON to_user.userID = p.to_user_id
+           LEFT JOIN student_wallets from_wallet ON from_wallet.id = p.from_wallet_id
+           LEFT JOIN student_wallets to_wallet ON to_wallet.id = p.to_wallet_id
+           LEFT JOIN users from_user ON from_user.userID = from_wallet.user_id
+           LEFT JOIN users to_user ON to_user.userID = to_wallet.user_id
           WHERE p.reference_no IN ({$placeholders})",
     );
     $p2pStmt->execute($transactionRefs);

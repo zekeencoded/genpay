@@ -38,6 +38,9 @@ if ($staffId !== null) {
     );
     $stmt->execute([$staffId, $merchantUserId]);
     $staff = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($staff) {
+        $staff = gjc_with_user_address($db, $staff, (int) $staffId);
+    }
 }
 
 if (!$staff) {

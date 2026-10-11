@@ -16,26 +16,7 @@ $directory = new MerchantTenantDirectory($db);
 
 // ── Ensure tables exist before any operation ──────────────────────────────
 if (!gjc_table_exists($db, 'merchant_leases')) {
-    $db->exec(
-        "CREATE TABLE IF NOT EXISTS merchant_leases (
-            id                INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            merchant_user_id  INT UNSIGNED NOT NULL,
-            stall_number      VARCHAR(30)  NOT NULL,
-            stall_name        VARCHAR(120) NOT NULL,
-            monthly_rent      DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-            deposit_amount    DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-            lease_start       DATE         NOT NULL,
-            lease_end         DATE         NOT NULL,
-            next_due_date     DATE         NOT NULL,
-            status            VARCHAR(20)  NOT NULL DEFAULT 'pending',
-            contract_notes    TEXT         NULL,
-            created_by        INT UNSIGNED NULL,
-            created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_ml_merchant (merchant_user_id),
-            INDEX idx_ml_status   (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
+    gjc_lease_json_fail('Lease schema is missing. Restore the approved database schema before continuing.');
 }
 
 if (!gjc_table_exists($db, 'merchant_rent_payments')) {
@@ -149,6 +130,7 @@ try {
                 gjc_lease_json_fail('Selected merchant was not found in the system.');
             }
 
+            if (in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true)) {
             $stmt = $db->prepare(
                 "INSERT INTO merchant_leases
                     (merchant_user_id, stall_number, stall_name, monthly_rent, deposit_amount,
@@ -168,6 +150,28 @@ try {
                 $notes ?: null,
                 $adminId,
             ]);
+
+            } else {
+            $stmt = $db->prepare(
+                "INSERT INTO merchant_leases
+                    (merchant_user_id, stall_number, stall_name, monthly_rent, deposit_amount,
+                     lease_start, lease_end, status, contract_notes, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            $stmt->execute([
+                $merchantUserId,
+                $stallNumber,
+                $stallName,
+                $monthlyRent,
+                $depositAmount,
+                $leaseStart,
+                $leaseEnd,
+                $status,
+                $notes ?: null,
+                $adminId,
+            ]);
+
+            }
 
             $newId = (int) $db->lastInsertId();
             $directory->syncNextDueDate($newId);

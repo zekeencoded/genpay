@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
+require_once __DIR__ . '/../connection/MerchantTenantDirectory.php';
 require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['merchant']);
@@ -47,6 +48,24 @@ function backup_fetch(PDO $db, string $table, string $sql, array $params): array
     return $stmt->fetchAll(PDO::FETCH_NUM);
 }
 
+/** Same CSV columns and ordering, with a calculated Next Due cell. */
+function backup_lease_rows(PDO $db, int $merchantUserId): array
+{
+    if (!gjc_table_exists($db, 'merchant_leases')) {
+        return [];
+    }
+    $stmt = $db->prepare(
+        "SELECT id, stall_name, monthly_rent, deposit_amount, lease_start, lease_end, status, contract_notes
+           FROM merchant_leases WHERE merchant_user_id = ? ORDER BY lease_start ASC"
+    );
+    $stmt->execute([$merchantUserId]);
+    $leases = (new MerchantTenantDirectory($db))->withDerivedDueDates($stmt->fetchAll(PDO::FETCH_ASSOC));
+    return array_map(static fn(array $lease): array => [
+        $lease['stall_name'], $lease['monthly_rent'], $lease['deposit_amount'],
+        $lease['lease_start'], $lease['lease_end'], $lease['next_due_date'],
+        $lease['status'], $lease['contract_notes'],
+    ], $leases);
+}
 $staffIdsStmt = $db->prepare("SELECT userID FROM users WHERE merchant_owner_id = ?");
 $staffIdsStmt->execute([$ownerMerchId]);
 $actorIds = array_map('intval', array_merge([$ownerMerchId], $staffIdsStmt->fetchAll(PDO::FETCH_COLUMN)));
@@ -95,10 +114,7 @@ $files = [
     ],
     'leases.csv' => [
         ['Stall', 'Monthly Rent', 'Deposit', 'Lease Start', 'Lease End', 'Next Due', 'Status', 'Notes'],
-        backup_fetch($db, 'merchant_leases',
-            "SELECT stall_name, monthly_rent, deposit_amount, lease_start, lease_end, next_due_date, status, contract_notes
-               FROM merchant_leases WHERE merchant_user_id = ? ORDER BY lease_start ASC",
-            [$ownerMerchId]),
+        backup_lease_rows($db, $ownerMerchId),
     ],
     'rent_payments.csv' => [
         ['Reference', 'Amount Paid', 'Period Covered', 'Payment Date', 'Method', 'Notes'],

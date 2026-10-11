@@ -200,7 +200,7 @@ CROSS JOIN (SELECT SUM(remaining_balance) AS voucher_total
             FROM vouchers WHERE status = 'active')                                 vo
 LEFT  JOIN (
     SELECT
-        SUM(amount_added) AS minted_this_month,
+        SUM(new_cap - old_cap) AS minted_this_month,
         COUNT(*)          AS mint_events
     FROM cap_increase_log
     WHERE MONTH(created_at) = MONTH(CURDATE())

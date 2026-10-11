@@ -24,6 +24,7 @@ if (!gjc_csrf_verify()) {
 }
 
 gjc_ensure_cart_orders_schema($db);
+gjc_ensure_order_items_schema($db);
 gjc_ensure_parent_schema($db);
 
 $action = trim((string) ($_POST['action'] ?? ''));
@@ -47,9 +48,14 @@ try {
     $db->beginTransaction();
     try {
         $orderStmt = $db->prepare(
-            "SELECT * FROM cart_orders
-              WHERE parent_user_id = ? AND status = 'pending'
-              ORDER BY created_at DESC
+            "SELECT o.*,
+                    (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id
+               FROM cart_orders o
+              WHERE o.parent_wallet_id IN (
+                    SELECT pw.id FROM parent_wallets pw JOIN parents p ON p.id = pw.parent_id
+                     WHERE p.user_id = ?)
+                AND o.status = 'pending'
+              ORDER BY o.created_at DESC
               LIMIT 1
               FOR UPDATE"
         );
@@ -59,6 +65,10 @@ try {
         if (!$order) {
             throw new RuntimeException('You don\'t have an order awaiting payment.');
         }
+        $scannedOrderReference = trim((string) ($_POST['order_reference'] ?? ''));
+        if ($scannedOrderReference !== '' && $scannedOrderReference !== $order['reference_no']) {
+            throw new RuntimeException('This payment QR belongs to a different order. Ask the merchant to open your order\'s QR.');
+        }
         if ((int) $order['merchant_user_id'] !== $scannedMerchantUserId) {
             throw new RuntimeException('This Wallet QR belongs to a different stall than your pending order.');
         }
@@ -67,7 +77,7 @@ try {
             throw new RuntimeException('This stall is temporarily suspended and cannot accept payments right now. Please cancel this order.');
         }
 
-        $lines = json_decode((string) $order['items_json'], true);
+        $lines = gjc_order_item_lines($db, 'cart', (int) $order['id']);
         if (!is_array($lines) || empty($lines)) {
             throw new RuntimeException('This order has no item details recorded.');
         }
@@ -163,6 +173,8 @@ try {
             $order['description'],
             gjc_active_school_year_id($db),
         ]);
+
+        gjc_store_transaction_items($db, (int) $db->lastInsertId(), $lines);
 
         $db->prepare(
             "UPDATE cart_orders SET status = 'paid', paid_at = NOW(), paid_ref = ? WHERE id = ?"

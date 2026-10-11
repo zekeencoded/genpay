@@ -54,10 +54,12 @@ try {
     }
 
     $stmt = $db->prepare(
-        "SELECT id, token, merchant_user_id, description, amount, status, expires_at
-           FROM merchant_qr_orders
-          WHERE token = ?
-             OR (short_code IS NOT NULL AND short_code = ?)
+        "SELECT o.id, o.token,
+                (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id,
+                o.description, o.amount, o.status, o.expires_at
+           FROM merchant_qr_orders o
+          WHERE o.token = ?
+             OR (o.short_code IS NOT NULL AND o.short_code = ?)
           LIMIT 1"
     );
     $stmt->execute([$token, $shortCode]);
@@ -89,6 +91,11 @@ try {
         exit;
     }
 
+    $lines = gjc_order_item_lines($db, 'qr', (int) $order['id']);
+    if (!$lines) {
+        throw new RuntimeException('This POS bill has no recorded items.');
+    }
+
     $merchantName = gjc_merchant_display_name($db, (int) $order['merchant_user_id']) ?: 'Merchant';
 
     echo json_encode([
@@ -96,6 +103,7 @@ try {
         'token' => (string) $order['token'],
         'merchant' => $merchantName,
         'description' => (string) ($order['description'] ?? ''),
+        'lines' => $lines,
         'amount' => round((float) $order['amount'], 2),
         'expires_at' => (string) $order['expires_at'],
         'seconds_left' => max(0, strtotime((string) $order['expires_at']) - time()),

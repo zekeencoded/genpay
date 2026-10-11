@@ -96,18 +96,11 @@ if (($walletIds || $parentWalletId) && gjc_table_exists($db, 'transactions')) {
         $params[] = $dateTo . ' 23:59:59';
     }
 
-    // Line items for a payment aren't on the transactions row itself — both
-    // cart_orders (in-app cart checkout) and merchant_qr_orders (POS/QR pay)
-    // link back to it via paid_ref = transactions.reference_no and carry an
-    // items_json column, same shape merchant/api/pos.php's own view_order
-    // action already reads.
+    // Receipt items come from the official relational records.
     $stmt = $db->prepare(
         "SELECT t.id, t.reference_no, t.transaction_type, t.student_wallet_id, t.merchant_wallet_id,
-                t.parent_wallet_id, t.initiated_by, t.amount, t.notes, t.status, t.created_at,
-                COALESCE(co.items_json, mqo.items_json) AS items_json
+                t.parent_wallet_id, t.initiated_by, t.amount, t.notes, t.status, t.created_at
            FROM transactions t
-           LEFT JOIN cart_orders co ON co.paid_ref = t.reference_no
-           LEFT JOIN merchant_qr_orders mqo ON mqo.paid_ref = t.reference_no
            {$where}
           ORDER BY t.created_at DESC
           LIMIT 300"
@@ -158,8 +151,8 @@ foreach ($rows as &$r) {
     $r['counterparty'] = $counterparty;
 
     $itemsSummary = '';
-    if (in_array($type, ['payment', 'voucher_payment'], true) && !empty($r['items_json'])) {
-        $decoded = json_decode((string) $r['items_json'], true);
+    if (in_array($type, ['payment', 'voucher_payment'], true)) {
+        $decoded = gjc_transaction_line_items($db, (string) $r['reference_no']);
         if (is_array($decoded)) {
             $itemsSummary = implode(', ', array_map(
                 static fn(array $i): string => (int) ($i['qty'] ?? 1) . '× ' . (string) ($i['name'] ?? 'Item'),

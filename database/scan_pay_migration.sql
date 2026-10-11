@@ -18,10 +18,8 @@ CREATE TABLE IF NOT EXISTS merchant_qr_orders (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     token VARCHAR(64) NOT NULL UNIQUE,
     short_code VARCHAR(12) NULL,
-    merchant_user_id INT UNSIGNED NOT NULL,
     merchant_wallet_id INT UNSIGNED NOT NULL,
     description TEXT NULL,
-    items_json TEXT NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     expires_at DATETIME NOT NULL,
@@ -31,7 +29,7 @@ CREATE TABLE IF NOT EXISTS merchant_qr_orders (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_mqo_token (token),
     INDEX idx_mqo_status_expiry (status, expires_at),
-    INDEX idx_mqo_merchant (merchant_user_id),
+    INDEX idx_mqo_merchant_wallet (merchant_wallet_id),
     UNIQUE INDEX uq_mqo_short_code (short_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

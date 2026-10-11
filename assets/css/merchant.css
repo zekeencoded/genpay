@@ -231,6 +231,15 @@ html {
   height: 330px;
 }
 
+.merchant-voided-panel { display:flex; flex-direction:column; min-width:0; }
+.merchant-voided-list { max-height:280px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.merchant-voided-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+  padding:12px 4px; border-bottom:1px solid var(--ad-line); color:var(--text-main); text-decoration:none; }
+.merchant-voided-row:hover, .merchant-voided-row:focus-visible { background:var(--gp-success-bg); color:var(--text-main); }
+.merchant-voided-description { min-width:0; overflow-wrap:anywhere; }
+.merchant-voided-row > .text-end { flex-shrink:0; }
+.merchant-voided-all { margin-top:16px; align-self:flex-start; }
+
 .merchant-quick-actions {
   display: flex;
   flex-direction: column;

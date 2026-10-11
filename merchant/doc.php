@@ -51,7 +51,7 @@ $appRow = null;
 if (gjc_table_exists($db, 'stall_applications')) {
     $appStmt = $db->prepare(
         "SELECT {$key}, awarded_at
-           FROM stall_applications
+           FROM " . gjc_stall_application_source($db) . "
           WHERE merchant_user_id = ?
             AND status = 'awarded'
           ORDER BY awarded_at DESC, id DESC

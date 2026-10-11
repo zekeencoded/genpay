@@ -48,12 +48,12 @@ function users_fetch(PDO $db, int $userId): ?array
         return null;
     }
     $stmt = $db->prepare(
-        "SELECT userID, first_name, last_name, email, roleID, sub_role, status,
-                suspended_until, suspension_reason
+        "SELECT userID, first_name, last_name, email, roleID, sub_role, status
            FROM users WHERE userID = ? LIMIT 1"
     );
     $stmt->execute([$userId]);
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $user ? gjc_with_user_suspension($db, $user, $userId) : null;
 }
 
 /**

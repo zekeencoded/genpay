@@ -157,7 +157,7 @@ class MintingGuard
     {
         $stmt = $this->db->prepare("
             SELECT
-                COALESCE(SUM(amount_added), 0)  AS minted_this_month,
+                COALESCE(SUM(new_cap - old_cap), 0)  AS minted_this_month,
                 COUNT(*)                         AS mint_events,
                 MIN(created_at)                  AS first_mint_at,
                 MAX(created_at)                  AS last_mint_at
@@ -207,7 +207,7 @@ class MintingGuard
     private function getMintedThisMonth(): float
     {
         $stmt = $this->db->query("
-            SELECT COALESCE(SUM(amount_added), 0)
+            SELECT COALESCE(SUM(new_cap - old_cap), 0)
             FROM cap_increase_log
             WHERE MONTH(created_at) = MONTH(CURDATE())
               AND YEAR(created_at)  = YEAR(CURDATE())

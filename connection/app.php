@@ -489,6 +489,239 @@ function gjc_enforce_restrictions_on_inventory(PDO $db): int
 }
 
 /**
+ * Optional current restricted-product state. Audit history remains separate.
+ * Existing legacy fields remain until a separately approved CONTRACT.
+ */
+function gjc_ensure_user_violations_schema(PDO $db): void
+{
+    if (!gjc_table_exists($db, 'users')) {
+        throw new RuntimeException('Violation state schema requires users.');
+    }
+    $type = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
+    if (!$type || strtolower($type['Type']) !== 'int') {
+        throw new RuntimeException('Violation owner FK requires signed INT users.userID.');
+    }
+    if (gjc_table_exists($db, 'user_violations')) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Violation state schema creation must precede a transaction.');
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS user_violations (
+    user_id INT NOT NULL,
+    restricted_violation_count INT UNSIGNED NOT NULL DEFAULT 0,
+    restricted_violation_last_at DATETIME NULL,
+    restricted_suspended_until DATETIME NULL,
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_user_violation_user FOREIGN KEY (user_id)
+        REFERENCES users(userID) ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+    gjc_table_columns($db, 'user_violations', true);
+}
+
+/** Current facts, distinct from immutable PRODUCT_RESTRICTION history. */
+function gjc_violation_fields(): array
+{
+    return ['restricted_violation_count', 'restricted_violation_last_at', 'restricted_suspended_until'];
+}
+
+function gjc_violation_has_legacy(PDO $db): bool
+{
+    $count = count(array_intersect(gjc_violation_fields(), gjc_table_columns($db, 'users')));
+    if ($count !== 0 && $count !== 3) {
+        throw new RuntimeException('Violation legacy fields must be all present or all absent.');
+    }
+    return $count === 3;
+}
+
+/** One-statement projection shared by enforcement and the finance list. */
+function gjc_violation_projection(PDO $db): array
+{
+    $legacy = gjc_violation_has_legacy($db);
+    $normalized = gjc_table_exists($db, 'user_violations')
+        && !array_diff(array_merge(['user_id'], gjc_violation_fields()), gjc_table_columns($db, 'user_violations'));
+    $select = [];
+    foreach (gjc_violation_fields() as $field) {
+        if ($legacy) {
+            $select[] = "u.{$field} AS legacy_{$field}";
+        }
+        if ($normalized) {
+            $select[] = "v.{$field} AS normalized_{$field}";
+        }
+    }
+    return ['legacy' => $legacy, 'normalized' => $normalized, 'select' => $select,
+        'join' => $normalized ? ' LEFT JOIN user_violations v ON v.user_id = u.userID' : ''];
+}
+
+function gjc_violation_from_projection(array $row, array $projection): array
+{
+    $legacy = $normalized = [];
+    foreach (gjc_violation_fields() as $field) {
+        if ($projection['legacy']) {
+            $legacy[$field] = $row["legacy_{$field}"];
+        }
+        if ($projection['normalized']) {
+            $normalized[$field] = $field === 'restricted_violation_count'
+                ? (int) ($row["normalized_{$field}"] ?? 0) : $row["normalized_{$field}"];
+        }
+    }
+    if (!$projection['normalized']) {
+        return $legacy;
+    }
+    if ($projection['legacy']) {
+        foreach (gjc_violation_fields() as $field) {
+            $equal = $field === 'restricted_violation_count'
+                ? (int) $legacy[$field] === $normalized[$field] : $legacy[$field] === $normalized[$field];
+            if (!$equal) {
+                return $legacy;
+            }
+        }
+    }
+    return $normalized;
+}
+
+function gjc_product_violation_state(PDO $db, int $userId, bool $lock = false): ?array
+{
+    if ($lock && !$db->inTransaction()) {
+        throw new RuntimeException('Violation locking requires a transaction.');
+    }
+    $projection = gjc_violation_projection($db);
+    if (!$projection['select']) {
+        return null;
+    }
+    $stmt = $db->prepare('SELECT u.userID, ' . implode(', ', $projection['select'])
+        . ' FROM users u' . $projection['join'] . ' WHERE u.userID = ? LIMIT 1'
+        . ($lock ? ' FOR UPDATE' : ''));
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? gjc_violation_from_projection($row, $projection) : null;
+}
+
+function gjc_violation_write(PDO $db, callable $write): mixed
+{
+    if (!$db->inTransaction()) {
+        gjc_ensure_product_violation_schema($db);
+    }
+    gjc_violation_has_legacy($db);
+    if (!gjc_table_exists($db, 'user_violations')
+        || array_diff(array_merge(['user_id'], gjc_violation_fields()), gjc_table_columns($db, 'user_violations'))) {
+        throw new RuntimeException('Violation migration schema is not ready.');
+    }
+    $owns = !$db->inTransaction();
+    $savepoint = 'gjc_violation_' . bin2hex(random_bytes(8));
+    if ($owns) {
+        $db->beginTransaction();
+    } else {
+        $db->exec("SAVEPOINT {$savepoint}");
+    }
+    try {
+        $result = $write();
+        if ($owns) {
+            $db->commit();
+        } else {
+            $db->exec("RELEASE SAVEPOINT {$savepoint}");
+        }
+        return $result;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            if ($owns) {
+                $db->rollBack();
+            } else {
+                $db->exec("ROLLBACK TO SAVEPOINT {$savepoint}");
+                $db->exec("RELEASE SAVEPOINT {$savepoint}");
+            }
+        }
+        throw $error;
+    }
+}
+
+
+function gjc_sync_user_violation(PDO $db, int $userId): void
+{
+    if (!$db->inTransaction()) {
+        throw new RuntimeException('Violation synchronization requires a transaction.');
+    }
+    if (!gjc_violation_has_legacy($db)) {
+        return;
+    }
+    $db->prepare(
+        "INSERT INTO user_violations
+            (user_id, restricted_violation_count, restricted_violation_last_at, restricted_suspended_until)
+         SELECT userID, restricted_violation_count, restricted_violation_last_at, restricted_suspended_until
+           FROM users WHERE userID = ?
+         ON DUPLICATE KEY UPDATE
+            restricted_violation_count = VALUES(restricted_violation_count),
+            restricted_violation_last_at = VALUES(restricted_violation_last_at),
+            restricted_suspended_until = VALUES(restricted_suspended_until)"
+    )->execute([$userId]);
+}
+
+function gjc_clear_product_suspension(PDO $db, int $userId, ?string $cutoff = null): bool
+{
+    return gjc_violation_write($db, function () use ($db, $userId, $cutoff): bool {
+        $state = gjc_product_violation_state($db, $userId, true);
+        if (!$state || $state['restricted_suspended_until'] === null
+            || ($cutoff !== null && strcmp((string) $state['restricted_suspended_until'], $cutoff) > 0)) {
+            return false;
+        }
+        $table = gjc_violation_has_legacy($db) ? 'users' : 'user_violations';
+        $key = $table === 'users' ? 'userID' : 'user_id';
+        $db->prepare("UPDATE {$table} SET restricted_suspended_until = NULL WHERE {$key} = ?")->execute([$userId]);
+        gjc_sync_user_violation($db, $userId);
+        return true;
+    });
+}
+
+function gjc_expire_product_suspensions(PDO $db): int
+{
+    $projection = gjc_violation_projection($db);
+    if (!$projection['select']) {
+        return 0;
+    }
+    $rows = $db->query('SELECT u.userID, NOW() AS checked_at, ' . implode(', ', $projection['select'])
+        . ' FROM users u' . $projection['join'])->fetchAll(PDO::FETCH_ASSOC);
+    $count = 0;
+    foreach ($rows as $row) {
+        $state = gjc_violation_from_projection($row, $projection);
+        if ($state['restricted_suspended_until'] !== null
+            && strcmp((string) $state['restricted_suspended_until'], (string) $row['checked_at']) <= 0
+            && gjc_clear_product_suspension($db, (int) $row['userID'], (string) $row['checked_at'])) {
+            $count++;
+        }
+    }
+    return $count;
+}
+
+function gjc_product_violators(PDO $db): array
+{
+    $projection = gjc_violation_projection($db);
+    if (!$projection['select']) {
+        return [];
+    }
+    $rows = $db->query('SELECT u.userID, u.first_name, u.last_name, m.stall_name, m.stall_id, '
+        . implode(', ', $projection['select']) . ' FROM users u' . $projection['join']
+        . ' LEFT JOIN merchant m ON m.userID = u.userID')->fetchAll(PDO::FETCH_ASSOC);
+    $result = [];
+    foreach ($rows as $row) {
+        $state = gjc_violation_from_projection($row, $projection);
+        if ((int) $state['restricted_violation_count'] <= 0 && $state['restricted_suspended_until'] === null) {
+            continue;
+        }
+        foreach (gjc_violation_fields() as $field) {
+            unset($row["legacy_{$field}"], $row["normalized_{$field}"]);
+        }
+        $result[] = array_merge($row, $state);
+    }
+    usort($result, static fn(array $a, array $b): int =>
+        (int) ($b['restricted_suspended_until'] !== null) <=> (int) ($a['restricted_suspended_until'] !== null)
+        ?: (int) $b['restricted_violation_count'] <=> (int) $a['restricted_violation_count']
+        ?: strcmp((string) ($b['restricted_violation_last_at'] ?? ''), (string) ($a['restricted_violation_last_at'] ?? '')));
+    return $result;
+}
+
+/**
  * Idempotent self-healer for the restricted-product violation counter —
  * see references/schema.md's gjc_ensure_<feature>_schema() convention.
  */
@@ -497,31 +730,7 @@ function gjc_ensure_product_violation_schema(PDO $db): void
     if (!gjc_table_exists($db, 'users')) {
         return;
     }
-    $cols = gjc_table_columns($db, 'users');
-    $altered = false;
-    if (!in_array('restricted_violation_count', $cols, true)) {
-        try {
-            $db->exec("ALTER TABLE users ADD COLUMN restricted_violation_count INT UNSIGNED NOT NULL DEFAULT 0");
-            $altered = true;
-        } catch (\Throwable $ignored) {}
-    }
-    if (!in_array('restricted_violation_last_at', $cols, true)) {
-        try {
-            $db->exec("ALTER TABLE users ADD COLUMN restricted_violation_last_at DATETIME NULL");
-            $altered = true;
-        } catch (\Throwable $ignored) {}
-    }
-    if (!in_array('restricted_suspended_until', $cols, true)) {
-        try {
-            $db->exec("ALTER TABLE users ADD COLUMN restricted_suspended_until DATETIME NULL");
-            $altered = true;
-        } catch (\Throwable $ignored) {}
-    }
-    if ($altered) {
-        // The per-request column cache was filled pre-ALTER; refresh it so
-        // checks later in this same request see the new columns.
-        gjc_table_columns($db, 'users', true);
-    }
+    gjc_ensure_user_violations_schema($db);
 }
 
 /**
@@ -538,35 +747,34 @@ function gjc_merchant_suspended_until(PDO $db, int $userId): ?string
         return null;
     }
     $cols = gjc_table_columns($db, 'users');
-    if (!in_array('restricted_suspended_until', $cols, true)) {
-        return null;
-    }
-    $idCol = gjc_column($db, 'users', ['id', 'userID']);
-    if (!$idCol) {
-        return null;
-    }
-
-    // Staff inherit their owner's suspension — the whole stall is frozen.
     if (in_array('merchant_owner_id', $cols, true)) {
-        $stmt = $db->prepare("SELECT merchant_owner_id FROM users WHERE {$idCol} = ? LIMIT 1");
+        $stmt = $db->prepare('SELECT merchant_owner_id FROM users WHERE userID = ? LIMIT 1');
         $stmt->execute([$userId]);
         $ownerId = (int) $stmt->fetchColumn();
         if ($ownerId > 0) {
             $userId = $ownerId;
         }
     }
-
-    $stmt = $db->prepare("SELECT restricted_suspended_until FROM users WHERE {$idCol} = ? LIMIT 1");
-    $stmt->execute([$userId]);
-    $until = $stmt->fetchColumn();
+    $state = gjc_product_violation_state($db, $userId);
+    $until = $state['restricted_suspended_until'] ?? null;
     if (!$until) {
         return null;
     }
-    if (strtotime((string) $until) <= time()) {
-        $db->prepare("UPDATE users SET restricted_suspended_until = NULL WHERE {$idCol} = ?")->execute([$userId]);
-        return null;
+    if (strtotime((string) $until) > time()) {
+        return (string) $until;
     }
-    return (string) $until;
+    return gjc_violation_write($db, function () use ($db, $userId): ?string {
+        $state = gjc_product_violation_state($db, $userId, true);
+        $until = $state['restricted_suspended_until'] ?? null;
+        if (!$until) {
+            return null;
+        }
+        if (strtotime((string) $until) <= time()) {
+            gjc_clear_product_suspension($db, $userId);
+            return null;
+        }
+        return (string) $until;
+    });
 }
 
 /**
@@ -585,23 +793,42 @@ function gjc_merchant_suspended_until(PDO $db, int $userId): ?string
 function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reason): int
 {
     gjc_ensure_product_violation_schema($db);
-
-    $db->prepare(
-        "UPDATE users
-            SET restricted_violation_count = restricted_violation_count + 1,
-                restricted_violation_last_at = NOW()
-          WHERE userID = ?"
-    )->execute([$merchantUserId]);
-
-    $stmt = $db->prepare("SELECT restricted_violation_count FROM users WHERE userID = ?");
-    $stmt->execute([$merchantUserId]);
-    $count = (int) $stmt->fetchColumn();
-
-    // Finance-tunable policy (admin/settings.php); the GJC_VIOLATION_* constants
-    // remain the fallback when no override is stored.
-    $warnAt      = gjc_setting_int($db, 'violation_warn_at');
-    $riskAt      = gjc_setting_int($db, 'violation_risk_at');
+    $warnAt = gjc_setting_int($db, 'violation_warn_at');
+    $riskAt = gjc_setting_int($db, 'violation_risk_at');
     $suspendDays = gjc_setting_int($db, 'violation_suspend_days');
+
+    $transition = gjc_violation_write($db, function () use ($db, $merchantUserId, $riskAt, $suspendDays): array {
+        $state = gjc_product_violation_state($db, $merchantUserId, true);
+        if ($state === null) {
+            return ['count' => 0, 'until' => null];
+        }
+        $count = (int) $state['restricted_violation_count'] + 1;
+        $legacy = gjc_violation_has_legacy($db);
+        if ($legacy) {
+            $db->prepare(
+                "UPDATE users SET restricted_violation_count = restricted_violation_count + 1,
+                    restricted_violation_last_at = NOW() WHERE userID = ?"
+            )->execute([$merchantUserId]);
+        } else {
+            $db->prepare(
+                "INSERT INTO user_violations (user_id, restricted_violation_count, restricted_violation_last_at)
+                 VALUES (?, 1, NOW()) ON DUPLICATE KEY UPDATE
+                    restricted_violation_count = restricted_violation_count + 1,
+                    restricted_violation_last_at = NOW()"
+            )->execute([$merchantUserId]);
+        }
+        if ($count >= $riskAt) {
+            $table = $legacy ? 'users' : 'user_violations';
+            $key = $legacy ? 'userID' : 'user_id';
+            $db->prepare("UPDATE {$table} SET restricted_suspended_until = DATE_ADD(NOW(), INTERVAL {$suspendDays} DAY),
+                restricted_violation_count = 0 WHERE {$key} = ?")->execute([$merchantUserId]);
+        }
+        gjc_sync_user_violation($db, $merchantUserId);
+        $after = gjc_product_violation_state($db, $merchantUserId);
+        return ['count' => $count, 'until' => $after['restricted_suspended_until'] ?? null];
+    });
+    $count = (int) $transition['count'];
+
 
     // >= not ===: if finance lowers the threshold below a merchant's current
     // tally, the warning still fires on the next strike instead of being
@@ -620,17 +847,7 @@ function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reas
     }
 
     if ($count >= $riskAt) {
-        // $suspendDays is an int cast, so interpolating it here is injection-safe.
-        $db->prepare(
-            "UPDATE users
-                SET restricted_suspended_until = DATE_ADD(NOW(), INTERVAL {$suspendDays} DAY),
-                    restricted_violation_count = 0
-              WHERE userID = ?"
-        )->execute([$merchantUserId]);
-
-        $untilStmt = $db->prepare("SELECT restricted_suspended_until FROM users WHERE userID = ?");
-        $untilStmt->execute([$merchantUserId]);
-        $untilLabel = date('M d, Y g:i A', strtotime((string) $untilStmt->fetchColumn()));
+        $untilLabel = date('M d, Y g:i A', strtotime((string) $transition['until']));
 
         $merchantName = gjc_user_label($db, $merchantUserId);
 
@@ -677,16 +894,56 @@ function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reas
 }
 
 /**
+ * Current manual lockout metadata; users.status remains the enforcement authority.
+ * lockout_kind is preserved as an approved recorded snapshot.
+ */
+function gjc_ensure_user_suspensions_schema(PDO $db): void
+{
+    if (!gjc_table_exists($db, 'users')) {
+        throw new RuntimeException('Suspension state schema requires users.');
+    }
+    $type = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
+    if (!$type || strtolower($type['Type']) !== 'int') {
+        throw new RuntimeException('Suspension state FKs require signed INT users.userID.');
+    }
+    if (gjc_table_exists($db, 'user_suspensions')) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Suspension state schema creation must precede a transaction.');
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS user_suspensions (
+    user_id INT NOT NULL,
+    suspended_until DATETIME NULL,
+    suspension_reason VARCHAR(255) NULL,
+    suspended_at DATETIME NULL,
+    suspended_by INT NULL,
+    suspension_prev_status VARCHAR(20) NULL,
+    suspension_froze_wallet TINYINT(1) NOT NULL DEFAULT 0,
+    lockout_kind VARCHAR(12) NULL,
+    PRIMARY KEY (user_id),
+    KEY idx_user_suspension_actor (suspended_by),
+    CONSTRAINT fk_user_suspension_user FOREIGN KEY (user_id)
+        REFERENCES users(userID) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_user_suspension_actor FOREIGN KEY (suspended_by)
+        REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+    gjc_table_columns($db, 'user_suspensions', true);
+}
+
+/**
  * Idempotent self-healer for finance-issued account lockouts — the Suspend and
  * Ban actions in admin/users.php. Widens users.status with the 'Suspended' and
  * 'Banned' labels, reading the labels off the live enum rather than a hardcoded
- * list so this never clobbers one a later migration added, then adds the columns
- * that describe a single lockout: which kind it is, when it lifts (NULL =
+ * list so this never clobbers one a later migration added, then ensures the
+ * user_suspensions row describes the lockout: when it lifts (NULL =
  * indefinite, and always NULL for a ban), why, who issued it, and the two bits
  * needed to undo it cleanly — the status it interrupted, and whether the wallet
  * freeze was ours to reverse.
  *
- * Suspension and ban share one set of columns because an account can only be in
+ * Suspension and ban share one current-state row because an account can only be in
  * one of them at a time: both are written to users.status, so claiming either
  * one excludes the other.
  *
@@ -698,6 +955,10 @@ function gjc_ensure_account_suspension_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, 'users')) {
         return;
+    }
+
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Suspension schema preparation must precede a transaction.');
     }
 
     try {
@@ -721,33 +982,7 @@ function gjc_ensure_account_suspension_schema(PDO $db): void
         }
     } catch (\Throwable $ignored) {}
 
-    $cols = gjc_table_columns($db, 'users');
-    $altered = false;
-    $adds = [
-        'suspended_until'         => 'DATETIME NULL',
-        'suspension_reason'       => 'VARCHAR(255) NULL',
-        'suspended_at'            => 'DATETIME NULL',
-        'suspended_by'            => 'INT NULL',
-        'suspension_prev_status'  => 'VARCHAR(20) NULL',
-        'suspension_froze_wallet' => 'TINYINT(1) NOT NULL DEFAULT 0',
-        // Which kind of lockout the columns above currently describe:
-        // 'suspension' (timed or indefinite, self-expiring) or 'ban'
-        // (permanent, never expires, finance must lift it by hand). NULL on
-        // rows written before this column existed — read as suspensions,
-        // which is what they were.
-        'lockout_kind'            => 'VARCHAR(12) NULL',
-    ];
-    foreach ($adds as $col => $def) {
-        if (!in_array($col, $cols, true)) {
-            try {
-                $db->exec("ALTER TABLE users ADD COLUMN {$col} {$def}");
-                $altered = true;
-            } catch (\Throwable $ignored) {}
-        }
-    }
-    if ($altered) {
-        gjc_table_columns($db, 'users', true);
-    }
+    gjc_ensure_user_suspensions_schema($db);
 }
 
 /**
@@ -770,9 +1005,8 @@ function gjc_account_suspension(PDO $db, int $userId, bool $inheritStallOwner = 
         return null;
     }
     $cols = gjc_table_columns($db, 'users');
-    // Schema self-healer hasn't run against this database yet — nothing can be
-    // suspended, so don't let the missing columns turn into a query error.
-    if (!in_array('suspended_until', $cols, true)) {
+    // Accept either the legacy metadata or the expanded normalized table.
+    if (!in_array('suspended_until', $cols, true) && !gjc_table_exists($db, 'user_suspensions')) {
         return null;
     }
     $idCol = gjc_column($db, 'users', ['id', 'userID']);
@@ -801,6 +1035,116 @@ function gjc_account_suspension(PDO $db, int $userId, bool $inheritStallOwner = 
 }
 
 /**
+ * Reads status and suspension facts in one statement. During migration, legacy
+ * facts remain the compatibility fallback if the normalized copy differs.
+ * A missing normalized row reconstructs the empty/default current state.
+ */
+function gjc_account_lockout_row(PDO $db, string $idCol, int $userId, bool $forUpdate = false): ?array
+{
+    if (!in_array($idCol, ['id', 'userID'], true)) {
+        throw new InvalidArgumentException('Invalid account identifier column.');
+    }
+    if ($forUpdate && !$db->inTransaction()) {
+        throw new RuntimeException('Lockout row locking requires a transaction.');
+    }
+    $fields = ['suspended_until', 'suspension_reason', 'suspended_at', 'suspended_by',
+        'suspension_prev_status', 'suspension_froze_wallet', 'lockout_kind'];
+    $columns = gjc_table_columns($db, 'users');
+    $hasLegacy = in_array('suspended_until', $columns, true);
+    $hasNormalized = gjc_table_exists($db, 'user_suspensions')
+        && !array_diff(array_merge(['user_id'], $fields), gjc_table_columns($db, 'user_suspensions'));
+    if (!$hasLegacy && !$hasNormalized) {
+        return null;
+    }
+
+    $select = ['u.status'];
+    foreach ($fields as $field) {
+        if ($hasLegacy) {
+            $value = in_array($field, $columns, true) ? "u.{$field}"
+                : ($field === 'suspension_froze_wallet' ? '0' : 'NULL');
+            $select[] = "{$value} AS legacy_{$field}";
+        }
+        if ($hasNormalized) {
+            $select[] = "s.{$field} AS normalized_{$field}";
+        }
+    }
+    $join = $hasNormalized ? " LEFT JOIN user_suspensions s ON s.user_id = u.{$idCol}" : '';
+    $stmt = $db->prepare("SELECT " . implode(', ', $select)
+        . " FROM users u{$join} WHERE u.{$idCol} = ? LIMIT 1" . ($forUpdate ? ' FOR UPDATE' : ''));
+    $stmt->execute([$userId]);
+    $record = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$record) {
+        return null;
+    }
+
+    $legacy = $normalized = ['status' => $record['status']];
+    foreach ($fields as $field) {
+        if ($hasLegacy) {
+            $legacy[$field] = $record["legacy_{$field}"];
+        }
+        if ($hasNormalized) {
+            $normalized[$field] = $field === 'suspension_froze_wallet'
+                ? ($record["normalized_{$field}"] ?? 0) : $record["normalized_{$field}"];
+        }
+    }
+    if (!$hasNormalized) {
+        return $legacy;
+    }
+    if ($hasLegacy) {
+        foreach ($fields as $field) {
+            if (!in_array($field, $columns, true)) {
+                continue;
+            }
+            $left = $legacy[$field];
+            $right = $normalized[$field];
+            $equal = $field === 'suspension_froze_wallet' ? (int) $left === (int) $right
+                : (($left === null || $right === null) ? $left === $right : (string) $left === (string) $right);
+            if (!$equal) {
+                return $legacy;
+            }
+        }
+    }
+    return $normalized;
+}
+
+/** Hydrates suspension facts for a gated display/API row without running expiry. */
+function gjc_with_user_suspension(PDO $db, array $row, int $userId): array
+{
+    if (!$row || $userId <= 0) {
+        return $row;
+    }
+    $idCol = gjc_column($db, 'users', ['id', 'userID']);
+    if (!$idCol) {
+        return $row;
+    }
+    $state = gjc_account_lockout_row($db, $idCol, $userId);
+    return $state === null ? $row : array_merge($row, $state);
+}
+
+/** Selects due suspension IDs using the shared state reader and database time. */
+function gjc_due_account_suspension_ids(PDO $db, string $idCol): array
+{
+    if (!in_array($idCol, ['id', 'userID'], true)) {
+        throw new InvalidArgumentException('Invalid account identifier column.');
+    }
+    $candidates = $db->query(
+        "SELECT {$idCol} AS user_id, NOW() AS checked_at FROM users WHERE status = 'Suspended'"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $due = [];
+    foreach ($candidates as $candidate) {
+        $userId = (int) $candidate['user_id'];
+        $state = gjc_account_lockout_row($db, $idCol, $userId);
+        // MySQL DATETIME and NOW() share the same canonical sortable format.
+        if ($state !== null && $state['status'] === 'Suspended'
+            && $state['suspended_until'] !== null
+            && strcmp((string) $state['suspended_until'], (string) $candidate['checked_at']) <= 0) {
+            $due[] = $userId;
+        }
+    }
+    return $due;
+}
+
+/**
  * One row's live lockout — suspension or ban — with the lazy expiry attached.
  * Split out of gjc_account_suspension() only so that function can ask the same
  * question of two accounts (the user, then their stall owner) without
@@ -814,23 +1158,14 @@ function gjc_account_suspension(PDO $db, int $userId, bool $inheritStallOwner = 
  */
 function gjc_read_account_suspension(PDO $db, string $idCol, int $userId): ?array
 {
-    $cols = gjc_table_columns($db, 'users');
-    $kindCol = in_array('lockout_kind', $cols, true) ? 'lockout_kind' : "NULL AS lockout_kind";
-
-    $stmt = $db->prepare(
-        "SELECT status, suspended_until, suspension_reason, suspended_at, suspended_by, {$kindCol}
-           FROM users WHERE {$idCol} = ? LIMIT 1"
-    );
-    $stmt->execute([$userId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $row = gjc_account_lockout_row($db, $idCol, $userId);
     $status = $row ? (string) $row['status'] : '';
     if (!$row || !in_array($status, ['Suspended', 'Banned'], true)) {
         return null;
     }
 
-    // users.status is the authority on which kind this is; lockout_kind is only
-    // a tiebreak for rows written before the status widened, so a NULL there on
-    // a Suspended row still reads as a suspension.
+    // users.status remains the enforcement authority. lockout_kind is retained
+    // as its recorded snapshot, including NULL on older suspension records.
     $kind = $status === 'Banned' ? 'ban' : 'suspension';
 
     // Only a suspension can run out. A ban has no end date and must never be
@@ -889,6 +1224,123 @@ function gjc_ban_account(PDO $db, int $userId, string $reason, int $bannedBy): b
     return gjc_claim_account_lockout($db, $userId, 'Banned', null, $reason, $bannedBy);
 }
 
+/** Loads the engine without allowing its PDO bootstrap to replace the caller's connection. */
+function gjc_account_lockout_engine(PDO $connection): CirculationEngine
+{
+    require_once __DIR__ . '/CirculationEngine.php';
+    return new CirculationEngine($connection);
+}
+
+/** Returns the physical legacy layout; a partial removal is never accepted. */
+function gjc_has_legacy_user_suspension(PDO $db): bool
+{
+    $fields = ['suspended_until', 'suspension_reason', 'suspended_at', 'suspended_by',
+        'suspension_prev_status', 'suspension_froze_wallet', 'lockout_kind'];
+    $count = count(array_intersect($fields, gjc_table_columns($db, 'users')));
+    if ($count !== 0 && $count !== count($fields)) {
+        throw new RuntimeException('Suspension legacy columns must be all present or all absent.');
+    }
+    return $count === count($fields);
+}
+
+/** Writes current normalized facts inside the already-locked account transaction. */
+function gjc_store_user_suspension(
+    PDO $db, int $userId, ?string $until, ?string $reason, ?int $actorId,
+    ?string $previousStatus, int $frozeWallet, ?string $kind, bool $stampNow
+): void {
+    if (!$db->inTransaction()) {
+        throw new RuntimeException('Suspension storage requires its locked user transaction.');
+    }
+    $at = $stampNow ? 'NOW()' : 'NULL';
+    $db->prepare(
+        "INSERT INTO user_suspensions
+            (user_id, suspended_until, suspension_reason, suspended_at, suspended_by,
+             suspension_prev_status, suspension_froze_wallet, lockout_kind)
+         VALUES (?, ?, ?, {$at}, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            suspended_until = VALUES(suspended_until),
+            suspension_reason = VALUES(suspension_reason),
+            suspended_at = VALUES(suspended_at),
+            suspended_by = VALUES(suspended_by),
+            suspension_prev_status = VALUES(suspension_prev_status),
+            suspension_froze_wallet = VALUES(suspension_froze_wallet),
+            lockout_kind = VALUES(lockout_kind)"
+    )->execute([$userId, $until, $reason, $actorId, $previousStatus, $frozeWallet, $kind]);
+}
+
+/**
+ * Runs a suspension metadata write without committing a caller's transaction.
+ * Schema preparation is allowed only before a transaction; inside one, this
+ * requires the already-expanded schema and performs no DDL.
+ */
+function gjc_account_lockout_write(PDO $db, callable $write): bool
+{
+    if (!$db->inTransaction()) {
+        gjc_ensure_account_suspension_schema($db);
+    }
+    $fields = ['suspended_until', 'suspension_reason', 'suspended_at',
+        'suspended_by', 'suspension_prev_status', 'suspension_froze_wallet', 'lockout_kind'];
+    gjc_has_legacy_user_suspension($db);
+    if (!gjc_table_exists($db, 'user_suspensions')
+        || array_diff(array_merge(['user_id'], $fields), gjc_table_columns($db, 'user_suspensions'))) {
+        throw new RuntimeException('The suspension migration schema is not ready.');
+    }
+
+    $ownsTransaction = !$db->inTransaction();
+    $savepoint = 'gjc_lockout_' . bin2hex(random_bytes(8));
+    if ($ownsTransaction) {
+        $db->beginTransaction();
+    } else {
+        $db->exec("SAVEPOINT {$savepoint}");
+    }
+    try {
+        $changed = $write();
+        if ($ownsTransaction) {
+            $db->commit();
+        } else {
+            $db->exec("RELEASE SAVEPOINT {$savepoint}");
+        }
+        return $changed;
+    } catch (\Throwable $error) {
+        if ($db->inTransaction()) {
+            if ($ownsTransaction) {
+                $db->rollBack();
+            } else {
+                $db->exec("ROLLBACK TO SAVEPOINT {$savepoint}");
+                $db->exec("RELEASE SAVEPOINT {$savepoint}");
+            }
+        }
+        throw $error;
+    }
+}
+
+/** Copies the persisted legacy facts exactly, including the recorded kind snapshot. */
+function gjc_sync_user_suspension(PDO $db, string $idCol, int $userId): void
+{
+    if (!$db->inTransaction() || !in_array($idCol, ['id', 'userID'], true)) {
+        throw new RuntimeException('Suspension synchronization requires its locked user transaction.');
+    }
+    if (!gjc_has_legacy_user_suspension($db)) {
+        return;
+    }
+    $db->prepare(
+        "INSERT INTO user_suspensions
+            (user_id, suspended_until, suspension_reason, suspended_at, suspended_by,
+             suspension_prev_status, suspension_froze_wallet, lockout_kind)
+         SELECT {$idCol}, suspended_until, suspension_reason, suspended_at, suspended_by,
+                suspension_prev_status, suspension_froze_wallet, lockout_kind
+           FROM users WHERE {$idCol} = ?
+         ON DUPLICATE KEY UPDATE
+            suspended_until = VALUES(suspended_until),
+            suspension_reason = VALUES(suspension_reason),
+            suspended_at = VALUES(suspended_at),
+            suspended_by = VALUES(suspended_by),
+            suspension_prev_status = VALUES(suspension_prev_status),
+            suspension_froze_wallet = VALUES(suspension_froze_wallet),
+            lockout_kind = VALUES(lockout_kind)"
+    )->execute([$userId]);
+}
+
 /**
  * The one write behind both Suspend and Ban. Claims users.status atomically,
  * remembers the status it interrupted so the lift can restore it, and freezes
@@ -902,64 +1354,74 @@ function gjc_ban_account(PDO $db, int $userId, string $reason, int $bannedBy): b
  */
 function gjc_claim_account_lockout(PDO $db, int $userId, string $target, ?string $until, string $reason, int $actorId): bool
 {
-    gjc_ensure_account_suspension_schema($db);
-    $idCol = gjc_column($db, 'users', ['id', 'userID']) ?: 'userID';
-    $hasKind = in_array('lockout_kind', gjc_table_columns($db, 'users'), true);
+    return gjc_account_lockout_write($db, function () use ($db, $userId, $target, $until, $reason, $actorId): bool {
+        $idCol = gjc_column($db, 'users', ['id', 'userID']) ?: 'userID';
+        $hasLegacy = gjc_has_legacy_user_suspension($db);
+        $hasKind = $hasLegacy;
 
-    $prevStmt = $db->prepare(
-        "SELECT status, suspension_prev_status, suspension_froze_wallet
-           FROM users WHERE {$idCol} = ? LIMIT 1"
-    );
-    $prevStmt->execute([$userId]);
-    $row = $prevStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row) {
-        return false;
-    }
+        $row = gjc_account_lockout_row($db, $idCol, $userId, true);
+        if (!$row) {
+            return false;
+        }
 
-    // Escalating a suspension to a ban must carry the pre-suspension status
-    // forward, not record 'Suspended' as the thing to restore to — otherwise
-    // lifting the ban would drop the account back into a suspension that no
-    // longer has a reason or an end date behind it.
-    $prev = (string) $row['status'];
-    $frozeWallet = 0;
-    if (in_array($prev, ['Suspended', 'Banned'], true)) {
-        $carried = trim((string) ($row['suspension_prev_status'] ?? ''));
-        $prev = ($carried !== '' && !in_array($carried, ['Suspended', 'Banned'], true)) ? $carried : 'Active';
-        // The outgoing lockout may already have frozen the wallet, in which
-        // case the freeze attempt below is a no-op and would leave the flag at
-        // 0 — the ban would then refuse to unfreeze on lift, stranding a wallet
-        // that only GenPay had locked. Carry the claim forward instead.
-        $frozeWallet = (int) ($row['suspension_froze_wallet'] ?? 0);
-    }
+        // Escalating a suspension to a ban must carry the pre-suspension status
+        // forward, not record 'Suspended' as the thing to restore to — otherwise
+        // lifting the ban would drop the account back into a suspension that no
+        // longer has a reason or an end date behind it.
+        $prev = (string) $row['status'];
+        $frozeWallet = 0;
+        if (in_array($prev, ['Suspended', 'Banned'], true)) {
+            $carried = trim((string) ($row['suspension_prev_status'] ?? ''));
+            $prev = ($carried !== '' && !in_array($carried, ['Suspended', 'Banned'], true)) ? $carried : 'Active';
+            // The outgoing lockout may already have frozen the wallet, in which
+            // case the freeze attempt below is a no-op and would leave the flag at
+            // 0 — the ban would then refuse to unfreeze on lift, stranding a wallet
+            // that only GenPay had locked. Carry the claim forward instead.
+            $frozeWallet = (int) ($row['suspension_froze_wallet'] ?? 0);
+        }
 
-    // A suspension may not claim an account that is suspended OR banned; a ban
-    // may not re-claim one that is already banned.
-    $blocked = $target === 'Banned' ? ["'Banned'"] : ["'Suspended'", "'Banned'"];
-    $kindSet = $hasKind ? ", lockout_kind = " . ($target === 'Banned' ? "'ban'" : "'suspension'") : '';
+        // A suspension may not claim an account that is suspended OR banned; a ban
+        // may not re-claim one that is already banned.
+        $blocked = $target === 'Banned' ? ["'Banned'"] : ["'Suspended'", "'Banned'"];
+        $kindSet = $hasKind ? ", lockout_kind = " . ($target === 'Banned' ? "'ban'" : "'suspension'") : '';
 
-    $claim = $db->prepare(
-        "UPDATE users
-            SET status = ?, suspended_until = ?, suspension_reason = ?,
-                suspended_at = NOW(), suspended_by = ?, suspension_prev_status = ?,
-                suspension_froze_wallet = ?{$kindSet}
-          WHERE {$idCol} = ? AND status NOT IN (" . implode(', ', $blocked) . ")"
-    );
-    $claim->execute([$target, $until, mb_substr($reason, 0, 255), $actorId, $prev, $frozeWallet, $userId]);
-    if ($claim->rowCount() === 0) {
-        return false;
-    }
+        if ($hasLegacy) {
+            $claim = $db->prepare(
+                "UPDATE users
+                    SET status = ?, suspended_until = ?, suspension_reason = ?,
+                        suspended_at = NOW(), suspended_by = ?, suspension_prev_status = ?,
+                        suspension_froze_wallet = ?{$kindSet}
+                  WHERE {$idCol} = ? AND status NOT IN (" . implode(', ', $blocked) . ")"
+            );
+            $claim->execute([$target, $until, mb_substr($reason, 0, 255), $actorId, $prev, $frozeWallet, $userId]);
+        } else {
+            $claim = $db->prepare(
+                "UPDATE users SET status = ? WHERE {$idCol} = ? AND status NOT IN (" . implode(', ', $blocked) . ")"
+            );
+            $claim->execute([$target, $userId]);
+        }
+        if ($claim->rowCount() === 0) {
+            return false;
+        }
 
-    if (gjc_table_exists($db, 'student_wallets')) {
-        try {
-            $froze = $db->prepare("UPDATE student_wallets SET is_frozen = 1 WHERE user_id = ? AND is_frozen = 0");
-            $froze->execute([$userId]);
-            if ($froze->rowCount() > 0) {
-                $db->prepare("UPDATE users SET suspension_froze_wallet = 1 WHERE {$idCol} = ?")->execute([$userId]);
-            }
-        } catch (\Throwable $ignored) {}
-    }
+        if (!$hasLegacy) {
+            gjc_store_user_suspension($db, $userId, $until, mb_substr($reason, 0, 255),
+                $actorId, $prev, $frozeWallet, $target === 'Banned' ? 'ban' : 'suspension', true);
+        }
 
-    return true;
+        if (gjc_table_exists($db, 'student_wallets')) {
+            try {
+                if (gjc_account_lockout_engine($db)->freezeStudentWalletForLockout($userId)) {
+                    $freezeTable = $hasLegacy ? 'users' : 'user_suspensions';
+                    $freezeId = $hasLegacy ? $idCol : 'user_id';
+                    $db->prepare("UPDATE {$freezeTable} SET suspension_froze_wallet = 1 WHERE {$freezeId} = ?")->execute([$userId]);
+                }
+            } catch (\Throwable $ignored) {}
+        }
+
+        gjc_sync_user_suspension($db, $idCol, $userId);
+        return true;
+    });
 }
 
 /**
@@ -998,47 +1460,61 @@ function gjc_lift_account_ban(PDO $db, int $userId, ?int $liftedBy): bool
  */
 function gjc_clear_account_lockout(PDO $db, int $userId, string $fromStatus, ?int $liftedBy, string $event): bool
 {
-    gjc_ensure_account_suspension_schema($db);
-    $idCol = gjc_column($db, 'users', ['id', 'userID']) ?: 'userID';
+    $row = null;
+    $restored = '';
+    $changed = gjc_account_lockout_write($db, function () use ($db, $userId, $fromStatus, &$row, &$restored): bool {
+        $idCol = gjc_column($db, 'users', ['id', 'userID']) ?: 'userID';
+        $hasLegacy = gjc_has_legacy_user_suspension($db);
+
+        $row = gjc_account_lockout_row($db, $idCol, $userId, true);
+        if (!$row || (string) $row['status'] !== $fromStatus) {
+            return false;
+        }
+
+        $restored = (string) ($row['suspension_prev_status'] ?? '');
+        if ($restored === '' || in_array($restored, ['Suspended', 'Banned'], true)) {
+            $restored = 'Active';
+        }
+
+        // Test-and-set again: two concurrent lifts (an admin clicking while the
+        // page-load sweep runs) must not both unfreeze the wallet and both log.
+        $kindSet = in_array('lockout_kind', gjc_table_columns($db, 'users'), true)
+            ? ', lockout_kind = NULL'
+            : '';
+        if ($hasLegacy) {
+            $claim = $db->prepare(
+                "UPDATE users
+                    SET status = ?, suspended_until = NULL, suspension_reason = NULL,
+                        suspended_at = NULL, suspended_by = NULL,
+                        suspension_prev_status = NULL, suspension_froze_wallet = 0{$kindSet}
+                  WHERE {$idCol} = ? AND status = ?"
+            );
+            $claim->execute([$restored, $userId, $fromStatus]);
+        } else {
+            $claim = $db->prepare("UPDATE users SET status = ? WHERE {$idCol} = ? AND status = ?");
+            $claim->execute([$restored, $userId, $fromStatus]);
+        }
+        if ($claim->rowCount() === 0) {
+            return false;
+        }
+
+        if (!$hasLegacy) {
+            gjc_store_user_suspension($db, $userId, null, null, null, null, 0, null, false);
+        }
+
+        if ((int) ($row['suspension_froze_wallet'] ?? 0) === 1 && gjc_table_exists($db, 'student_wallets')) {
+            try {
+                gjc_account_lockout_engine($db)->unfreezeStudentWalletForLockout($userId);
+            } catch (\Throwable $ignored) {}
+        }
+
+        gjc_sync_user_suspension($db, $idCol, $userId);
+        return true;
+    });
+    if (!$changed) {
+        return false;
+    }
     $isBan = $fromStatus === 'Banned';
-
-    $stmt = $db->prepare(
-        "SELECT status, suspended_until, suspension_reason, suspension_prev_status, suspension_froze_wallet
-           FROM users WHERE {$idCol} = ? LIMIT 1"
-    );
-    $stmt->execute([$userId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row || (string) $row['status'] !== $fromStatus) {
-        return false;
-    }
-
-    $restored = (string) ($row['suspension_prev_status'] ?? '');
-    if ($restored === '' || in_array($restored, ['Suspended', 'Banned'], true)) {
-        $restored = 'Active';
-    }
-
-    // Test-and-set again: two concurrent lifts (an admin clicking while the
-    // page-load sweep runs) must not both unfreeze the wallet and both log.
-    $kindSet = in_array('lockout_kind', gjc_table_columns($db, 'users'), true)
-        ? ', lockout_kind = NULL'
-        : '';
-    $claim = $db->prepare(
-        "UPDATE users
-            SET status = ?, suspended_until = NULL, suspension_reason = NULL,
-                suspended_at = NULL, suspended_by = NULL,
-                suspension_prev_status = NULL, suspension_froze_wallet = 0{$kindSet}
-          WHERE {$idCol} = ? AND status = ?"
-    );
-    $claim->execute([$restored, $userId, $fromStatus]);
-    if ($claim->rowCount() === 0) {
-        return false;
-    }
-
-    if ((int) ($row['suspension_froze_wallet'] ?? 0) === 1 && gjc_table_exists($db, 'student_wallets')) {
-        try {
-            $db->prepare("UPDATE student_wallets SET is_frozen = 0 WHERE user_id = ?")->execute([$userId]);
-        } catch (\Throwable $ignored) {}
-    }
 
     // Both paths notify, so the account always learns access is back — whether
     // an admin lifted it early or the clock simply ran out.
@@ -1094,12 +1570,7 @@ function gjc_expire_due_suspensions(PDO $db): int
     $idCol = gjc_column($db, 'users', ['id', 'userID']) ?: 'userID';
 
     try {
-        $due = $db->query(
-            "SELECT {$idCol} FROM users
-              WHERE status = 'Suspended'
-                AND suspended_until IS NOT NULL
-                AND suspended_until <= NOW()"
-        )->fetchAll(PDO::FETCH_COLUMN);
+        $due = gjc_due_account_suspension_ids($db, $idCol);
     } catch (\Throwable $ignored) {
         return 0;
     }
@@ -1226,169 +1697,992 @@ function gjc_column(PDO $db, string $table, array $candidates): ?string
     return null;
 }
 
+/** D2 application-owned detail schemas. No live routing change during EXPAND. */
+function gjc_stall_application_detail_definitions(): array
+{
+    return array (
+  'ddl' => 
+  array (
+    'stall_application_applicants' => 'CREATE TABLE IF NOT EXISTS stall_application_applicants (
+    application_id INT UNSIGNED NOT NULL,
+    first_name varchar(60) NOT NULL DEFAULT \'\',
+    middle_name varchar(60) NULL DEFAULT NULL,
+    last_name varchar(60) NOT NULL DEFAULT \'\',
+    suffix varchar(20) NULL DEFAULT NULL,
+    sex enum(\'male\',\'female\') NOT NULL DEFAULT \'male\',
+    contact_number varchar(15) NOT NULL,
+    email varchar(255) NOT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_1_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_meetings' => 'CREATE TABLE IF NOT EXISTS stall_application_meetings (
+    application_id INT UNSIGNED NOT NULL,
+    meetup_scheduled_at datetime NULL DEFAULT NULL,
+    meetup_location varchar(255) NULL DEFAULT NULL,
+    meetup_notes text NULL DEFAULT NULL,
+    meetup_scheduled_by int NULL DEFAULT NULL,
+    meetup_scheduled_email_sent_at datetime NULL DEFAULT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_2_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_2_meetup_scheduled_by FOREIGN KEY (meetup_scheduled_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_payments' => 'CREATE TABLE IF NOT EXISTS stall_application_payments (
+    application_id INT UNSIGNED NOT NULL,
+    down_payment_amount decimal(10,2) NULL DEFAULT NULL,
+    down_payment_reference varchar(80) NULL DEFAULT NULL,
+    down_payment_notes text NULL DEFAULT NULL,
+    down_payment_recorded_by int NULL DEFAULT NULL,
+    down_payment_recorded_at datetime NULL DEFAULT NULL,
+    deposit_amount decimal(10,2) NULL DEFAULT NULL,
+    advance_amount decimal(10,2) NULL DEFAULT NULL,
+    rental_start_date date NULL DEFAULT NULL,
+    payment_schedule_day tinyint unsigned NULL DEFAULT NULL,
+    payment_method varchar(20) NULL DEFAULT NULL,
+    payment_ref_no varchar(60) NULL DEFAULT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_3_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_3_down_payment_recorded_by FOREIGN KEY (down_payment_recorded_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_contracts' => 'CREATE TABLE IF NOT EXISTS stall_application_contracts (
+    application_id INT UNSIGNED NOT NULL,
+    contract_file varchar(500) NULL DEFAULT NULL,
+    contract_uploaded_at datetime NULL DEFAULT NULL,
+    contract_uploaded_by int NULL DEFAULT NULL,
+    contract_ref varchar(40) NULL DEFAULT NULL,
+    signed_at datetime NULL DEFAULT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_4_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_4_contract_uploaded_by FOREIGN KEY (contract_uploaded_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_decisions' => 'CREATE TABLE IF NOT EXISTS stall_application_decisions (
+    application_id INT UNSIGNED NOT NULL,
+    reviewed_by int NULL DEFAULT NULL,
+    reviewed_at datetime NULL DEFAULT NULL,
+    rejection_reason text NULL DEFAULT NULL,
+    initially_approved_by int NULL DEFAULT NULL,
+    initially_approved_at datetime NULL DEFAULT NULL,
+    merchant_user_id int NULL DEFAULT NULL,
+    awarded_by int NULL DEFAULT NULL,
+    awarded_at datetime NULL DEFAULT NULL,
+    cancelled_by int NULL DEFAULT NULL,
+    cancelled_at datetime NULL DEFAULT NULL,
+    cancel_reason text NULL DEFAULT NULL,
+    first_viewed_at datetime NULL DEFAULT NULL,
+    first_viewed_by int NULL DEFAULT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_5_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_initially_approved_by FOREIGN KEY (initially_approved_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_merchant_user_id FOREIGN KEY (merchant_user_id) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_awarded_by FOREIGN KEY (awarded_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_5_first_viewed_by FOREIGN KEY (first_viewed_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_addresses' => 'CREATE TABLE IF NOT EXISTS stall_application_addresses (
+    application_id INT UNSIGNED NOT NULL,
+    street VARCHAR(150) NOT NULL DEFAULT \'\',
+    location_id INT UNSIGNED NOT NULL,
+    PRIMARY KEY (application_id),
+    CONSTRAINT fk_d2_address_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_address_location FOREIGN KEY (location_id) REFERENCES address_locations(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_documents' => 'CREATE TABLE IF NOT EXISTS stall_application_documents (
+    application_id INT UNSIGNED NOT NULL,
+    document_kind enum(\'profile_picture\',\'business_permit\',\'sanitary_permit\',\'gjc_requirements\',\'clearance\') NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    PRIMARY KEY (application_id, document_kind),
+    CONSTRAINT fk_d2_document_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'stall_application_rejections' => 'CREATE TABLE IF NOT EXISTS stall_application_rejections (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    application_id INT UNSIGNED NOT NULL,
+    event_key CHAR(64) NOT NULL,
+    rejected_at_step TINYINT UNSIGNED NOT NULL,
+    rejection_reason TEXT NOT NULL,
+    rejected_by INT NULL,
+    rejected_at DATETIME NOT NULL,
+    event_source ENUM(\'legacy_state\',\'workflow\') NOT NULL DEFAULT \'workflow\',
+    reactivated_at DATETIME NULL,
+    reactivated_by INT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_d2_rejection_event (event_key),
+    KEY idx_d2_rejection_application (application_id),
+    CONSTRAINT fk_d2_rejection_application FOREIGN KEY (application_id) REFERENCES stall_applications(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_rejection_actor FOREIGN KEY (rejected_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_d2_reactivation_actor FOREIGN KEY (reactivated_by) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+  ),
+  'types' => 
+  array (
+    'stall_application_applicants' => 
+    array (
+      'application_id' => 'int unsigned',
+      'first_name' => 'varchar(60)',
+      'middle_name' => 'varchar(60)',
+      'last_name' => 'varchar(60)',
+      'suffix' => 'varchar(20)',
+      'sex' => 'enum(\'male\',\'female\')',
+      'contact_number' => 'varchar(15)',
+      'email' => 'varchar(255)',
+    ),
+    'stall_application_meetings' => 
+    array (
+      'application_id' => 'int unsigned',
+      'meetup_scheduled_at' => 'datetime',
+      'meetup_location' => 'varchar(255)',
+      'meetup_notes' => 'text',
+      'meetup_scheduled_by' => 'int',
+      'meetup_scheduled_email_sent_at' => 'datetime',
+    ),
+    'stall_application_payments' => 
+    array (
+      'application_id' => 'int unsigned',
+      'down_payment_amount' => 'decimal(10,2)',
+      'down_payment_reference' => 'varchar(80)',
+      'down_payment_notes' => 'text',
+      'down_payment_recorded_by' => 'int',
+      'down_payment_recorded_at' => 'datetime',
+      'deposit_amount' => 'decimal(10,2)',
+      'advance_amount' => 'decimal(10,2)',
+      'rental_start_date' => 'date',
+      'payment_schedule_day' => 'tinyint unsigned',
+      'payment_method' => 'varchar(20)',
+      'payment_ref_no' => 'varchar(60)',
+    ),
+    'stall_application_contracts' => 
+    array (
+      'application_id' => 'int unsigned',
+      'contract_file' => 'varchar(500)',
+      'contract_uploaded_at' => 'datetime',
+      'contract_uploaded_by' => 'int',
+      'contract_ref' => 'varchar(40)',
+      'signed_at' => 'datetime',
+    ),
+    'stall_application_decisions' => 
+    array (
+      'application_id' => 'int unsigned',
+      'reviewed_by' => 'int',
+      'reviewed_at' => 'datetime',
+      'rejection_reason' => 'text',
+      'initially_approved_by' => 'int',
+      'initially_approved_at' => 'datetime',
+      'merchant_user_id' => 'int',
+      'awarded_by' => 'int',
+      'awarded_at' => 'datetime',
+      'cancelled_by' => 'int',
+      'cancelled_at' => 'datetime',
+      'cancel_reason' => 'text',
+      'first_viewed_at' => 'datetime',
+      'first_viewed_by' => 'int',
+    ),
+    'stall_application_addresses' => 
+    array (
+      'application_id' => 'int unsigned',
+      'street' => 'varchar(150)',
+      'location_id' => 'int unsigned',
+    ),
+    'stall_application_documents' => 
+    array (
+      'application_id' => 'int unsigned',
+      'document_kind' => 'enum(\'profile_picture\',\'business_permit\',\'sanitary_permit\',\'gjc_requirements\',\'clearance\')',
+      'file_path' => 'varchar(500)',
+    ),
+    'stall_application_rejections' => 
+    array (
+      'id' => 'bigint unsigned',
+      'application_id' => 'int unsigned',
+      'event_key' => 'char(64)',
+      'rejected_at_step' => 'tinyint unsigned',
+      'rejection_reason' => 'text',
+      'rejected_by' => 'int',
+      'rejected_at' => 'datetime',
+      'event_source' => 'enum(\'legacy_state\',\'workflow\')',
+      'reactivated_at' => 'datetime',
+      'reactivated_by' => 'int',
+    ),
+  ),
+  'fks' => 
+  array (
+    'stall_application_applicants' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_1_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+    ),
+    'stall_application_meetings' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_2_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'meetup_scheduled_by',
+        'name' => 'fk_d2_2_meetup_scheduled_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+    ),
+    'stall_application_payments' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_3_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'down_payment_recorded_by',
+        'name' => 'fk_d2_3_down_payment_recorded_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+    ),
+    'stall_application_contracts' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_4_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'contract_uploaded_by',
+        'name' => 'fk_d2_4_contract_uploaded_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+    ),
+    'stall_application_decisions' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_5_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'reviewed_by',
+        'name' => 'fk_d2_5_reviewed_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      2 => 
+      array (
+        'column' => 'initially_approved_by',
+        'name' => 'fk_d2_5_initially_approved_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      3 => 
+      array (
+        'column' => 'merchant_user_id',
+        'name' => 'fk_d2_5_merchant_user_id',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      4 => 
+      array (
+        'column' => 'awarded_by',
+        'name' => 'fk_d2_5_awarded_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      5 => 
+      array (
+        'column' => 'cancelled_by',
+        'name' => 'fk_d2_5_cancelled_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      6 => 
+      array (
+        'column' => 'first_viewed_by',
+        'name' => 'fk_d2_5_first_viewed_by',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+    ),
+    'stall_application_addresses' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_address_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'location_id',
+        'name' => 'fk_d2_address_location',
+        'target' => 'address_locations',
+        'target_column' => 'id',
+      ),
+    ),
+    'stall_application_documents' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_document_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+    ),
+    'stall_application_rejections' => 
+    array (
+      0 => 
+      array (
+        'column' => 'application_id',
+        'name' => 'fk_d2_rejection_application',
+        'target' => 'stall_applications',
+        'target_column' => 'id',
+      ),
+      1 => 
+      array (
+        'column' => 'rejected_by',
+        'name' => 'fk_d2_rejection_actor',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+      2 => 
+      array (
+        'column' => 'reactivated_by',
+        'name' => 'fk_d2_reactivation_actor',
+        'target' => 'users',
+        'target_column' => 'userID',
+      ),
+    ),
+  ),
+  'groups' => 
+  array (
+    'stall_application_applicants' => 
+    array (
+      0 => 'first_name',
+      1 => 'middle_name',
+      2 => 'last_name',
+      3 => 'suffix',
+      4 => 'sex',
+      5 => 'contact_number',
+      6 => 'email',
+    ),
+    'stall_application_meetings' => 
+    array (
+      0 => 'meetup_scheduled_at',
+      1 => 'meetup_location',
+      2 => 'meetup_notes',
+      3 => 'meetup_scheduled_by',
+      4 => 'meetup_scheduled_email_sent_at',
+    ),
+    'stall_application_payments' => 
+    array (
+      0 => 'down_payment_amount',
+      1 => 'down_payment_reference',
+      2 => 'down_payment_notes',
+      3 => 'down_payment_recorded_by',
+      4 => 'down_payment_recorded_at',
+      5 => 'deposit_amount',
+      6 => 'advance_amount',
+      7 => 'rental_start_date',
+      8 => 'payment_schedule_day',
+      9 => 'payment_method',
+      10 => 'payment_ref_no',
+    ),
+    'stall_application_contracts' => 
+    array (
+      0 => 'contract_file',
+      1 => 'contract_uploaded_at',
+      2 => 'contract_uploaded_by',
+      3 => 'contract_ref',
+      4 => 'signed_at',
+    ),
+    'stall_application_decisions' => 
+    array (
+      0 => 'reviewed_by',
+      1 => 'reviewed_at',
+      2 => 'rejection_reason',
+      3 => 'initially_approved_by',
+      4 => 'initially_approved_at',
+      5 => 'merchant_user_id',
+      6 => 'awarded_by',
+      7 => 'awarded_at',
+      8 => 'cancelled_by',
+      9 => 'cancelled_at',
+      10 => 'cancel_reason',
+      11 => 'first_viewed_at',
+      12 => 'first_viewed_by',
+    ),
+  ),
+  'document_kinds' => 
+  array (
+    0 => 'profile_picture',
+    1 => 'business_permit',
+    2 => 'sanitary_permit',
+    3 => 'gjc_requirements',
+    4 => 'clearance',
+  ),
+);
+}
+
+/** Explicit D2 EXPAND: default is a read-only plan, never called by page loads. */
+function gjc_ensure_stall_application_details_schema(PDO $db, bool $apply = false): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('D2 EXPAND requires CLI, ewallet and no transaction.');
+    }
+    foreach ([['stall_applications','id','int unsigned'],['users','userID','int'],['address_locations','id','int unsigned']] as [$table,$column,$type]) {
+        if (!gjc_table_exists($db,$table)) {
+            throw new RuntimeException('Missing required parent table: '.$table);
+        }
+        $definition=$db->query("SHOW COLUMNS FROM {$table} LIKE '{$column}'")->fetch(PDO::FETCH_ASSOC);
+        if (!$definition || strtolower($definition['Type'])!==$type) {
+            throw new RuntimeException('D2 parent identifiers have unexpected types.');
+        }
+    }
+    if (gjc_stall_application_has_legacy($db)) {
+    foreach (['reviewed_by','meetup_scheduled_by','down_payment_recorded_by','contract_uploaded_by',
+        'initially_approved_by','merchant_user_id','awarded_by','cancelled_by','first_viewed_by'] as $actor) {
+        $invalid=(int)$db->query('SELECT COUNT(*) FROM stall_applications a LEFT JOIN users u ON u.userID=a.'.$actor
+            .' WHERE a.'.$actor.' IS NOT NULL AND (u.userID IS NULL OR a.'.$actor.'>2147483647)')->fetchColumn();
+        if ($invalid) {
+            throw new RuntimeException('D2 actor data requires separate review: '.$actor);
+        }
+    }
+    $invalidRejected=(int)$db->query("SELECT COUNT(*) FROM stall_applications WHERE status='rejected'
+        AND (rejection_reason IS NULL OR rejection_reason='' OR reviewed_at IS NULL)")->fetchColumn();
+    if ($invalidRejected) {
+        throw new RuntimeException('D2 cannot invent missing rejection facts.');
+    }
+    }
+    $definitions=gjc_stall_application_detail_definitions();$plan=[];
+    foreach ($definitions['ddl'] as $table=>$sql) {
+        if (!gjc_table_exists($db,$table)) {
+            foreach ($definitions['fks'][$table] as $fk) {
+                $find=$db->prepare('SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME=?');
+                $find->execute([$fk['name']]);
+                if ((int)$find->fetchColumn()) {
+                    throw new RuntimeException('D2 foreign-key name already exists: '.$fk['name']);
+                }
+            }
+            $plan[$table]=$sql;continue;
+        }
+        $actual=[];foreach($db->query('SHOW COLUMNS FROM '.$table)->fetchAll(PDO::FETCH_ASSOC) as $column)$actual[$column['Field']]=strtolower($column['Type']);
+        if ($actual!==$definitions['types'][$table]) {
+            throw new RuntimeException('Unexpected installed D2 columns: '.$table);
+        }
+        $primary=$db->query("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='".$table."' AND INDEX_NAME='PRIMARY' ORDER BY SEQ_IN_INDEX")->fetchAll(PDO::FETCH_COLUMN);
+        $expectedPrimary=$table==='stall_application_documents'?['application_id','document_kind']:($table==='stall_application_rejections'?['id']:['application_id']);
+        if ($primary!==$expectedPrimary) {
+            throw new RuntimeException('Unexpected installed D2 primary key: '.$table);
+        }
+        if ($table==='stall_application_rejections') {
+            $unique=$db->query("SELECT COLUMN_NAME,NON_UNIQUE,SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='stall_application_rejections' AND INDEX_NAME='uq_d2_rejection_event' ORDER BY SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+            if ($unique!==[['COLUMN_NAME'=>'event_key','NON_UNIQUE'=>0,'SEQ_IN_INDEX'=>1]]) {
+                throw new RuntimeException('Missing unique D2 rejection event key.');
+            }
+        }
+        $read=$db->prepare('SELECT k.COLUMN_NAME,k.CONSTRAINT_NAME,k.REFERENCED_TABLE_NAME,k.REFERENCED_COLUMN_NAME,r.DELETE_RULE,r.UPDATE_RULE FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA AND r.TABLE_NAME=k.TABLE_NAME AND r.CONSTRAINT_NAME=k.CONSTRAINT_NAME WHERE k.TABLE_SCHEMA=DATABASE() AND k.TABLE_NAME=? ORDER BY k.CONSTRAINT_NAME');
+        $read->execute([$table]);$expected=[];
+        foreach($definitions['fks'][$table] as $fk)$expected[]=['COLUMN_NAME'=>$fk['column'],'CONSTRAINT_NAME'=>$fk['name'],'REFERENCED_TABLE_NAME'=>$fk['target'],'REFERENCED_COLUMN_NAME'=>$fk['target_column'],'DELETE_RULE'=>'RESTRICT','UPDATE_RULE'=>'RESTRICT'];
+        usort($expected,fn($a,$b)=>strcmp($a['CONSTRAINT_NAME'],$b['CONSTRAINT_NAME']));
+        if ($read->fetchAll(PDO::FETCH_ASSOC)!==$expected) {
+            throw new RuntimeException('Unexpected installed D2 foreign keys: '.$table);
+        }
+    }
+    if ($apply) {
+        foreach($plan as $table=>$sql) {$db->exec($sql);gjc_table_columns($db,$table,true);}
+    }
+    return $plan;
+}
+
 /**
  * Pipeline status vocabulary: review -> meeting -> down_payment -> approval -> active.
  * Maps 1:1 to the 4-step application pipeline (current_step 1-4).
  */
+/** Exact legacy output layout with normalized reads and byte-sensitive fallback. */
+function gjc_stall_application_projection_metadata(): array
+{
+    return array (
+  'logical_columns' => 
+  array (
+    0 => 'id',
+    1 => 'stall_id',
+    2 => 'business_name',
+    3 => 'first_name',
+    4 => 'middle_name',
+    5 => 'last_name',
+    6 => 'suffix',
+    7 => 'sex',
+    8 => 'street',
+    9 => 'barangay',
+    10 => 'city',
+    11 => 'province',
+    12 => 'proprietor_name',
+    13 => 'contact_number',
+    14 => 'email',
+    15 => 'profile_picture',
+    16 => 'business_permit',
+    17 => 'sanitary_permit',
+    18 => 'gjc_requirements',
+    19 => 'clearance',
+    20 => 'terms_accepted',
+    21 => 'status',
+    22 => 'current_step',
+    23 => 'reviewed_by',
+    24 => 'reviewed_at',
+    25 => 'rejection_reason',
+    26 => 'contract_ref',
+    27 => 'signed_at',
+    28 => 'initially_approved_by',
+    29 => 'initially_approved_at',
+    30 => 'created_at',
+    31 => 'updated_at',
+    32 => 'meetup_scheduled_at',
+    33 => 'meetup_location',
+    34 => 'meetup_notes',
+    35 => 'meetup_scheduled_by',
+    36 => 'meetup_scheduled_email_sent_at',
+    37 => 'down_payment_amount',
+    38 => 'down_payment_reference',
+    39 => 'down_payment_notes',
+    40 => 'down_payment_recorded_by',
+    41 => 'down_payment_recorded_at',
+    42 => 'merchant_user_id',
+    43 => 'temp_password_plain',
+    44 => 'preferred_stall_id',
+    45 => 'contract_file',
+    46 => 'contract_uploaded_at',
+    47 => 'contract_uploaded_by',
+    48 => 'deposit_amount',
+    49 => 'advance_amount',
+    50 => 'rental_start_date',
+    51 => 'payment_schedule_day',
+    52 => 'awarded_by',
+    53 => 'awarded_at',
+    54 => 'cancelled_by',
+    55 => 'cancelled_at',
+    56 => 'cancel_reason',
+    57 => 'first_viewed_at',
+    58 => 'first_viewed_by',
+    59 => 'payment_method',
+    60 => 'payment_ref_no',
+  ),
+  'normalized_expressions' => 
+  array (
+    'first_name' => 'ap.first_name',
+    'middle_name' => 'ap.middle_name',
+    'last_name' => 'ap.last_name',
+    'suffix' => 'ap.suffix',
+    'sex' => 'ap.sex',
+    'contact_number' => 'ap.contact_number',
+    'email' => 'ap.email',
+    'meetup_scheduled_at' => 'mt.meetup_scheduled_at',
+    'meetup_location' => 'mt.meetup_location',
+    'meetup_notes' => 'mt.meetup_notes',
+    'meetup_scheduled_by' => 'mt.meetup_scheduled_by',
+    'meetup_scheduled_email_sent_at' => 'mt.meetup_scheduled_email_sent_at',
+    'down_payment_amount' => 'py.down_payment_amount',
+    'down_payment_reference' => 'py.down_payment_reference',
+    'down_payment_notes' => 'py.down_payment_notes',
+    'down_payment_recorded_by' => 'py.down_payment_recorded_by',
+    'down_payment_recorded_at' => 'py.down_payment_recorded_at',
+    'deposit_amount' => 'py.deposit_amount',
+    'advance_amount' => 'py.advance_amount',
+    'rental_start_date' => 'py.rental_start_date',
+    'payment_schedule_day' => 'py.payment_schedule_day',
+    'payment_method' => 'py.payment_method',
+    'payment_ref_no' => 'py.payment_ref_no',
+    'contract_file' => 'ct.contract_file',
+    'contract_uploaded_at' => 'ct.contract_uploaded_at',
+    'contract_uploaded_by' => 'ct.contract_uploaded_by',
+    'contract_ref' => 'ct.contract_ref',
+    'signed_at' => 'ct.signed_at',
+    'reviewed_by' => 'dc.reviewed_by',
+    'reviewed_at' => 'dc.reviewed_at',
+    'rejection_reason' => 'dc.rejection_reason',
+    'initially_approved_by' => 'dc.initially_approved_by',
+    'initially_approved_at' => 'dc.initially_approved_at',
+    'merchant_user_id' => 'dc.merchant_user_id',
+    'awarded_by' => 'dc.awarded_by',
+    'awarded_at' => 'dc.awarded_at',
+    'cancelled_by' => 'dc.cancelled_by',
+    'cancelled_at' => 'dc.cancelled_at',
+    'cancel_reason' => 'dc.cancel_reason',
+    'first_viewed_at' => 'dc.first_viewed_at',
+    'first_viewed_by' => 'dc.first_viewed_by',
+    'street' => 'ad.street',
+    'barangay' => 'b.label',
+    'city' => 'c.label',
+    'province' => 'p.label',
+    'profile_picture' => 'nd0.file_path',
+    'business_permit' => 'nd1.file_path',
+    'sanitary_permit' => 'nd2.file_path',
+    'gjc_requirements' => 'nd3.file_path',
+    'clearance' => 'nd4.file_path',
+  ),
+  'joins' => 
+  array (
+    0 => 'LEFT JOIN stall_application_applicants ap ON ap.application_id=sa.id',
+    1 => 'LEFT JOIN stall_application_meetings mt ON mt.application_id=sa.id',
+    2 => 'LEFT JOIN stall_application_payments py ON py.application_id=sa.id',
+    3 => 'LEFT JOIN stall_application_contracts ct ON ct.application_id=sa.id',
+    4 => 'LEFT JOIN stall_application_decisions dc ON dc.application_id=sa.id',
+    5 => 'LEFT JOIN stall_application_addresses ad ON ad.application_id=sa.id',
+    6 => 'LEFT JOIN address_locations b ON b.id=ad.location_id AND b.location_kind=\'barangay\'',
+    7 => 'LEFT JOIN address_locations c ON c.id=b.parent_id AND c.location_kind=\'city\'',
+    8 => 'LEFT JOIN address_locations p ON p.id=c.parent_id AND p.location_kind=\'province\'',
+    9 => 'LEFT JOIN stall_application_documents nd0 ON nd0.application_id=sa.id AND nd0.document_kind=\'profile_picture\'',
+    10 => 'LEFT JOIN stall_application_documents nd1 ON nd1.application_id=sa.id AND nd1.document_kind=\'business_permit\'',
+    11 => 'LEFT JOIN stall_application_documents nd2 ON nd2.application_id=sa.id AND nd2.document_kind=\'sanitary_permit\'',
+    12 => 'LEFT JOIN stall_application_documents nd3 ON nd3.application_id=sa.id AND nd3.document_kind=\'gjc_requirements\'',
+    13 => 'LEFT JOIN stall_application_documents nd4 ON nd4.application_id=sa.id AND nd4.document_kind=\'clearance\'',
+  ),
+  'legacy_fields' => 
+  array (
+    0 => 'first_name',
+    1 => 'middle_name',
+    2 => 'last_name',
+    3 => 'suffix',
+    4 => 'sex',
+    5 => 'contact_number',
+    6 => 'email',
+    7 => 'meetup_scheduled_at',
+    8 => 'meetup_location',
+    9 => 'meetup_notes',
+    10 => 'meetup_scheduled_by',
+    11 => 'meetup_scheduled_email_sent_at',
+    12 => 'down_payment_amount',
+    13 => 'down_payment_reference',
+    14 => 'down_payment_notes',
+    15 => 'down_payment_recorded_by',
+    16 => 'down_payment_recorded_at',
+    17 => 'deposit_amount',
+    18 => 'advance_amount',
+    19 => 'rental_start_date',
+    20 => 'payment_schedule_day',
+    21 => 'payment_method',
+    22 => 'payment_ref_no',
+    23 => 'contract_file',
+    24 => 'contract_uploaded_at',
+    25 => 'contract_uploaded_by',
+    26 => 'contract_ref',
+    27 => 'signed_at',
+    28 => 'reviewed_by',
+    29 => 'reviewed_at',
+    30 => 'rejection_reason',
+    31 => 'initially_approved_by',
+    32 => 'initially_approved_at',
+    33 => 'merchant_user_id',
+    34 => 'awarded_by',
+    35 => 'awarded_at',
+    36 => 'cancelled_by',
+    37 => 'cancelled_at',
+    38 => 'cancel_reason',
+    39 => 'first_viewed_at',
+    40 => 'first_viewed_by',
+    41 => 'street',
+    42 => 'barangay',
+    43 => 'city',
+    44 => 'province',
+    45 => 'profile_picture',
+    46 => 'business_permit',
+    47 => 'sanitary_permit',
+    48 => 'gjc_requirements',
+    49 => 'clearance',
+    50 => 'proprietor_name',
+  ),
+  'string_fields' => 
+  array (
+    0 => 'stall_id',
+    1 => 'business_name',
+    2 => 'first_name',
+    3 => 'middle_name',
+    4 => 'last_name',
+    5 => 'suffix',
+    6 => 'sex',
+    7 => 'street',
+    8 => 'barangay',
+    9 => 'city',
+    10 => 'province',
+    11 => 'proprietor_name',
+    12 => 'contact_number',
+    13 => 'email',
+    14 => 'profile_picture',
+    15 => 'business_permit',
+    16 => 'sanitary_permit',
+    17 => 'gjc_requirements',
+    18 => 'clearance',
+    19 => 'status',
+    20 => 'rejection_reason',
+    21 => 'contract_ref',
+    22 => 'meetup_location',
+    23 => 'meetup_notes',
+    24 => 'down_payment_reference',
+    25 => 'down_payment_notes',
+    26 => 'temp_password_plain',
+    27 => 'preferred_stall_id',
+    28 => 'contract_file',
+    29 => 'cancel_reason',
+    30 => 'payment_method',
+    31 => 'payment_ref_no',
+  ),
+  'actor_fields' => 
+  array (
+    0 => 'meetup_scheduled_by',
+    1 => 'down_payment_recorded_by',
+    2 => 'contract_uploaded_by',
+    3 => 'reviewed_by',
+    4 => 'initially_approved_by',
+    5 => 'merchant_user_id',
+    6 => 'awarded_by',
+    7 => 'cancelled_by',
+    8 => 'first_viewed_by',
+  ),
+);
+}
+
+function gjc_stall_application_has_legacy(PDO $db): bool
+{
+    $fields=gjc_stall_application_projection_metadata()['legacy_fields'];
+    $count=count(array_intersect($fields,gjc_table_columns($db,'stall_applications')));
+    if ($count!==0 && $count!==count($fields)) {
+        throw new RuntimeException('Application fields are partially contracted.');
+    }
+    return $count===count($fields);
+}
+
+/** Complete legacy-compatible SELECT source; alias is internal and validated. */
+function gjc_stall_application_source(PDO $db, string $alias='app'): string
+{
+    if (!preg_match('/^[a-z_][a-z0-9_]*$/i',$alias)) {
+        throw new InvalidArgumentException('Invalid application alias.');
+    }
+    $m=gjc_stall_application_projection_metadata();$legacy=gjc_stall_application_has_legacy($db);
+    foreach(gjc_stall_application_detail_definitions()['ddl'] as $table=>$ddl) {
+        if(!gjc_table_exists($db,$table))throw new RuntimeException('Application detail schema is missing: '.$table);
+    }
+    $expressions=[];
+    foreach($m['logical_columns'] as $field) {
+        if($field==='proprietor_name')continue;
+        $normal=$m['normalized_expressions'][$field]??null;
+        if($normal===null){$expressions[$field]='sa.'.$field;continue;}
+        $value=$normal;
+        if($legacy){$left=$normal;$right='sa.'.$field;
+            if(in_array($field,$m['string_fields'],true)){$left='BINARY '.$left;$right='BINARY '.$right;}
+            $value='CASE WHEN '.$left.' <=> '.$right.' THEN '.$normal.' ELSE sa.'.$field.' END';
+        }
+        if(in_array($field,$m['actor_fields'],true))$value='CAST(('.$value.') AS SIGNED)';
+        $expressions[$field]=$value;
+    }
+    $names=[];foreach(['first_name','middle_name','last_name','suffix'] as $field)$names[]="NULLIF((".$expressions[$field]."),'')";
+    $expressions['proprietor_name']="TRIM(CONCAT_WS(' ',".implode(',',$names).'))';
+    $select=[];foreach($m['logical_columns'] as $field)$select[]=$expressions[$field].' AS '.$field;
+    $from=' FROM stall_applications sa '.implode(' ',$m['joins']);
+    if(!$legacy){$missing=['ap.application_id','mt.application_id','py.application_id','ct.application_id','dc.application_id','ad.application_id','b.id','c.id','p.id'];
+        foreach(range(0,4) as $i)$missing[]='nd'.$i.'.application_id';
+        if($db->query('SELECT sa.id'.$from.' WHERE '.implode(' OR ',array_map(fn($field)=>$field.' IS NULL',$missing)).' LIMIT 1')->fetchColumn()!==false)throw new RuntimeException('Application details are incomplete.');
+    }
+    return '(SELECT '.implode(', ',$select).$from.') '.$alias;
+}
+
+function gjc_stall_application_fetch(PDO $db, int $id, bool $lock=false): ?array
+{
+    if($lock){if(!$db->inTransaction())throw new RuntimeException('Application lock requires a transaction.');$stmt=$db->prepare('SELECT id FROM stall_applications WHERE id=? FOR UPDATE');$stmt->execute([$id]);if($stmt->fetchColumn()===false)return null;}
+    $source=gjc_stall_application_source($db);
+    if($lock){
+        // A locking read sees current detail rows even after an earlier caller snapshot.
+        $inner=substr($source,1,-strlen(') app'));
+        $stmt=$db->prepare($inner.' WHERE sa.id=? FOR SHARE');
+    }else{$stmt=$db->prepare('SELECT app.* FROM '.$source.' WHERE app.id=? LIMIT 1');}
+    $stmt->execute([$id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC)?:null;
+}
+
+/** Use a private savepoint when called inside an existing onboarding transaction. */
+function gjc_stall_application_write(PDO $db, callable $operation): mixed
+{
+    $owns=!$db->inTransaction();$savepoint='gjc_app_'.bin2hex(random_bytes(8));
+    if($owns)$db->beginTransaction();else $db->exec('SAVEPOINT '.$savepoint);
+    try{$result=$operation();if($owns)$db->commit();else $db->exec('RELEASE SAVEPOINT '.$savepoint);return $result;}
+    catch(Throwable $e){if($db->inTransaction()){if($owns)$db->rollBack();else{$db->exec('ROLLBACK TO SAVEPOINT '.$savepoint);$db->exec('RELEASE SAVEPOINT '.$savepoint);}}throw $e;}
+}
+
+/** Submitted names remain historical; only the combined rendering is derived. */
+function gjc_stall_application_proprietor(array $state): string
+{
+    return trim(implode(' ',array_filter([$state['first_name']??'',$state['middle_name']??null,$state['last_name']??'',$state['suffix']??null],fn($part)=>$part!==null&&$part!=='')));
+}
+/** Synchronize the full logical application in the caller's transaction. */
+function gjc_sync_stall_application_details(PDO $db, array $state): void
+{
+    if(!$db->inTransaction())throw new RuntimeException('Application synchronization requires a transaction.');
+    $id=(int)$state['id'];$definitions=gjc_stall_application_detail_definitions();
+    foreach($definitions['groups'] as $table=>$fields){$values=[$id];foreach($fields as $field){if(!array_key_exists($field,$state))throw new RuntimeException('Missing application value: '.$field);$values[]=$state[$field];}
+        $sql='INSERT INTO '.$table.' (application_id,'.implode(',',$fields).') VALUES ('.implode(',',array_fill(0,count($values),'?')).') ON DUPLICATE KEY UPDATE '.implode(',',array_map(fn($field)=>$field.'=VALUES('.$field.')',$fields));$db->prepare($sql)->execute($values);
+    }
+    $parent=null;
+    foreach(['province','city','barangay'] as $kind){$label=$state[$kind];if(!is_string($label)||mb_strlen($label,'UTF-8')>100)throw new InvalidArgumentException('Invalid application address label.');
+        $find=$db->prepare('SELECT id FROM address_locations WHERE parent_id<=>? AND location_kind=? AND label=? LIMIT 1');$find->execute([$parent,$kind,$label]);$location=$find->fetchColumn();
+        if($location===false){$db->prepare('INSERT INTO address_locations(parent_id,location_kind,label) VALUES(?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$parent,$kind,$label]);$location=$db->lastInsertId();}$parent=(int)$location;
+    }
+    $db->prepare('INSERT INTO stall_application_addresses(application_id,street,location_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE street=VALUES(street),location_id=VALUES(location_id)')->execute([$id,$state['street'],$parent]);
+    $doc=$db->prepare('INSERT INTO stall_application_documents(application_id,document_kind,file_path) VALUES(?,?,?) ON DUPLICATE KEY UPDATE file_path=VALUES(file_path)');
+    foreach($definitions['document_kinds'] as $kind)$doc->execute([$id,$kind,$state[$kind]]);
+}
+
+const GJC_APPLICATION_DB_NOW='@genpay:database-now';
+
+/** Return false for a missing row or changed guarded state; otherwise write atomically. */
+function gjc_stall_application_update(PDO $db, int $id, array $changes, array $conditions=[]): bool
+{
+    return gjc_stall_application_write($db,function()use($db,$id,$changes,$conditions):bool{
+        $before=gjc_stall_application_fetch($db,$id,true);if(!$before)return false;
+        foreach($conditions as $field=>$expected)if(!array_key_exists($field,$before)||$before[$field]!==$expected)return false;
+        $allowed=gjc_stall_application_projection_metadata()['logical_columns'];$now=null;
+        foreach($changes as $field=>&$value){if(!in_array($field,$allowed,true)||in_array($field,['id','created_at','updated_at','proprietor_name'],true))throw new InvalidArgumentException('Invalid application update field: '.$field);
+            if($value===GJC_APPLICATION_DB_NOW && ($field==='signed_at'||str_ends_with($field,'_at')))$value=$now??=$db->query('SELECT NOW()')->fetchColumn();
+        }unset($value);
+        $state=array_replace($before,$changes);$state['proprietor_name']=gjc_stall_application_proprietor($state);
+        if(mb_strlen($state['proprietor_name'],'UTF-8')>120)throw new InvalidArgumentException('Applicant name exceeds 120 characters.');
+        $legacy=gjc_stall_application_has_legacy($db);$physical=gjc_table_columns($db,'stall_applications');
+        $write=$changes;if($legacy)$write['proprietor_name']=$state['proprietor_name'];$write=array_intersect_key($write,array_flip($physical));
+        if($write){$assign=implode(',',array_map(fn($field)=>$field.'=?',array_keys($write)));$db->prepare('UPDATE stall_applications SET '.$assign.' WHERE id=?')->execute(array_merge(array_values($write),[$id]));}
+        if($legacy){$stmt=$db->prepare('SELECT * FROM stall_applications WHERE id=?');$stmt->execute([$id]);$state=$stmt->fetch(PDO::FETCH_ASSOC);}
+        gjc_sync_stall_application_details($db,$state);
+        if(!$legacy){$after=gjc_stall_application_fetch($db,$id);$changed=false;foreach($changes as $field=>$value)if($after[$field]!==$before[$field]){$changed=true;break;}
+            if($changed)$db->prepare('UPDATE stall_applications SET updated_at=NOW() WHERE id=?')->execute([$id]);
+        }
+        if(($changes['status']??null)==='rejected'&&$before['status']!=='rejected'){
+            $after=gjc_stall_application_fetch($db,$id);
+            $db->prepare('INSERT INTO stall_application_rejections(application_id,event_key,rejected_at_step,rejection_reason,rejected_by,rejected_at,event_source) VALUES(?,?,?,?,?,?,?)')->execute([$id,bin2hex(random_bytes(32)),(int)$after['current_step'],$after['rejection_reason'],$after['reviewed_by'],$after['reviewed_at'],'workflow']);
+        }
+        return true;
+    });
+}
+function gjc_stall_application_defaults(): array
+{
+    return array (
+  'stall_id' => NULL,
+  'business_name' => '',
+  'first_name' => '',
+  'middle_name' => NULL,
+  'last_name' => '',
+  'suffix' => NULL,
+  'sex' => 'male',
+  'street' => '',
+  'barangay' => '',
+  'city' => '',
+  'province' => '',
+  'proprietor_name' => '',
+  'contact_number' => '',
+  'email' => '',
+  'profile_picture' => '',
+  'business_permit' => '',
+  'sanitary_permit' => '',
+  'gjc_requirements' => '',
+  'clearance' => '',
+  'terms_accepted' => 0,
+  'status' => 'pending_verification',
+  'current_step' => 1,
+  'reviewed_by' => NULL,
+  'reviewed_at' => NULL,
+  'rejection_reason' => NULL,
+  'contract_ref' => NULL,
+  'signed_at' => NULL,
+  'initially_approved_by' => NULL,
+  'initially_approved_at' => NULL,
+  'meetup_scheduled_at' => NULL,
+  'meetup_location' => NULL,
+  'meetup_notes' => NULL,
+  'meetup_scheduled_by' => NULL,
+  'meetup_scheduled_email_sent_at' => NULL,
+  'down_payment_amount' => NULL,
+  'down_payment_reference' => NULL,
+  'down_payment_notes' => NULL,
+  'down_payment_recorded_by' => NULL,
+  'down_payment_recorded_at' => NULL,
+  'merchant_user_id' => NULL,
+  'temp_password_plain' => NULL,
+  'preferred_stall_id' => NULL,
+  'contract_file' => NULL,
+  'contract_uploaded_at' => NULL,
+  'contract_uploaded_by' => NULL,
+  'deposit_amount' => NULL,
+  'advance_amount' => NULL,
+  'rental_start_date' => NULL,
+  'payment_schedule_day' => NULL,
+  'awarded_by' => NULL,
+  'awarded_at' => NULL,
+  'cancelled_by' => NULL,
+  'cancelled_at' => NULL,
+  'cancel_reason' => NULL,
+  'first_viewed_at' => NULL,
+  'first_viewed_by' => NULL,
+  'payment_method' => NULL,
+  'payment_ref_no' => NULL,
+);
+}
+
+function gjc_stall_application_create(PDO $db, array $values): int
+{
+    return gjc_stall_application_write($db,function()use($db,$values):int{
+        $state=array_replace(gjc_stall_application_defaults(),$values);$now=null;
+        foreach($state as $field=>&$value)if($value===GJC_APPLICATION_DB_NOW&&($field==='signed_at'||str_ends_with($field,'_at')))$value=$now??=$db->query('SELECT NOW()')->fetchColumn();unset($value);
+        $state['proprietor_name']=gjc_stall_application_proprietor($state);
+        if(mb_strlen($state['proprietor_name'],'UTF-8')>120)throw new InvalidArgumentException('Applicant name exceeds 120 characters.');
+        unset($state['id'],$state['created_at'],$state['updated_at']);
+        $physical=gjc_table_columns($db,'stall_applications');$write=array_intersect_key($state,array_flip($physical));
+        $db->prepare('INSERT INTO stall_applications ('.implode(',',array_keys($write)).') VALUES ('.implode(',',array_fill(0,count($write),'?')).')')->execute(array_values($write));
+        $id=(int)$db->lastInsertId();$stmt=$db->prepare('SELECT * FROM stall_applications WHERE id=?');$stmt->execute([$id]);$raw=$stmt->fetch(PDO::FETCH_ASSOC);
+        $state=array_replace($state,$raw);gjc_sync_stall_application_details($db,$state);return $id;
+    });
+}
+
+/** Reuse one rejected application; hold the scheduler lock until its transaction commits. */
+function gjc_reactivate_stall_application(PDO $db, int $eventId, int $actor): ?array
+{
+    if($db->inTransaction())throw new RuntimeException('Application reactivation must own its transaction.');
+    $location=gjc_meeting_default_location($db);
+    $lock=$db->query("SELECT GET_LOCK('gjc_stall_scheduler',10)")->fetchColumn();if((int)$lock!==1)throw new RuntimeException('Meeting scheduler is busy.');
+    try{return gjc_stall_application_write($db,function()use($db,$eventId,$actor,$location):?array{
+        $lookup=$db->prepare('SELECT application_id FROM stall_application_rejections WHERE id=?');$lookup->execute([$eventId]);$applicationId=$lookup->fetchColumn();if($applicationId===false)return null;
+        $app=gjc_stall_application_fetch($db,(int)$applicationId,true);
+        $read=$db->prepare('SELECT * FROM stall_application_rejections WHERE id=? FOR UPDATE');$read->execute([$eventId]);$event=$read->fetch(PDO::FETCH_ASSOC);
+        if(!$app||$app['status']!=='rejected'||!$event||$event['reactivated_at']!==null)return null;
+        $latest=$db->prepare('SELECT id FROM stall_application_rejections WHERE application_id=? ORDER BY rejected_at DESC,id DESC LIMIT 1');$latest->execute([$applicationId]);if((int)$latest->fetchColumn()!==$eventId)return null;
+        $slot=gjc_find_next_meeting_slot($db);if($slot===null)throw new RuntimeException('No verification meeting slot is available.');
+        $date=$slot['date'].' '.$slot['time'].':00';
+        if(!gjc_stall_application_update($db,(int)$applicationId,['status'=>'pending_verification','current_step'=>1,'reviewed_by'=>null,'reviewed_at'=>null,'rejection_reason'=>null,'first_viewed_at'=>null,'first_viewed_by'=>null,'meetup_scheduled_at'=>$date,'meetup_location'=>$location,'meetup_scheduled_by'=>$actor,'meetup_scheduled_email_sent_at'=>null],['status'=>'rejected']))return null;
+        $db->prepare('UPDATE stall_application_rejections SET reactivated_at=NOW(),reactivated_by=? WHERE id=?')->execute([$actor,$eventId]);
+        $current=gjc_stall_application_fetch($db,(int)$applicationId);
+        $current['_reactivation_before']=['id'=>$app['id'],'status'=>'rejected',
+            'meetup_scheduled_at'=>$app['meetup_scheduled_at'],'meetup_location'=>$app['meetup_location']];
+        return $current;
+    });}finally{$db->query("SELECT RELEASE_LOCK('gjc_stall_scheduler')")->fetchColumn();}
+}
+
 function gjc_ensure_stall_application_workflow_schema(PDO $db): void
 {
-    if (!gjc_table_exists($db, "stall_applications")) {
-        return;
-    }
-
-    $columns = gjc_table_columns($db, "stall_applications");
-
-    // One-time migration from the old pending/awaiting_*/approved chain to the
-    // 4-step pipeline. Detected by the absence of the current_step column.
-    if (!in_array("current_step", $columns, true)) {
-        try {
-            $db->exec(
-                "ALTER TABLE stall_applications
-                 MODIFY stall_id VARCHAR(10) NULL DEFAULT NULL,
-                 ADD COLUMN current_step TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER status",
-            );
-        } catch (Throwable $ignored) {
-        }
-
-        // Widen the enum so old and new values coexist while data is migrated.
-        try {
-            $db->exec(
-                "ALTER TABLE stall_applications
-                 MODIFY status ENUM(
-                    'pending','awaiting_meetup','awaiting_approval','active','rejected','expired',
-                    'initially_approved','approved',
-                    'review','meeting','down_payment','approval'
-                 ) NOT NULL DEFAULT 'review'",
-            );
-        } catch (Throwable $ignored) {
-        }
-
-        $db->exec("UPDATE stall_applications SET status='review', current_step=1 WHERE status='pending'");
-        $db->exec("UPDATE stall_applications SET status='meeting', current_step=2 WHERE status IN ('initially_approved','awaiting_meetup')");
-        $db->exec("UPDATE stall_applications SET status='approval', current_step=4 WHERE status='awaiting_approval'");
-        $db->exec("UPDATE stall_applications SET status='active', current_step=4 WHERE status IN ('approved', 'active')");
-
-        // Early-rejection archiving: anything already rejected moves out of the
-        // live pipeline into archived_rejections (step unknown for legacy rows -> 1).
-        gjc_ensure_archived_rejections_schema($db);
-        $db->exec(
-            "INSERT INTO archived_rejections
-                (original_application_id, rejected_at_step, business_name, proprietor_name,
-                 contact_number, email, profile_picture, business_permit, sanitary_permit,
-                 gjc_requirements, clearance, rejection_reason, rejected_by, rejected_at)
-             SELECT id, 1, business_name, proprietor_name, contact_number, email,
-                    profile_picture, business_permit, sanitary_permit, gjc_requirements, clearance,
-                    COALESCE(rejection_reason, 'Rejected (reason not recorded prior to pipeline migration)'),
-                    COALESCE(reviewed_by, 0), COALESCE(reviewed_at, updated_at)
-             FROM stall_applications WHERE status = 'rejected'",
-        );
-        $db->exec("DELETE FROM stall_applications WHERE status = 'rejected'");
-
-        // Narrow the enum down to the final 4-step vocabulary.
-        try {
-            $db->exec(
-                "ALTER TABLE stall_applications
-                 MODIFY status ENUM('review','meeting','down_payment','approval','active','expired')
-                    NOT NULL DEFAULT 'review'",
-            );
-        } catch (Throwable $ignored) {
-        }
-    }
-
-    // One-time rename from the earlier "gender" column to "sex".
-    if (in_array("gender", $columns, true) && !in_array("sex", $columns, true)) {
-        try {
-            $db->exec("ALTER TABLE stall_applications CHANGE gender sex ENUM('male','female') NOT NULL DEFAULT 'male'");
-            $columns = array_diff($columns, ["gender"]);
-            $columns[] = "sex";
-        } catch (Throwable $ignored) {
-        }
-    }
-
-    $adds = [
-        "first_name" => "VARCHAR(60) NOT NULL DEFAULT '' AFTER business_name",
-        "middle_name" => "VARCHAR(60) NULL DEFAULT NULL AFTER first_name",
-        "last_name" => "VARCHAR(60) NOT NULL DEFAULT '' AFTER middle_name",
-        "suffix" => "VARCHAR(20) NULL DEFAULT NULL AFTER last_name",
-        "sex" => "ENUM('male','female') NOT NULL DEFAULT 'male' AFTER suffix",
-        "street" => "VARCHAR(150) NOT NULL DEFAULT '' AFTER sex",
-        "barangay" => "VARCHAR(100) NOT NULL DEFAULT '' AFTER street",
-        "city" => "VARCHAR(100) NOT NULL DEFAULT '' AFTER barangay",
-        "province" => "VARCHAR(100) NOT NULL DEFAULT '' AFTER city",
-        "meetup_scheduled_at" => "DATETIME NULL",
-        "meetup_location" => "VARCHAR(255) NULL",
-        "meetup_notes" => "TEXT NULL",
-        "meetup_scheduled_by" => "INT UNSIGNED NULL",
-        "meetup_scheduled_email_sent_at" => "DATETIME NULL",
-        "down_payment_amount" => "DECIMAL(10,2) NULL",
-        "down_payment_reference" => "VARCHAR(80) NULL",
-        "down_payment_notes" => "TEXT NULL",
-        "down_payment_recorded_by" => "INT UNSIGNED NULL",
-        "down_payment_recorded_at" => "DATETIME NULL",
-        "merchant_user_id" => "INT UNSIGNED NULL",
-        "temp_password_plain" => "VARCHAR(100) NULL",
-        "preferred_stall_id" => "VARCHAR(10) NULL DEFAULT NULL",
-        // One-stop meeting: signed contract + payment recorded at the meeting.
-        "contract_file" => "VARCHAR(500) NULL",
-        "contract_uploaded_at" => "DATETIME NULL",
-        "contract_uploaded_by" => "INT UNSIGNED NULL",
-        "deposit_amount" => "DECIMAL(10,2) NULL",      // 2 months deposit
-        "advance_amount" => "DECIMAL(10,2) NULL",      // 1 month advance
-        "rental_start_date" => "DATE NULL",
-        "payment_schedule_day" => "TINYINT UNSIGNED NULL", // 15 or 30
-        "payment_method" => "VARCHAR(20) NULL",        // always 'cash'; no longer shown or chosen in the UI
-        "payment_ref_no" => "VARCHAR(60) NULL",        // unused: held GCash/Maya reference numbers
-        "awarded_by" => "INT UNSIGNED NULL",
-        "awarded_at" => "DATETIME NULL",
-        "cancelled_by" => "INT UNSIGNED NULL",
-        "cancelled_at" => "DATETIME NULL",
-        "cancel_reason" => "TEXT NULL",
-        // "New" badge: NULL until an admin first opens the application.
-        "first_viewed_at" => "DATETIME NULL",
-        "first_viewed_by" => "INT UNSIGNED NULL",
-    ];
-
-    foreach ($adds as $column => $definition) {
-        if (!in_array($column, $columns, true)) {
-            $db->exec(
-                "ALTER TABLE stall_applications ADD COLUMN {$column} {$definition}",
-            );
-        }
-    }
-
-    // One-stop pipeline: the meeting is auto-scheduled at submission and the
-    // old Review/Meeting/Down-Payment stages are collapsed into a single
-    // in-person verification meeting. Widen the ENUM (so old values still
-    // resolve), remap any legacy rows onto the two-status model, then narrow to
-    // the final vocabulary. Idempotent — safe to run on every page load.
-    try {
-        $db->exec(
-            "ALTER TABLE stall_applications
-             MODIFY status ENUM(
-                'pending_verification','awarded','cancelled','rejected','expired',
-                'review','meeting','down_payment','approval','active','pending','approved'
-             ) NOT NULL DEFAULT 'pending_verification'",
-        );
-        // Anything mid-pipeline (submitted, not yet awarded) -> Pending for Verification.
-        $db->exec(
-            "UPDATE stall_applications
-                SET status = 'pending_verification'
-              WHERE status IN ('review','meeting','down_payment','approval','pending')",
-        );
-        // Completed/awarded applications -> Awarded.
-        $db->exec(
-            "UPDATE stall_applications
-                SET status = 'awarded'
-              WHERE status IN ('active','approved')",
-        );
-        // Narrow to the final one-stop vocabulary.
-        $db->exec(
-            "ALTER TABLE stall_applications
-             MODIFY status ENUM('pending_verification','awarded','rejected','cancelled','expired')
-                NOT NULL DEFAULT 'pending_verification'",
-        );
-    } catch (Throwable $ignored) {
-    }
+    if(!gjc_table_exists($db,'stall_applications'))return;
+    gjc_stall_application_has_legacy($db);
+    foreach(gjc_stall_application_detail_definitions()['ddl'] as $table=>$ddl)if(!gjc_table_exists($db,$table))throw new RuntimeException('Application details require the approved EXPAND.');
+    $status=$db->query("SHOW COLUMNS FROM stall_applications LIKE 'status'")->fetch(PDO::FETCH_ASSOC);
+    if(!$status||$status['Type']!=="enum('pending_verification','awarded','rejected','cancelled','expired')")throw new RuntimeException('Unexpected application workflow vocabulary.');
 }
 
 /**
@@ -1420,7 +2714,7 @@ function gjc_expire_overdue_stall_applications(PDO $db, int $triggeredBy = 0): i
     $overdue = $db
         ->query(
             "SELECT id, proprietor_name, business_name, email, meetup_scheduled_at
-               FROM stall_applications
+               FROM " . gjc_stall_application_source($db) . "
               WHERE status = 'pending_verification'
                 AND meetup_scheduled_at IS NOT NULL
                 AND DATE(meetup_scheduled_at) < CURDATE()",
@@ -1431,20 +2725,14 @@ function gjc_expire_overdue_stall_applications(PDO $db, int $triggeredBy = 0): i
         return 0;
     }
 
-    $update = $db->prepare(
-        "UPDATE stall_applications
-            SET status = 'expired', reviewed_by = ?, reviewed_at = NOW(), rejection_reason = ?
-          WHERE id = ? AND status = 'pending_verification'",
-    );
-
     $expiredCount = 0;
     foreach ($overdue as $app) {
         $meetingAt = new DateTime($app["meetup_scheduled_at"]);
         $reason = "Applicant did not attend the scheduled verification meeting on "
             . $meetingAt->format("M j, Y g:i A") . ".";
 
-        $update->execute([$triggeredBy > 0 ? $triggeredBy : null, $reason, $app["id"]]);
-        if ($update->rowCount() === 0) {
+        $changed=gjc_stall_application_update($db,(int)$app['id'],['status'=>'expired','reviewed_by'=>$triggeredBy>0?$triggeredBy:null,'reviewed_at'=>GJC_APPLICATION_DB_NOW,'rejection_reason'=>$reason],['status'=>'pending_verification','meetup_scheduled_at'=>$app['meetup_scheduled_at']]);
+        if (!$changed) {
             continue; // already expired by a concurrent request
         }
         $expiredCount++;
@@ -1617,30 +2905,9 @@ function gjc_cleanup_stale_stall_application_drafts(): void
  */
 function gjc_ensure_archived_rejections_schema(PDO $db): void
 {
-    $db->exec(
-        "CREATE TABLE IF NOT EXISTS archived_rejections (
-            id                       INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            original_application_id INT UNSIGNED NOT NULL,
-            rejected_at_step         TINYINT UNSIGNED NOT NULL,
-            business_name            VARCHAR(120)  NOT NULL,
-            proprietor_name          VARCHAR(120)  NOT NULL,
-            contact_number           VARCHAR(15)   NOT NULL,
-            email                    VARCHAR(255)  NOT NULL,
-            profile_picture          VARCHAR(500)  NULL,
-            business_permit          VARCHAR(500)  NULL,
-            sanitary_permit          VARCHAR(500)  NULL,
-            gjc_requirements         VARCHAR(500)  NULL,
-            clearance                VARCHAR(500)  NULL,
-            rejection_reason         TEXT          NOT NULL,
-            rejected_by              INT UNSIGNED  NOT NULL,
-            rejected_at              DATETIME      NOT NULL,
-            archived_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            reactivated              TINYINT(1)    NOT NULL DEFAULT 0,
-            PRIMARY KEY (id),
-            KEY idx_ar_original (original_application_id),
-            KEY idx_ar_email    (email)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
-    );
+    if (!gjc_table_exists($db,'stall_application_rejections')) {
+        throw new RuntimeException('Normalized rejection history is missing.');
+    }
 }
 
 /**
@@ -1704,6 +2971,29 @@ function gjc_ensure_first_login_schema(PDO $db): void
     }
 }
 
+/**
+ * Supplies normalized address fields while retaining safe compatibility reads.
+ * New accounts without an address read as blank after legacy columns are removed.
+ */
+function gjc_with_user_address(PDO $db, array $row, int $userId): array
+{
+    if (!$row || !gjc_table_exists($db, 'user_addresses') || !gjc_table_exists($db, 'address_locations')) {
+        return $row;
+    }
+    $fields = ['address_barangay', 'address_city', 'address_province'];
+    $legacy = [];
+    foreach ($fields as $field) {
+        if (array_key_exists($field, $row)) {
+            $legacy[$field] = $row[$field];
+        }
+    }
+    $normalized = gjc_user_address_values($db, $userId);
+    if (count($legacy) === 3 && ($normalized === null || $normalized !== $legacy)) {
+        return $row;
+    }
+    return array_replace($row, $normalized ?? array_fill_keys($fields, null));
+}
+
 function gjc_current_user(PDO $db): array
 {
     $id = gjc_user_id();
@@ -1731,6 +3021,9 @@ function gjc_current_user(PDO $db): array
     $stmt = $db->prepare("SELECT * FROM users WHERE {$idColumn} = ? LIMIT 1");
     $stmt->execute([$id]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ($user) {
+        $user = gjc_with_user_address($db, $user, (int) ($user[$idColumn] ?? $id));
+    }
 
     $name = trim((string) ($user["name"] ?? ""));
     if ($name === "") {
@@ -1823,6 +3116,12 @@ function gjc_app_setting_defaults(): array
 
 function gjc_ensure_app_settings_schema(PDO $db): void
 {
+    if (gjc_table_exists($db, 'app_settings')) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('App settings schema must precede a transaction.');
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS app_settings (
             setting_key   VARCHAR(64)   NOT NULL,
@@ -2160,9 +3459,11 @@ function gjc_ensure_user_profile_schema(PDO $db): void
         return;
     }
 
+    gjc_ensure_user_address_schema($db);
     $cols = gjc_table_columns($db, 'users');
     $altered = false;
-    foreach (gjc_user_profile_columns() as $col => $def) {
+    $userFields = array_intersect_key(gjc_user_profile_columns(), array_flip(['sex', 'date_of_birth']));
+    foreach ($userFields as $col => $def) {
         if (!in_array($col, $cols, true)) {
             try {
                 $db->exec("ALTER TABLE users ADD COLUMN {$col} {$def}");
@@ -2173,6 +3474,574 @@ function gjc_ensure_user_profile_schema(PDO $db): void
     if ($altered) {
         gjc_table_columns($db, 'users', true);
     }
+}
+
+/** Explicit staff-owner integrity change, read-only unless separately approved. */
+function gjc_ensure_staff_owner_integrity_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Staff owner integrity requires CLI, ewallet and no transaction.');
+    }
+    if (!gjc_table_exists($db, 'users')) {
+        throw new RuntimeException('Staff owner integrity requires users.');
+    }
+    $id = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
+    $owner = $db->query("SHOW FULL COLUMNS FROM users LIKE 'merchant_owner_id'")->fetch(PDO::FETCH_ASSOC);
+    if (!$id || strtolower($id['Type']) !== 'int' || !$owner
+        || !in_array(strtolower($owner['Type']), ['int', 'int unsigned'], true)
+        || $owner['Null'] !== 'YES' || $owner['Default'] !== null || $owner['Extra'] !== '') {
+        throw new RuntimeException('Unexpected staff owner column definitions.');
+    }
+    $keys = $db->query("SELECT k.COLUMN_NAME,k.CONSTRAINT_NAME,k.REFERENCED_TABLE_NAME,
+        k.REFERENCED_COLUMN_NAME,r.DELETE_RULE,r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+        ON r.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA AND r.TABLE_NAME=k.TABLE_NAME
+        AND r.CONSTRAINT_NAME=k.CONSTRAINT_NAME
+        WHERE k.TABLE_SCHEMA=DATABASE() AND k.TABLE_NAME='users' AND k.COLUMN_NAME='merchant_owner_id'
+        ORDER BY k.CONSTRAINT_NAME")->fetchAll(PDO::FETCH_ASSOC);
+    $expected = [['COLUMN_NAME'=>'merchant_owner_id','CONSTRAINT_NAME'=>'fk_users_merchant_owner',
+        'REFERENCED_TABLE_NAME'=>'users','REFERENCED_COLUMN_NAME'=>'userID',
+        'DELETE_RULE'=>'RESTRICT','UPDATE_RULE'=>'RESTRICT']];
+    $indexes = $db->query("SELECT INDEX_NAME,COLUMN_NAME,NON_UNIQUE,SEQ_IN_INDEX
+        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users'
+        AND (COLUMN_NAME='merchant_owner_id' OR INDEX_NAME='idx_users_merchant_owner')
+        ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $expectedIndex = [['INDEX_NAME'=>'idx_users_merchant_owner','COLUMN_NAME'=>'merchant_owner_id',
+        'NON_UNIQUE'=>1,'SEQ_IN_INDEX'=>1]];
+    if ($keys === $expected && strtolower($owner['Type']) === 'int' && $indexes === $expectedIndex) {
+        return [];
+    }
+    if ($keys || $indexes) {
+        throw new RuntimeException('Unexpected existing staff owner key or index.');
+    }
+    $nameUsed = (int) $db->query("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+        WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME='fk_users_merchant_owner'")->fetchColumn();
+    $incoming = (int) $db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE REFERENCED_TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME='users'
+        AND REFERENCED_COLUMN_NAME='merchant_owner_id'")->fetchColumn();
+    if ($nameUsed || $incoming) {
+        throw new RuntimeException('Staff owner constraint name or incoming dependency conflict.');
+    }
+    $invalid = (int) $db->query('SELECT COUNT(*) FROM users s LEFT JOIN users o ON o.userID=s.merchant_owner_id
+        WHERE s.merchant_owner_id IS NOT NULL AND (o.userID IS NULL OR s.merchant_owner_id>2147483647
+            OR s.merchant_owner_id<=0 OR s.merchant_owner_id=s.userID OR s.roleID<>6
+            OR o.roleID NOT IN (2,5) OR o.merchant_owner_id IS NOT NULL)')->fetchColumn();
+    if ($invalid) {
+        throw new RuntimeException('Unexpected owner data requires a separate review.');
+    }
+    $comment = $db->quote((string) $owner['Comment']);
+    $plan = ['users'=>'ALTER TABLE users MODIFY COLUMN merchant_owner_id INT NULL DEFAULT NULL COMMENT '.$comment
+        . ', ADD INDEX idx_users_merchant_owner (merchant_owner_id), ADD CONSTRAINT fk_users_merchant_owner'
+        . ' FOREIGN KEY (merchant_owner_id) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT'];
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('An exact immediate private users export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath),true,512,JSON_THROW_ON_ERROR);
+    if (($archive['schema_users'] ?? null) !== $db->query('SHOW CREATE TABLE users')->fetch(PDO::FETCH_NUM)[1]
+        || ($archive['users'] ?? null) !== $db->query('SELECT * FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC)) {
+        throw new RuntimeException('Private export differs from current users.');
+    }
+    $db->exec($plan['users']);
+    gjc_table_columns($db,'users',true);
+    return $plan;
+}
+
+/** Explicit violations CONTRACT; never called by normal page requests. */
+function gjc_ensure_group_d_user_violation_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Violation CONTRACT requires CLI, ewallet, and no transaction.');
+    }
+    foreach (['users', 'user_violations'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Required violation table is missing: ' . $table);
+        }
+    }
+    $fields = gjc_violation_fields();
+    if (array_diff(array_merge(['user_id'], $fields), gjc_table_columns($db, 'user_violations', true))) {
+        throw new RuntimeException('Normalized violation schema is incomplete.');
+    }
+    foreach ([['users', 'userID'], ['user_violations', 'user_id']] as [$table, $column]) {
+        $type = $db->query("SHOW COLUMNS FROM {$table} LIKE '{$column}'")->fetch(PDO::FETCH_ASSOC);
+        if (!$type || strtolower($type['Type']) !== 'int') {
+            throw new RuntimeException('Violation identifiers require signed INT.');
+        }
+    }
+    $relations = $db->query("SELECT k.COLUMN_NAME, k.CONSTRAINT_NAME, k.REFERENCED_TABLE_NAME,
+        k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+          ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+          AND r.TABLE_NAME = k.TABLE_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.TABLE_NAME = 'user_violations'
+          AND k.REFERENCED_TABLE_NAME IS NOT NULL ORDER BY k.COLUMN_NAME")->fetchAll(PDO::FETCH_ASSOC);
+    if ($relations !== [['COLUMN_NAME' => 'user_id', 'CONSTRAINT_NAME' => 'fk_user_violation_user',
+        'REFERENCED_TABLE_NAME' => 'users', 'REFERENCED_COLUMN_NAME' => 'userID',
+        'DELETE_RULE' => 'CASCADE', 'UPDATE_RULE' => 'RESTRICT']]) {
+        throw new RuntimeException('Normalized violation foreign key differs from approved schema.');
+    }
+    $primary = $db->query("SELECT COLUMN_NAME FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_violations' AND INDEX_NAME='PRIMARY'
+        ORDER BY SEQ_IN_INDEX")->fetchAll(PDO::FETCH_COLUMN);
+    if ($primary !== ['user_id']) {
+        throw new RuntimeException('Violation primary key differs from approved schema.');
+    }
+    $present = array_intersect($fields, gjc_table_columns($db, 'users', true));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== 3) {
+        throw new RuntimeException('Violation legacy columns are partially contracted.');
+    }
+    $rows = $db->query('SELECT userID, restricted_violation_count, restricted_violation_last_at,
+        restricted_suspended_until FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC);
+    $normalized = $db->query('SELECT u.userID, COALESCE(v.restricted_violation_count, 0) AS restricted_violation_count,
+        v.restricted_violation_last_at, v.restricted_suspended_until FROM users u
+        LEFT JOIN user_violations v ON v.user_id=u.userID ORDER BY u.userID')->fetchAll(PDO::FETCH_ASSOC);
+    if ($rows !== $normalized) {
+        throw new RuntimeException('Normalized violation facts differ from legacy.');
+    }
+    $names = "'restricted_violation_count','restricted_violation_last_at','restricted_suspended_until'";
+    $keys = $db->query("SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA=DATABASE() AND ((TABLE_NAME='users' AND COLUMN_NAME IN ({$names}))
+        OR (REFERENCED_TABLE_NAME='users' AND REFERENCED_COLUMN_NAME IN ({$names})))")->fetchAll(PDO::FETCH_COLUMN);
+    $indexes = $db->query("SELECT INDEX_NAME FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME IN ({$names})")->fetchAll(PDO::FETCH_COLUMN);
+    if ($keys || $indexes) {
+        throw new RuntimeException('Unexpected legacy violation key or index dependency.');
+    }
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT EVENT_NAME AS name, EVENT_DEFINITION AS body FROM information_schema.EVENTS
+            WHERE EVENT_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) AS name, GENERATION_EXPRESSION AS body
+            FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                AND GENERATION_EXPRESSION <> ''")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', INDEX_NAME) AS name, EXPRESSION AS body
+            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+                AND EXPRESSION IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if ($object['body'] === null
+            || preg_match('/\\b(restricted_violation_count|restricted_violation_last_at|restricted_suspended_until)\\b/i', $object['body'])) {
+            throw new RuntimeException('Cannot contract violation-dependent object: ' . $object['name']);
+        }
+    }
+    $plan = ['users' => 'ALTER TABLE users DROP COLUMN restricted_violation_count, DROP COLUMN restricted_violation_last_at, DROP COLUMN restricted_suspended_until'];
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A matching private violation export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    $schema = $db->query('SHOW CREATE TABLE users')->fetch(PDO::FETCH_NUM)[1];
+    $normalizedSchema = $db->query('SHOW CREATE TABLE user_violations')->fetch(PDO::FETCH_NUM)[1];
+    $allUsers = $db->query('SELECT * FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC);
+    $normalizedRows = $db->query('SELECT * FROM user_violations ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+    if (($archive['schema_users'] ?? null) !== $schema || ($archive['states'] ?? null) !== $rows
+        || ($archive['schema_user_violations'] ?? null) !== $normalizedSchema
+        || ($archive['users'] ?? null) !== $allUsers || ($archive['normalized_rows'] ?? null) !== $normalizedRows) {
+        throw new RuntimeException('Private violation export differs from current source.');
+    }
+    $db->exec($plan['users']);
+    gjc_table_columns($db, 'users', true);
+    return $plan;
+}
+
+/** Explicit suspension CONTRACT; read-only by default and requires an exact private export. */
+function gjc_ensure_group_d_user_suspension_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('User suspension CONTRACT requires CLI, ewallet, and no transaction.');
+    }
+    foreach (['users', 'user_suspensions'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Required suspension table is missing: ' . $table);
+        }
+    }
+    $fields = ['suspended_until', 'suspension_reason', 'suspended_at', 'suspended_by', 'suspension_prev_status', 'suspension_froze_wallet', 'lockout_kind'];
+    $normalColumns = gjc_table_columns($db, 'user_suspensions', true);
+    if (array_diff(array_merge(['user_id'], $fields), $normalColumns)) {
+        throw new RuntimeException('Normalized suspension schema is incomplete.');
+    }
+    foreach ([['users', 'userID'], ['user_suspensions', 'user_id'], ['user_suspensions', 'suspended_by']] as [$table, $column]) {
+        $type = $db->query("SHOW COLUMNS FROM {$table} LIKE '{$column}'")->fetch(PDO::FETCH_ASSOC);
+        if (!$type || strtolower($type['Type']) !== 'int') {
+            throw new RuntimeException('Suspension foreign keys require signed INT identifiers.');
+        }
+    }
+    $relations = $db->query("SELECT k.COLUMN_NAME, k.CONSTRAINT_NAME, k.REFERENCED_TABLE_NAME,
+        k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+          ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+          AND r.TABLE_NAME = k.TABLE_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.TABLE_NAME = 'user_suspensions'
+          AND k.REFERENCED_TABLE_NAME IS NOT NULL ORDER BY k.COLUMN_NAME")->fetchAll(PDO::FETCH_ASSOC);
+    $expectedRelations = [
+        ['COLUMN_NAME' => 'suspended_by', 'CONSTRAINT_NAME' => 'fk_user_suspension_actor',
+            'REFERENCED_TABLE_NAME' => 'users', 'REFERENCED_COLUMN_NAME' => 'userID',
+            'DELETE_RULE' => 'RESTRICT', 'UPDATE_RULE' => 'RESTRICT'],
+        ['COLUMN_NAME' => 'user_id', 'CONSTRAINT_NAME' => 'fk_user_suspension_user',
+            'REFERENCED_TABLE_NAME' => 'users', 'REFERENCED_COLUMN_NAME' => 'userID',
+            'DELETE_RULE' => 'CASCADE', 'UPDATE_RULE' => 'RESTRICT'],
+    ];
+    if ($relations !== $expectedRelations) {
+        throw new RuntimeException('Normalized suspension foreign keys differ from the approved schema.');
+    }
+
+    $present = array_intersect($fields, gjc_table_columns($db, 'users', true));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== 7) {
+        throw new RuntimeException('User suspension columns are partially contracted.');
+    }
+    $rows = $db->query('SELECT userID, status, suspended_until, suspension_reason, suspended_at,
+        suspended_by, suspension_prev_status, suspension_froze_wallet, lockout_kind
+        FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC);
+    $normalized = $db->query('SELECT u.userID, u.status, s.suspended_until, s.suspension_reason, s.suspended_at,
+        s.suspended_by, s.suspension_prev_status, COALESCE(s.suspension_froze_wallet, 0) AS suspension_froze_wallet,
+        s.lockout_kind FROM users u LEFT JOIN user_suspensions s ON s.user_id = u.userID ORDER BY u.userID')
+        ->fetchAll(PDO::FETCH_ASSOC);
+    if ($rows !== $normalized) {
+        throw new RuntimeException('Normalized suspension facts differ from the legacy projection.');
+    }
+    $names = "'suspended_until','suspension_reason','suspended_at','suspended_by','suspension_prev_status','suspension_froze_wallet','lockout_kind'";
+    $keys = $db->query("SELECT k.TABLE_NAME, k.COLUMN_NAME, k.CONSTRAINT_NAME,
+        k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k
+        LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+            AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND ((k.TABLE_NAME = 'users' AND k.COLUMN_NAME IN ({$names}))
+          OR (k.REFERENCED_TABLE_NAME = 'users' AND k.REFERENCED_COLUMN_NAME IN ({$names})))")
+        ->fetchAll(PDO::FETCH_ASSOC);
+    $expectedKey = [['TABLE_NAME' => 'users', 'COLUMN_NAME' => 'suspended_by',
+        'CONSTRAINT_NAME' => 'fk_core_users_suspended_by', 'REFERENCED_TABLE_NAME' => 'users',
+        'REFERENCED_COLUMN_NAME' => 'userID', 'DELETE_RULE' => 'RESTRICT', 'UPDATE_RULE' => 'RESTRICT']];
+    if ($keys !== $expectedKey) {
+        throw new RuntimeException('Unexpected legacy suspension key dependency.');
+    }
+    $indexes = $db->query("SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX
+        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+        AND (COLUMN_NAME IN ({$names}) OR INDEX_NAME = 'fk_core_users_suspended_by')
+        ORDER BY INDEX_NAME, SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $expectedIndex = [['INDEX_NAME' => 'fk_core_users_suspended_by', 'COLUMN_NAME' => 'suspended_by',
+        'NON_UNIQUE' => 1, 'SEQ_IN_INDEX' => 1]];
+    if ($indexes !== $expectedIndex) {
+        throw new RuntimeException('Unexpected legacy suspension index dependency.');
+    }
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT EVENT_NAME AS name, EVENT_DEFINITION AS body FROM information_schema.EVENTS
+            WHERE EVENT_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) AS name, GENERATION_EXPRESSION AS body
+            FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                AND GENERATION_EXPRESSION <> ''")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', INDEX_NAME) AS name, EXPRESSION AS body
+            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+                AND EXPRESSION IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if ($object['body'] === null
+            || preg_match('/\\b(suspended_until|suspension_reason|suspended_at|suspended_by|suspension_prev_status|suspension_froze_wallet|lockout_kind)\\b/i', $object['body'])) {
+            throw new RuntimeException('Cannot contract suspension-dependent object: ' . $object['name']);
+        }
+    }
+    $plan = ['users' => 'ALTER TABLE users DROP FOREIGN KEY fk_core_users_suspended_by, DROP INDEX fk_core_users_suspended_by, DROP COLUMN suspended_until, DROP COLUMN suspension_reason, DROP COLUMN suspended_at, DROP COLUMN suspended_by, DROP COLUMN suspension_prev_status, DROP COLUMN suspension_froze_wallet, DROP COLUMN lockout_kind'];
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A matching private suspension export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    $schema = $db->query('SHOW CREATE TABLE users')->fetch(PDO::FETCH_NUM)[1];
+    $normalizedSchema = $db->query('SHOW CREATE TABLE user_suspensions')->fetch(PDO::FETCH_NUM)[1];
+    $normalizedRows = $db->query('SELECT * FROM user_suspensions ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+    if (($archive['schema_users'] ?? null) !== $schema || ($archive['states'] ?? null) !== $rows
+        || ($archive['schema_user_suspensions'] ?? null) !== $normalizedSchema
+        || ($archive['normalized_rows'] ?? null) !== $normalizedRows) {
+        throw new RuntimeException('Private suspension export differs from current source.');
+    }
+    $db->exec($plan['users']);
+    gjc_table_columns($db, 'users', true);
+    return $plan;
+}
+
+/**
+ * Explicit user-address CONTRACT. Read-only unless applying with an exact private export.
+ */
+function gjc_ensure_group_d_user_address_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('User address CONTRACT requires CLI, ewallet, and no transaction.');
+    }
+    foreach (['users', 'user_addresses', 'address_locations'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Required address table is missing: ' . $table);
+        }
+    }
+    $fields = ['address_barangay', 'address_city', 'address_province'];
+    $present = array_intersect($fields, gjc_table_columns($db, 'users', true));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== 3) {
+        throw new RuntimeException('User address columns are partially contracted.');
+    }
+    $rows = $db->query('SELECT userID, address_barangay, address_city, address_province FROM users ORDER BY userID')
+        ->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $userId = (int) $row['userID'];
+        unset($row['userID']);
+        if (gjc_user_address_values($db, $userId) !== $row) {
+            throw new RuntimeException('Normalized address is missing or differs from the original.');
+        }
+    }
+    $names = "'address_barangay','address_city','address_province'";
+    $keys = $db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = 'users' AND COLUMN_NAME IN ({$names}))
+          OR (REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME IN ({$names})))")->fetchColumn();
+    $indexes = $db->query("SELECT COUNT(*) FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ({$names})")->fetchColumn();
+    if ((int) $keys !== 0 || (int) $indexes !== 0) {
+        throw new RuntimeException('A key or index depends on legacy address columns.');
+    }
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT EVENT_NAME AS name, EVENT_DEFINITION AS body FROM information_schema.EVENTS
+            WHERE EVENT_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) AS name, GENERATION_EXPRESSION AS body
+            FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                AND GENERATION_EXPRESSION <> ''")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', INDEX_NAME) AS name, EXPRESSION AS body
+            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+                AND EXPRESSION IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if ($object['body'] === null
+            || preg_match('/\\b(address_barangay|address_city|address_province)\\b/i', $object['body'])) {
+            throw new RuntimeException('Cannot contract address-dependent object: ' . $object['name']);
+        }
+    }
+    $plan = ['users' => 'ALTER TABLE users DROP COLUMN address_barangay, DROP COLUMN address_city, DROP COLUMN address_province'];
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A matching private address export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    $schema = $db->query('SHOW CREATE TABLE users')->fetch(PDO::FETCH_NUM)[1];
+    if (($archive['schema'] ?? null) !== $schema || ($archive['addresses'] ?? null) !== $rows) {
+        throw new RuntimeException('Private address export differs from current source.');
+    }
+    $db->exec($plan['users']);
+    gjc_table_columns($db, 'users', true);
+    return $plan;
+}
+
+/**
+ * Commits the existing profile UPDATE and normalized address as one operation.
+ * No schema DDL runs here; callers retain their current validation and audit behavior.
+ */
+function gjc_save_profile_with_address(PDO $db, int $userId, string $sql, array $params, array $address): void
+{
+    if ($db->inTransaction()) {
+        throw new LogicException('Profile address writes must own their transaction.');
+    }
+    if (!gjc_table_exists($db, 'address_locations') || !gjc_table_exists($db, 'user_addresses')) {
+        throw new RuntimeException('Profile could not be saved. Please try again.');
+    }
+    $addressKeys = ['address_barangay', 'address_city', 'address_province'];
+    $columns = gjc_table_columns($db, 'users', true);
+    $legacyCount = count(array_intersect($addressKeys, $columns));
+    if ($legacyCount !== 0 && $legacyCount !== 3) {
+        throw new LogicException('Legacy address columns are only partially present.');
+    }
+    foreach ($addressKeys as $key) {
+        if (!array_key_exists($key, $address)) {
+            throw new InvalidArgumentException('All address fields must be supplied.');
+        }
+    }
+    if (!$params || (int) $params[array_key_last($params)] !== $userId) {
+        throw new InvalidArgumentException('Profile UPDATE must target the locked user.');
+    }
+    $db->beginTransaction();
+    try {
+        $lock = $db->prepare('SELECT userID FROM users WHERE userID = ? FOR UPDATE');
+        $lock->execute([$userId]);
+        if ($lock->fetchColumn() === false) {
+            throw new RuntimeException('Profile could not be saved. Please try again.');
+        }
+        $db->prepare($sql)->execute($params);
+        if ($legacyCount === 3) {
+            $read = $db->prepare('SELECT address_barangay, address_city, address_province FROM users WHERE userID = ?');
+            $read->execute([$userId]);
+            $address = $read->fetch(PDO::FETCH_ASSOC);
+            if (!$address) {
+                throw new RuntimeException('Profile could not be saved. Please try again.');
+            }
+        }
+        gjc_sync_user_address($db, $userId, $address);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
+ * Normalized optional user addresses. Existing profile columns remain during EXPAND/MIGRATE.
+ * Schema creation must precede application transactions.
+ */
+function gjc_ensure_user_address_schema(PDO $db): void
+{
+    if (!gjc_table_exists($db, 'users')) {
+        throw new RuntimeException('User address schema requires users.');
+    }
+    $type = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
+    if (!$type || strtolower($type['Type']) !== 'int') {
+        throw new RuntimeException('User address FK requires signed INT users.userID.');
+    }
+    $locationsExist = gjc_table_exists($db, 'address_locations');
+    $addressesExist = gjc_table_exists($db, 'user_addresses');
+    if ($locationsExist && $addressesExist) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('User address schema creation must precede a transaction.');
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS address_locations (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    parent_id INT UNSIGNED NULL,
+    location_kind ENUM('province', 'city', 'barangay') NOT NULL,
+    label VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_address_location_scope (location_kind, (COALESCE(parent_id, 0)), label),
+    KEY idx_address_location_parent (parent_id),
+    CONSTRAINT fk_address_location_parent FOREIGN KEY (parent_id)
+        REFERENCES address_locations(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT chk_address_province_root CHECK (location_kind <> 'province' OR parent_id IS NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS user_addresses (
+    user_id INT NOT NULL,
+    location_id INT UNSIGNED NULL,
+    PRIMARY KEY (user_id),
+    KEY idx_user_address_location (location_id),
+    CONSTRAINT fk_user_address_user FOREIGN KEY (user_id)
+        REFERENCES users(userID) ON DELETE CASCADE ON UPDATE RESTRICT,
+    CONSTRAINT fk_user_address_location FOREIGN KEY (location_id)
+        REFERENCES address_locations(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+    gjc_table_columns($db, 'address_locations', true);
+    gjc_table_columns($db, 'user_addresses', true);
+}
+
+/** Writes only normalized address tables; the caller owns the transaction and compatibility write. */
+function gjc_sync_user_address(PDO $db, int $userId, array $values): void
+{
+    if (!$db->inTransaction()) {
+        throw new RuntimeException('Address synchronization requires a transaction.');
+    }
+    foreach (['province', 'city', 'barangay'] as $kind) {
+        $key = 'address_' . $kind;
+        if (!array_key_exists($key, $values)) {
+            throw new InvalidArgumentException('All three address fields must be supplied.');
+        }
+        if ($values[$key] !== null
+            && (!is_string($values[$key]) || mb_strlen($values[$key], 'UTF-8') > 120)) {
+            throw new InvalidArgumentException('Address labels must be strings of at most 120 characters.');
+        }
+    }
+    $parentId = null;
+    foreach (['province', 'city', 'barangay'] as $kind) {
+        $label = $values['address_' . $kind];
+        if ($label === null) {
+            continue;
+        }
+        $find = $db->prepare('SELECT id FROM address_locations
+            WHERE parent_id <=> ? AND location_kind = ? AND label = ? LIMIT 1');
+        $find->execute([$parentId, $kind, $label]);
+        $id = $find->fetchColumn();
+        if ($id === false) {
+            $db->prepare('INSERT INTO address_locations (parent_id, location_kind, label)
+                VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)')
+                ->execute([$parentId, $kind, $label]);
+            $id = $db->lastInsertId();
+        }
+        $parentId = (int) $id;
+    }
+    $db->prepare('INSERT INTO user_addresses (user_id, location_id) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE location_id = ?')->execute([$userId, $parentId, $parentId]);
+}
+
+/** Returns NULL for an unmigrated user, or the exact original address field layout. */
+function gjc_user_address_values(PDO $db, int $userId): ?array
+{
+    $stmt = $db->prepare('SELECT location_id FROM user_addresses WHERE user_id = ?');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    $values = ['address_barangay' => null, 'address_city' => null, 'address_province' => null];
+    $id = $row['location_id'];
+    $previousRank = 3;
+    $ranks = ['province' => 0, 'city' => 1, 'barangay' => 2];
+    $lookup = $db->prepare('SELECT parent_id, location_kind, label FROM address_locations WHERE id = ?');
+    while ($id !== null) {
+        $lookup->execute([(int) $id]);
+        $node = $lookup->fetch(PDO::FETCH_ASSOC);
+        if (!$node || !isset($ranks[$node['location_kind']])
+            || $ranks[$node['location_kind']] >= $previousRank) {
+            throw new RuntimeException('Address hierarchy is missing or invalid.');
+        }
+        $previousRank = $ranks[$node['location_kind']];
+        $values['address_' . $node['location_kind']] = $node['label'];
+        $id = $node['parent_id'];
+    }
+    return $values;
 }
 
 /**
@@ -2271,8 +4140,8 @@ function gjc_format_address(array $row): string
  *
  * A field left blank is stored as NULL rather than '', so clearing a value
  * actually clears it and the read-side "is anything on file?" checks stay
- * honest. Columns absent from $columns are skipped, mirroring how the profile
- * pages already guard their writes against a schema that never healed.
+ * honest. Sex and date of birth follow the available users columns. Address
+ * fields remain logical profile inputs even after their legacy columns are removed.
  */
 function gjc_collect_profile_details(array $post, array $columns): array
 {
@@ -2309,8 +4178,11 @@ function gjc_collect_profile_details(array $post, array $columns): array
         'address_province'           => $blank('address_province'),
     ];
 
+    $profileFields = array_unique(array_merge($columns, [
+        'address_barangay', 'address_city', 'address_province',
+    ]));
     return [
-        'values' => array_intersect_key($values, array_flip($columns)),
+        'values' => array_intersect_key($values, array_flip($profileFields)),
         'error'  => null,
     ];
 }
@@ -2320,15 +4192,15 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS topup_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NULL,
+            user_id INT NULL,
             student_wallet_id INT UNSIGNED NULL,
             amount DECIMAL(15,2) NOT NULL,
             payment_method VARCHAR(80) NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             reference_no VARCHAR(40) NULL UNIQUE,
-            approved_by INT UNSIGNED NULL,
+            approved_by INT NULL,
             approved_at DATETIME NULL,
-            rejected_by INT UNSIGNED NULL,
+            rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_topup_user (user_id),
@@ -2339,15 +4211,15 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS encashment_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NULL,
+            user_id INT NULL,
             merchant_wallet_id INT UNSIGNED NULL,
             amount DECIMAL(15,2) NOT NULL,
             method VARCHAR(80) NOT NULL DEFAULT 'Cashier Release',
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             reference_no VARCHAR(40) NULL UNIQUE,
-            released_by INT UNSIGNED NULL,
+            released_by INT NULL,
             released_at DATETIME NULL,
-            rejected_by INT UNSIGNED NULL,
+            rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_encash_user (user_id),
@@ -2356,13 +4228,13 @@ function gjc_ensure_operational_tables(PDO $db): void
     );
 
     $topupAdds = [
-        "user_id" => "INT UNSIGNED NULL",
+        "user_id" => "INT NULL",
         "student_wallet_id" => "INT UNSIGNED NULL",
         "payment_method" => "VARCHAR(80) NOT NULL DEFAULT 'Cash at Cashier'",
         "reference_no" => "VARCHAR(40) NULL",
-        "approved_by" => "INT UNSIGNED NULL",
+        "approved_by" => "INT NULL",
         "approved_at" => "DATETIME NULL",
-        "rejected_by" => "INT UNSIGNED NULL",
+        "rejected_by" => "INT NULL",
         "rejected_at" => "DATETIME NULL",
         "created_at" => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
     ];
@@ -2377,13 +4249,13 @@ function gjc_ensure_operational_tables(PDO $db): void
     }
 
     $encashAdds = [
-        "user_id" => "INT UNSIGNED NULL",
+        "user_id" => "INT NULL",
         "merchant_wallet_id" => "INT UNSIGNED NULL",
         "method" => "VARCHAR(80) NOT NULL DEFAULT 'Cashier Release'",
         "reference_no" => "VARCHAR(40) NULL",
-        "released_by" => "INT UNSIGNED NULL",
+        "released_by" => "INT NULL",
         "released_at" => "DATETIME NULL",
-        "rejected_by" => "INT UNSIGNED NULL",
+        "rejected_by" => "INT NULL",
         "rejected_at" => "DATETIME NULL",
         "created_at" => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
     ];
@@ -2407,15 +4279,15 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS withdrawal_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NULL,
+            user_id INT NULL,
             student_wallet_id INT UNSIGNED NULL,
             amount DECIMAL(15,2) NOT NULL,
             method VARCHAR(80) NOT NULL DEFAULT 'Cashier Release',
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             reference_no VARCHAR(40) NULL UNIQUE,
-            released_by INT UNSIGNED NULL,
+            released_by INT NULL,
             released_at DATETIME NULL,
-            rejected_by INT UNSIGNED NULL,
+            rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_withdraw_user (user_id),
@@ -2424,13 +4296,13 @@ function gjc_ensure_operational_tables(PDO $db): void
     );
 
     $withdrawAdds = [
-        "user_id" => "INT UNSIGNED NULL",
+        "user_id" => "INT NULL",
         "student_wallet_id" => "INT UNSIGNED NULL",
         "method" => "VARCHAR(80) NOT NULL DEFAULT 'Cashier Release'",
         "reference_no" => "VARCHAR(40) NULL",
-        "released_by" => "INT UNSIGNED NULL",
+        "released_by" => "INT NULL",
         "released_at" => "DATETIME NULL",
-        "rejected_by" => "INT UNSIGNED NULL",
+        "rejected_by" => "INT NULL",
         "rejected_at" => "DATETIME NULL",
         "created_at" => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
     ];
@@ -2559,20 +4431,19 @@ function gjc_ensure_merchant_qr_orders_schema(PDO $db): void
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             token VARCHAR(64) NOT NULL UNIQUE,
             short_code VARCHAR(12) NULL,
-            merchant_user_id INT UNSIGNED NOT NULL,
             merchant_wallet_id INT UNSIGNED NOT NULL,
             description TEXT NULL,
-            items_json TEXT NOT NULL,
             amount DECIMAL(15,2) NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             expires_at DATETIME NOT NULL,
-            paid_by INT UNSIGNED NULL,
+            paid_by INT NULL,
+            created_by INT NULL,
             paid_ref VARCHAR(40) NULL,
             paid_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_mqo_token (token),
             INDEX idx_mqo_status_expiry (status, expires_at),
-            INDEX idx_mqo_merchant (merchant_user_id),
+            INDEX idx_mqo_merchant_wallet (merchant_wallet_id),
             UNIQUE INDEX uq_mqo_short_code (short_code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
     );
@@ -2580,11 +4451,11 @@ function gjc_ensure_merchant_qr_orders_schema(PDO $db): void
     $adds = [
         "short_code" => "VARCHAR(12) NULL AFTER token",
         "description" => "TEXT NULL",
-        "items_json" => "TEXT NOT NULL",
         "amount" => "DECIMAL(15,2) NOT NULL DEFAULT 0.00",
         "status" => "VARCHAR(20) NOT NULL DEFAULT 'pending'",
         "expires_at" => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        "paid_by" => "INT UNSIGNED NULL",
+        "paid_by" => "INT NULL",
+        "created_by" => "INT NULL",
         "paid_ref" => "VARCHAR(40) NULL",
         "paid_at" => "DATETIME NULL",
         "created_at" => "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
@@ -2596,6 +4467,7 @@ function gjc_ensure_merchant_qr_orders_schema(PDO $db): void
             $db->exec("ALTER TABLE merchant_qr_orders ADD COLUMN {$column} {$definition}");
         }
     }
+    gjc_table_columns($db, 'merchant_qr_orders', true);
 
     $idxStmt = $db->prepare(
         "SELECT COUNT(*) FROM information_schema.STATISTICS
@@ -2922,23 +4794,19 @@ function gjc_ensure_cart_orders_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS cart_orders (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             reference_no VARCHAR(30) NOT NULL UNIQUE,
-            student_user_id INT UNSIGNED NULL,
             student_wallet_id INT UNSIGNED NULL,
-            merchant_user_id INT UNSIGNED NOT NULL,
             merchant_wallet_id INT UNSIGNED NOT NULL,
             buyer_role VARCHAR(10) NOT NULL DEFAULT 'student',
-            parent_user_id INT UNSIGNED NULL,
             parent_wallet_id INT UNSIGNED NULL,
             description TEXT NULL,
-            items_json TEXT NOT NULL,
             amount DECIMAL(15,2) NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             paid_at DATETIME NULL,
             paid_ref VARCHAR(40) NULL,
-            INDEX idx_cart_orders_student (student_user_id, status),
-            INDEX idx_cart_orders_parent (parent_user_id, status),
-            INDEX idx_cart_orders_merchant (merchant_user_id, status)
+            INDEX idx_cart_orders_student_wallet (student_wallet_id, status),
+            INDEX idx_cart_orders_parent_wallet (parent_wallet_id, status),
+            INDEX idx_cart_orders_merchant_wallet (merchant_wallet_id, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
@@ -2949,23 +4817,1053 @@ function gjc_ensure_cart_orders_schema(PDO $db): void
     if (!in_array('buyer_role', $cols, true)) {
         $db->exec("ALTER TABLE cart_orders ADD COLUMN buyer_role VARCHAR(10) NOT NULL DEFAULT 'student'");
     }
-    if (!in_array('parent_user_id', $cols, true)) {
-        $db->exec("ALTER TABLE cart_orders ADD COLUMN parent_user_id INT UNSIGNED NULL");
-        try { $db->exec("ALTER TABLE cart_orders ADD INDEX idx_cart_orders_parent (parent_user_id, status)"); } catch (\Throwable $ignored) {}
-    }
     if (!in_array('parent_wallet_id', $cols, true)) {
         $db->exec("ALTER TABLE cart_orders ADD COLUMN parent_wallet_id INT UNSIGNED NULL");
     }
 
-    // A parent order has no student, so the two student columns must accept
-    // NULL. MODIFY only relaxes nullability — existing values are preserved.
-    foreach (['student_user_id', 'student_wallet_id'] as $col) {
+    // A parent order has no student wallet, so that column must accept NULL.
+    // Copied user IDs are retained only in pre-CONTRACT schemas.
+    foreach (['student_wallet_id'] as $col) {
         try {
             $def = $db->query("SHOW COLUMNS FROM cart_orders LIKE " . $db->quote($col))->fetch(PDO::FETCH_ASSOC);
             if ($def && strtoupper((string) $def['Null']) === 'NO') {
-                $db->exec("ALTER TABLE cart_orders MODIFY $col INT UNSIGNED NULL");
+                $db->exec("ALTER TABLE cart_orders MODIFY `$col` {$def['Type']} NULL");
             }
         } catch (\Throwable $ignored) {}
+    }
+}
+
+/** Explicit CLI cleanup; export the empty legacy definitions before calling. */
+function gjc_ensure_legacy_table_cleanup_schema(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli') {
+        throw new RuntimeException('Legacy table cleanup must be invoked explicitly from the CLI.');
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Legacy table cleanup cannot run inside a transaction.');
+    }
+    if ($db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Legacy table cleanup requires the ewallet database.');
+    }
+
+    $expected = [
+        'topup' => ['topupID', 'adminID', 'userID', 'wallet_id', 'amount', 'remarks', 'date_time'],
+        'transaction' => ['transactionID', 'wallet_id', 'merchantID', 'amount', 'date_time', 'description', 'reference'],
+        'wallet' => ['wallet_id', 'userID', 'balance', 'last_updated'],
+    ];
+    $existing = array_filter(array_keys($expected), fn($table) => gjc_table_exists($db, $table));
+    if (!$existing) {
+        return;
+    }
+
+    $archivePath = BASE_PATH . '/storage/backups/genpay-legacy-table-definitions-2026-10-08.sql';
+    $archive = is_file($archivePath) ? file_get_contents($archivePath) : false;
+    if ($archive === false) {
+        throw new RuntimeException('The verified legacy table definition export is required before cleanup.');
+    }
+    foreach ($existing as $table) {
+        $columns = gjc_table_columns($db, $table, true);
+        $required = $expected[$table];
+        sort($columns);
+        sort($required);
+        if ($columns !== $required) {
+            throw new RuntimeException('Unexpected legacy table structure: ' . $table);
+        }
+        $ddl = $db->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_NUM)[1];
+        if (!str_contains($archive, $ddl . ';')) {
+            throw new RuntimeException('Legacy table export does not match the live definition: ' . $table);
+        }
+        if ((int) $db->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn() !== 0) {
+            throw new RuntimeException('Refusing to drop a nonempty legacy table: ' . $table);
+        }
+    }
+
+    $db->exec('DROP TABLE IF EXISTS `ewallet`.`topup`, `ewallet`.`transaction`, `ewallet`.`wallet`');
+}
+
+/**
+ * Explicit Group B B2 CONTRACT. Defaults to read-only planning.
+ * Applying requires a private export of each affected table's exact rows and definition.
+ */
+function gjc_ensure_group_b_wallet_identity_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Group B identity contraction requires CLI, ewallet, and no transaction.');
+    }
+    $copies = [
+        'cart_orders' => ['student_user_id', 'merchant_user_id', 'parent_user_id'],
+        'merchant_qr_orders' => ['merchant_user_id'],
+        'p2p_transfers' => ['from_user_id', 'to_user_id'],
+        'parent_alerts' => ['student_user_id'],
+        'tuition_credits' => ['student_user_id'],
+    ];
+    $checks = [
+        'cart_orders' => "SELECT COUNT(*) FROM cart_orders o
+            LEFT JOIN student_wallets sw ON sw.id = o.student_wallet_id
+            LEFT JOIN merchant_wallets mw ON mw.id = o.merchant_wallet_id
+            LEFT JOIN parent_wallets pw ON pw.id = o.parent_wallet_id
+            LEFT JOIN parents p ON p.id = pw.parent_id
+            WHERE mw.id IS NULL OR NOT(o.student_user_id <=> sw.user_id)
+               OR NOT(o.merchant_user_id <=> mw.user_id) OR NOT(o.parent_user_id <=> p.user_id)
+               OR (o.student_wallet_id IS NOT NULL AND sw.id IS NULL)
+               OR (o.parent_wallet_id IS NOT NULL AND (pw.id IS NULL OR p.id IS NULL))
+               OR o.buyer_role NOT IN ('student','parent')
+               OR (o.buyer_role = 'student' AND (sw.id IS NULL OR o.parent_wallet_id IS NOT NULL))
+               OR (o.buyer_role = 'parent' AND (p.id IS NULL OR o.student_wallet_id IS NOT NULL))",
+        'merchant_qr_orders' => "SELECT COUNT(*) FROM merchant_qr_orders o
+            LEFT JOIN merchant_wallets mw ON mw.id = o.merchant_wallet_id
+            WHERE mw.id IS NULL OR NOT(o.merchant_user_id <=> mw.user_id)",
+        'p2p_transfers' => "SELECT COUNT(*) FROM p2p_transfers p
+            LEFT JOIN student_wallets f ON f.id = p.from_wallet_id
+            LEFT JOIN student_wallets t ON t.id = p.to_wallet_id
+            WHERE f.id IS NULL OR t.id IS NULL
+               OR NOT(p.from_user_id <=> f.user_id) OR NOT(p.to_user_id <=> t.user_id)",
+        'parent_alerts' => "SELECT COUNT(*) FROM parent_alerts a
+            LEFT JOIN student_wallets sw ON sw.id = a.student_wallet_id
+            WHERE sw.id IS NULL OR NOT(a.student_user_id <=> sw.user_id)",
+        'tuition_credits' => "SELECT COUNT(*) FROM tuition_credits c
+            LEFT JOIN student_wallets sw ON sw.id = c.student_wallet_id
+            WHERE sw.id IS NULL OR NOT(c.student_user_id <=> sw.user_id)",
+    ];
+    $keys = $db->query("SELECT k.TABLE_NAME, k.COLUMN_NAME, k.CONSTRAINT_NAME,
+        k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+          ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.TABLE_NAME = k.TABLE_NAME
+         AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL")
+        ->fetchAll(PDO::FETCH_ASSOC);
+    $indexes = $db->query("SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME
+        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $walletLinks = [
+        'cart_orders' => ['student_wallet_id' => 'student_wallets', 'merchant_wallet_id' => 'merchant_wallets', 'parent_wallet_id' => 'parent_wallets'],
+        'merchant_qr_orders' => ['merchant_wallet_id' => 'merchant_wallets'],
+        'p2p_transfers' => ['from_wallet_id' => 'student_wallets', 'to_wallet_id' => 'student_wallets'],
+        'parent_alerts' => ['student_wallet_id' => 'student_wallets'],
+        'tuition_credits' => ['student_wallet_id' => 'student_wallets'],
+    ];
+    $plan = [];
+    foreach ($copies as $table => $columns) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Contract source table is missing: ' . $table);
+        }
+        $live = gjc_table_columns($db, $table, true);
+        $present = array_values(array_intersect($columns, $live));
+        if (!$present) {
+            continue;
+        }
+        if (count($present) !== count($columns)) {
+            throw new RuntimeException('Partially contracted compatibility columns: ' . $table);
+        }
+        if ((int) $db->query($checks[$table])->fetchColumn() !== 0) {
+            throw new RuntimeException('Conflicting identities or orphan wallets block CONTRACT: ' . $table);
+        }
+        foreach ($walletLinks[$table] as $column => $target) {
+            $matching = array_values(array_filter($keys, static fn($key) =>
+                $key['TABLE_NAME'] === $table && $key['COLUMN_NAME'] === $column
+                && $key['REFERENCED_TABLE_NAME'] === $target && $key['REFERENCED_COLUMN_NAME'] === 'id'
+                && $key['DELETE_RULE'] === 'RESTRICT' && $key['UPDATE_RULE'] === 'RESTRICT'));
+            if (count($matching) !== 1) {
+                throw new RuntimeException('Required protected wallet link is missing: ' . $table . '.' . $column);
+            }
+        }
+        $clauses = [];
+        $dropKeys = [];
+        foreach ($keys as $key) {
+            if ($key['REFERENCED_TABLE_NAME'] === $table
+                && in_array($key['REFERENCED_COLUMN_NAME'], $columns, true)) {
+                throw new RuntimeException('Another table references a copied ID: ' . $table);
+            }
+            if ($key['TABLE_NAME'] === $table && in_array($key['COLUMN_NAME'], $columns, true)) {
+                $expected = 'fk_core_' . $table . '_' . $key['COLUMN_NAME'];
+                if ($key['CONSTRAINT_NAME'] !== $expected || $key['REFERENCED_TABLE_NAME'] !== 'users'
+                    || $key['REFERENCED_COLUMN_NAME'] !== 'userID'
+                    || $key['DELETE_RULE'] !== 'RESTRICT' || $key['UPDATE_RULE'] !== 'RESTRICT') {
+                    throw new RuntimeException('Unexpected copied-ID foreign key: ' . $table);
+                }
+                $dropKeys[$expected] = true;
+            }
+        }
+        foreach (array_keys($dropKeys) as $name) {
+            $clauses[] = 'DROP FOREIGN KEY `' . $name . '`';
+        }
+        $tableIndexes = [];
+        foreach ($indexes as $index) {
+            if ($index['TABLE_NAME'] === $table) {
+                $tableIndexes[$index['INDEX_NAME']][] = $index;
+            }
+        }
+        foreach ($tableIndexes as $name => $parts) {
+            if (!array_intersect(array_column($parts, 'COLUMN_NAME'), $columns)) {
+                continue;
+            }
+            if ($name === 'PRIMARY' || (int) $parts[0]['NON_UNIQUE'] !== 1
+                || array_diff(array_column($parts, 'COLUMN_NAME'), array_merge($columns, ['status']))) {
+                throw new RuntimeException('Unexpected index involving copied IDs: ' . $table . '.' . $name);
+            }
+            $clauses[] = 'DROP INDEX `' . str_replace('`', '``', $name) . '`';
+        }
+        foreach ($columns as $column) {
+            $clauses[] = 'DROP COLUMN `' . $column . '`';
+        }
+        $plan[$table] = 'ALTER TABLE `' . $table . '` ' . implode(', ', $clauses);
+    }
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS object_name, ACTION_STATEMENT AS body
+            FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS object_name, VIEW_DEFINITION AS body
+            FROM information_schema.VIEWS WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS object_name, ROUTINE_DEFINITION AS body
+            FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        foreach ($copies as $table => $columns) {
+            if (!isset($plan[$table]) || !preg_match('/\\b' . preg_quote($table, '/') . '\\b/i', $object['body'] ?? '')) {
+                continue;
+            }
+            foreach ($columns as $column) {
+                if (preg_match('/\\b' . preg_quote($column, '/') . '\\b/i', $object['body'] ?? '')) {
+                    throw new RuntimeException('Database object depends on copied IDs: ' . $object['object_name']);
+                }
+            }
+        }
+    }
+    if (!$apply || !$plan) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A private pre-CONTRACT table export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    foreach ($plan as $table => $sql) {
+        $definition = $db->query('SHOW CREATE TABLE `' . $table . '`')->fetch(PDO::FETCH_NUM)[1];
+        $rows = $db->query('SELECT * FROM `' . $table . '` ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+        if (($archive[$table]['schema'] ?? null) !== $definition || ($archive[$table]['rows'] ?? null) !== $rows) {
+            throw new RuntimeException('Private export differs from current table: ' . $table);
+        }
+    }
+    foreach ($plan as $sql) {
+        $db->exec($sql);
+    }
+    return $plan;
+}
+
+/**
+ * Explicit Group B wallet-link EXPAND; preflight both tables before any DDL.
+ */
+function gjc_ensure_group_b_wallet_links_schema(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Group B wallet-link expansion requires an explicit CLI call outside a transaction.');
+    }
+    if ($db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Group B wallet-link expansion requires the ewallet database.');
+    }
+    $plan = [
+        'parent_alerts' => 'fk_group_b_parent_alerts_student_wallet',
+        'tuition_credits' => 'fk_group_b_tuition_credits_student_wallet',
+    ];
+    foreach (array_merge(['student_wallets'], array_keys($plan)) as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Required wallet-link table is missing: ' . $table);
+        }
+    }
+    $metadata = [];
+    foreach ($db->query("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
+        FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME IN ('student_wallets', 'parent_alerts', 'tuition_credits')")
+        ->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $metadata[$row['TABLE_NAME']][$row['COLUMN_NAME']] = $row;
+    }
+    if (($metadata['student_wallets']['id']['COLUMN_TYPE'] ?? null) !== 'int unsigned') {
+        throw new RuntimeException('Unexpected student wallet primary-key type.');
+    }
+    $existing = $db->query("SELECT k.TABLE_NAME, k.COLUMN_NAME, k.CONSTRAINT_NAME,
+        k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+          ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+         AND r.TABLE_NAME = k.TABLE_NAME AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL")
+        ->fetchAll(PDO::FETCH_ASSOC);
+    $additions = [];
+    foreach ($plan as $table => $name) {
+        $column = $metadata[$table]['student_wallet_id'] ?? null;
+        if (!$column || $column['COLUMN_TYPE'] !== 'int unsigned' || $column['IS_NULLABLE'] !== 'NO') {
+            throw new RuntimeException('Unexpected student-wallet reference definition: ' . $table);
+        }
+        if ((int) $db->query("SELECT COUNT(*) FROM `{$table}` c
+            LEFT JOIN student_wallets sw ON sw.id = c.student_wallet_id
+            WHERE sw.id IS NULL")->fetchColumn() !== 0) {
+            throw new RuntimeException('Orphan student-wallet references block expansion: ' . $table);
+        }
+        $matches = array_values(array_filter($existing,
+            static fn($row) => $row['CONSTRAINT_NAME'] === $name));
+        foreach ($existing as $row) {
+            if ($row['TABLE_NAME'] === $table && $row['COLUMN_NAME'] === 'student_wallet_id'
+                && $row['CONSTRAINT_NAME'] !== $name) {
+                throw new RuntimeException('An unplanned foreign key uses: ' . $table . '.student_wallet_id');
+            }
+        }
+        if ($matches) {
+            $row = $matches[0];
+            if (count($matches) !== 1 || $row['TABLE_NAME'] !== $table
+                || $row['COLUMN_NAME'] !== 'student_wallet_id'
+                || $row['REFERENCED_TABLE_NAME'] !== 'student_wallets'
+                || $row['REFERENCED_COLUMN_NAME'] !== 'id'
+                || $row['DELETE_RULE'] !== 'RESTRICT' || $row['UPDATE_RULE'] !== 'RESTRICT') {
+                throw new RuntimeException('Conflicting wallet-link foreign key: ' . $name);
+            }
+        } else {
+            $additions[$table] = $name;
+        }
+    }
+    foreach ($additions as $table => $name) {
+        $db->exec("ALTER TABLE `{$table}` ADD CONSTRAINT `{$name}`
+            FOREIGN KEY (student_wallet_id) REFERENCES student_wallets(id)
+            ON DELETE RESTRICT ON UPDATE RESTRICT");
+    }
+}
+
+/** Explicit core-only migration; preflight all relationships before any DDL. */
+function gjc_ensure_core_integrity_schema(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Core integrity migration requires an explicit CLI call outside a transaction.');
+    }
+    if ($db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Core integrity migration requires the ewallet database.');
+    }
+    $plan = [
+        'users' => [
+            'roleID' => ['role', 'roleID', 'RESTRICT'],
+            'suspended_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'auth_remember_tokens' => [
+            'user_id' => ['users', 'userID', 'CASCADE'],
+        ],
+        'student_wallets' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'parents' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'parent_wallets' => [
+            'parent_id' => ['parents', 'id', 'RESTRICT'],
+        ],
+        'parent_student_links' => [
+            'parent_id' => ['parents', 'id', 'CASCADE'],
+            'student_user_id' => ['users', 'userID', 'CASCADE'],
+        ],
+        'merchant_accounts' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+            'created_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'cart_orders' => [
+            'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+            'parent_wallet_id' => ['parent_wallets', 'id', 'RESTRICT'],
+            'served_by' => ['users', 'userID', 'RESTRICT'],
+            'paid_ref' => ['transactions', 'reference_no', 'RESTRICT'],
+        ],
+        'merchant_qr_orders' => [
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+            'paid_by' => ['users', 'userID', 'RESTRICT'],
+            'paid_ref' => ['transactions', 'reference_no', 'RESTRICT'],
+        ],
+        'transactions' => [
+            'initiated_by' => ['users', 'userID', 'RESTRICT'],
+            'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+            'parent_wallet_id' => ['parent_wallets', 'id', 'RESTRICT'],
+            'voucher_id' => ['vouchers', 'id', 'RESTRICT'],
+            'school_year_id' => ['school_years', 'id', 'RESTRICT'],
+        ],
+        'transaction_items' => [
+            'transaction_id' => ['transactions', 'id', 'RESTRICT'],
+        ],
+        'p2p_transfers' => [
+            'from_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'to_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'reference_no' => ['transactions', 'reference_no', 'RESTRICT'],
+        ],
+        'topup_requests' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+            'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'approved_by' => ['users', 'userID', 'RESTRICT'],
+            'rejected_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'withdrawal_requests' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+            'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
+            'released_by' => ['users', 'userID', 'RESTRICT'],
+            'rejected_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'encashment_requests' => [
+            'user_id' => ['users', 'userID', 'RESTRICT'],
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+            'released_by' => ['users', 'userID', 'RESTRICT'],
+            'rejected_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'vouchers' => [
+            'issued_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'voucher_payment_log' => [
+            'voucher_id' => ['vouchers', 'id', 'RESTRICT'],
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+            'scanned_by' => ['users', 'userID', 'RESTRICT'],
+            'transaction_ref' => ['transactions', 'reference_no', 'RESTRICT'],
+        ],
+    ];
+    // The normalized schema owns this relationship after suspension CONTRACT.
+    if (!gjc_has_legacy_user_suspension($db)) {
+        unset($plan['users']['suspended_by']);
+    }
+    $metadata = [];
+    foreach ($db->query('SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME
+        FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()')->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $metadata[$row['TABLE_NAME']][$row['COLUMN_NAME']] = $row;
+    }
+    $existing = [];
+    foreach ($db->query('SELECT k.TABLE_NAME, k.COLUMN_NAME, k.CONSTRAINT_NAME, k.REFERENCED_TABLE_NAME,
+        k.REFERENCED_COLUMN_NAME, r.DELETE_RULE, r.UPDATE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+            AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $existing[$row['CONSTRAINT_NAME']][] = $row;
+    }
+    $typeChanges = [];
+    $additions = [];
+    foreach ($plan as $table => $columns) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Core integrity source table is missing: ' . $table);
+        }
+        $liveColumns = gjc_table_columns($db, $table, true);
+        $ddl = $db->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_NUM)[1];
+        foreach ($columns as $column => [$parent, $parentKey, $deleteRule]) {
+            if (!in_array($column, $liveColumns, true) || !isset($metadata[$parent][$parentKey])) {
+                throw new RuntimeException('Core integrity column is missing: ' . $table . '.' . $column);
+            }
+            $source = $metadata[$table][$column];
+            $target = $metadata[$parent][$parentKey];
+            $isUserReference = $parent === 'users' && $parentKey === 'userID';
+            if ($isUserReference) {
+                if ($target['COLUMN_TYPE'] !== 'int' || !in_array($source['COLUMN_TYPE'], ['int', 'int unsigned'], true)) {
+                    throw new RuntimeException('Unexpected user reference type: ' . $table . '.' . $column);
+                }
+                $invalidRange = (int) $db->query("SELECT COUNT(*) FROM `{$table}`
+                    WHERE `{$column}` < 0 OR `{$column}` > 2147483647")->fetchColumn();
+                if ($invalidRange) {
+                    throw new RuntimeException('User reference is outside the approved signed range: ' . $table . '.' . $column);
+                }
+                if ($source['COLUMN_TYPE'] === 'int unsigned') {
+                    $pattern = '/^  (`' . preg_quote($column, '/') . '` )int unsigned(.*),$/mi';
+                    if (!preg_match($pattern, $ddl, $match)) {
+                        throw new RuntimeException('Cannot preserve the live column definition: ' . $table . '.' . $column);
+                    }
+                    $typeChanges[$table][] = 'MODIFY COLUMN ' . $match[1] . 'int' . $match[2];
+                }
+            } elseif ($source['CHARACTER_SET_NAME'] !== null || $target['CHARACTER_SET_NAME'] !== null) {
+                if (!str_starts_with($source['COLUMN_TYPE'], 'varchar(')
+                    || !str_starts_with($target['COLUMN_TYPE'], 'varchar(')
+                    || $source['CHARACTER_SET_NAME'] !== $target['CHARACTER_SET_NAME']
+                    || $source['COLLATION_NAME'] !== $target['COLLATION_NAME']) {
+                    throw new RuntimeException('Incompatible text reference: ' . $table . '.' . $column);
+                }
+            } elseif ($source['COLUMN_TYPE'] !== $target['COLUMN_TYPE']) {
+                throw new RuntimeException('Incompatible numeric reference: ' . $table . '.' . $column);
+            }
+            $orphans = (int) $db->query("SELECT COUNT(*) FROM `{$table}` c
+                LEFT JOIN `{$parent}` p ON c.`{$column}` = p.`{$parentKey}`
+                WHERE c.`{$column}` IS NOT NULL AND p.`{$parentKey}` IS NULL")->fetchColumn();
+            if ($orphans) {
+                throw new RuntimeException('Orphan records block core integrity: ' . $table . '.' . $column);
+            }
+            $name = 'fk_core_' . $table . '_' . $column;
+            if (strlen($name) > 64) {
+                throw new RuntimeException('Core constraint name is too long.');
+            }
+            if (isset($existing[$name])) {
+                $rows = $existing[$name];
+                $row = $rows[0];
+                if (count($rows) !== 1 || $row['TABLE_NAME'] !== $table || $row['COLUMN_NAME'] !== $column
+                    || $row['REFERENCED_TABLE_NAME'] !== $parent || $row['REFERENCED_COLUMN_NAME'] !== $parentKey
+                    || $row['DELETE_RULE'] !== $deleteRule || $row['UPDATE_RULE'] !== 'RESTRICT') {
+                    throw new RuntimeException('Conflicting core constraint: ' . $name);
+                }
+            } else {
+                foreach ($existing as $rows) {
+                    foreach ($rows as $row) {
+                        if ($row['TABLE_NAME'] === $table && $row['COLUMN_NAME'] === $column) {
+                            throw new RuntimeException('An unplanned foreign key already uses: ' . $table . '.' . $column);
+                        }
+                    }
+                }
+                $additions[$table][] = "ADD CONSTRAINT `{$name}` FOREIGN KEY (`{$column}`)
+                    REFERENCES `{$parent}` (`{$parentKey}`) ON DELETE {$deleteRule} ON UPDATE RESTRICT";
+            }
+        }
+    }
+
+    if (!$typeChanges && !$additions) {
+        return;
+    }
+    $archivePath = BASE_PATH . '/storage/backups/genpay-core-integrity-before-2026-10-08.sql';
+    if (!is_file($archivePath) || !is_readable($archivePath)) {
+        throw new RuntimeException('The core integrity definition export is required before DDL.');
+    }
+    // No foreign-key checks are disabled. Each ALTER is independently committed by MySQL.
+    foreach ($typeChanges as $table => $changes) {
+        $db->exec("ALTER TABLE `{$table}` " . implode(', ', $changes));
+        gjc_table_columns($db, $table, true);
+    }
+    foreach ($additions as $table => $changes) {
+        $db->exec("ALTER TABLE `{$table}` " . implode(', ', $changes));
+    }
+}
+
+function gjc_ensure_merchant_application_product_types_schema(PDO $db): void
+{
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Initialize product-type schema before a transaction.');
+    }
+    if (!gjc_table_exists($db, 'merchant_applications')) {
+        throw new RuntimeException('Merchant applications table is missing.');
+    }
+
+    $parent = $db->query(
+        "SHOW COLUMNS FROM merchant_applications LIKE 'id'"
+    )->fetch(PDO::FETCH_ASSOC);
+    if (!$parent || strtolower($parent['Type']) !== 'int unsigned') {
+        throw new RuntimeException('Review application ID type before adding a foreign key.');
+    }
+
+    if (!gjc_table_exists($db, 'merchant_application_product_types')) {
+        $db->exec("CREATE TABLE merchant_application_product_types (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            merchant_application_id INT UNSIGNED NOT NULL,
+            product_type VARCHAR(120) NOT NULL,
+            PRIMARY KEY (id),
+            KEY idx_map_application (merchant_application_id),
+            CONSTRAINT fk_map_application
+                FOREIGN KEY (merchant_application_id)
+                REFERENCES merchant_applications(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci");
+    }
+
+    $columns = gjc_table_columns($db, 'merchant_application_product_types', true);
+    foreach (['id', 'merchant_application_id', 'product_type'] as $column) {
+        if (!in_array($column, $columns, true)) {
+            throw new RuntimeException('Unexpected product-type table structure.');
+        }
+    }
+
+    $duplicates = $db->query(
+        "SELECT 1 FROM merchant_application_product_types
+         GROUP BY merchant_application_id, product_type
+         HAVING COUNT(*) > 1 LIMIT 1"
+    )->fetchColumn();
+    if ($duplicates !== false) {
+        throw new RuntimeException('Resolve duplicate product types before adding uniqueness.');
+    }
+
+    $stmt = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'merchant_application_product_types'
+           AND INDEX_NAME = 'uq_map_application_product_type'"
+    );
+    $stmt->execute();
+    if (!(int) $stmt->fetchColumn()) {
+        $db->exec(
+            "ALTER TABLE merchant_application_product_types
+             ADD UNIQUE KEY uq_map_application_product_type
+                 (merchant_application_id, product_type)"
+        );
+    }
+}
+
+function gjc_ensure_merchant_wallet_owner_schema(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Merchant-wallet owner schema requires an explicit CLI call outside a transaction.');
+    }
+    if ($db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Expected the ewallet database.');
+    }
+    foreach (['users' => 'userID', 'merchant_wallets' => 'user_id'] as $table => $column) {
+        if (!gjc_table_exists($db, $table)
+            || !in_array($column, gjc_table_columns($db, $table, true), true)) {
+            throw new RuntimeException('Required wallet-owner table or column is missing.');
+        }
+    }
+    $parent = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
+    $child = $db->query("SHOW COLUMNS FROM merchant_wallets LIKE 'user_id'")->fetch(PDO::FETCH_ASSOC);
+    if ($parent['Type'] !== 'int' || $parent['Null'] !== 'NO'
+        || !in_array($child['Type'], ['int', 'int unsigned'], true)
+        || $child['Null'] !== 'NO') {
+        throw new RuntimeException('Unexpected owner column definitions; review before changing types.');
+    }
+    $invalid = $db->query(
+        'SELECT 1 FROM merchant_wallets w
+         LEFT JOIN users u ON u.userID = w.user_id
+         WHERE u.userID IS NULL OR w.user_id > 2147483647 LIMIT 1'
+    )->fetchColumn();
+    if ($invalid !== false) {
+        throw new RuntimeException('Missing wallet owners or owner IDs outside signed INT range.');
+    }
+    $foreignKeys = $db->query(
+        "SELECT k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME,
+                r.DELETE_RULE, r.UPDATE_RULE
+         FROM information_schema.KEY_COLUMN_USAGE k
+         JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+           ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+          AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+          AND r.TABLE_NAME = k.TABLE_NAME
+         WHERE k.TABLE_SCHEMA = DATABASE()
+           AND k.TABLE_NAME = 'merchant_wallets'
+           AND k.COLUMN_NAME = 'user_id'"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if ($foreignKeys) {
+        $fk = $foreignKeys[0];
+        if (count($foreignKeys) !== 1 || $child['Type'] !== 'int'
+            || $fk['REFERENCED_TABLE_NAME'] !== 'users'
+            || $fk['REFERENCED_COLUMN_NAME'] !== 'userID'
+            || $fk['DELETE_RULE'] !== 'RESTRICT' || $fk['UPDATE_RULE'] !== 'RESTRICT') {
+            throw new RuntimeException('Unexpected existing owner foreign key; no changes applied.');
+        }
+        return;
+    }
+    if ((int) $db->query(
+        "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND CONSTRAINT_NAME = 'fk_core_merchant_wallets_user_id'"
+    )->fetchColumn()) {
+        throw new RuntimeException('Owner foreign-key name is already in use.');
+    }
+    $changes = [];
+    if ($child['Type'] === 'int unsigned') {
+        $changes[] = "MODIFY COLUMN user_id INT NOT NULL COMMENT 'FK -> users.userID (merchant role)'";
+    }
+    $changes[] = 'ADD CONSTRAINT fk_core_merchant_wallets_user_id
+                  FOREIGN KEY (user_id) REFERENCES users(userID)
+                  ON DELETE RESTRICT ON UPDATE RESTRICT';
+    $db->exec('ALTER TABLE merchant_wallets ' . implode(', ', $changes));
+    gjc_table_columns($db, 'merchant_wallets', true);
+}
+
+function gjc_ensure_group_a_normalized_schema(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Group A CONTRACT requires an explicit CLI call outside a transaction.');
+    }
+    $targets = [
+        'cart_orders' => 'items_json',
+        'merchant_qr_orders' => 'items_json',
+        'merchant_applications' => 'product_types',
+    ];
+    $hasLegacy = [];
+    foreach ($targets as $table => $column) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Missing Group A table: ' . $table);
+        }
+        $hasLegacy[$table] = in_array($column, gjc_table_columns($db, $table, true), true);
+    }
+    foreach (['cart_order_items', 'qr_order_items', 'merchant_application_product_types'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Missing normalized table: ' . $table);
+        }
+    }
+
+    // Validate all sources before the first DROP.
+    foreach (['cart' => 'cart_orders', 'qr' => 'merchant_qr_orders'] as $source => $table) {
+        $select = 'id' . ($hasLegacy[$table] ? ', items_json' : '');
+        foreach ($db->query("SELECT {$select} FROM `{$table}` ORDER BY id")->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $actual = gjc_order_item_lines($db, $source, (int) $row['id']);
+            if (!$actual) {
+                throw new RuntimeException('Missing official items for ' . $table . ' #' . $row['id']);
+            }
+            if (!$hasLegacy[$table]) {
+                continue;
+            }
+            $expected = gjc_validate_order_item_lines(json_decode($row['items_json'], true, 512, JSON_THROW_ON_ERROR));
+            if (count($actual) !== count($expected)) {
+                throw new RuntimeException('Order-item count mismatch.');
+            }
+            $fields = $source === 'cart'
+                ? ['id', 'name', 'qty', 'price', 'sku', 'stock_qty', 'line_total']
+                : ['id', 'name', 'qty', 'price'];
+            foreach ($expected as $i => $line) {
+                if (array_diff(array_keys($line), $fields)) {
+                    throw new RuntimeException('Unmapped JSON item fields; stop before CONTRACT.');
+                }
+                foreach ($fields as $field) {
+                    $value = $line[$field] ?? null;
+                    if ($field === 'line_total' && $value === null) {
+                        $value = round($line['qty'] * $line['price'], 2);
+                    }
+                    $saved = $actual[$i][$field] ?? null;
+                    $matches = in_array($field, ['name', 'sku'], true) ? $saved === $value : $saved == $value;
+                    if (!$matches) {
+                        throw new RuntimeException('Order-item snapshot mismatch.');
+                    }
+                }
+            }
+        }
+    }
+    if ($hasLegacy['merchant_applications']) {
+        foreach ($db->query('SELECT id, product_types FROM merchant_applications ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $expected = array_values(array_filter(array_map('trim', explode(',', $row['product_types'])), static fn($value) => $value !== ''));
+            $stmt = $db->prepare('SELECT product_type FROM merchant_application_product_types WHERE merchant_application_id = ? ORDER BY id');
+            $stmt->execute([$row['id']]);
+            $actual = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            sort($expected);
+            sort($actual);
+            if ($expected !== $actual) {
+                throw new RuntimeException('Application product types do not match.');
+            }
+        }
+    }
+
+    foreach ($targets as $table => $column) {
+        if ($hasLegacy[$table]) {
+            $db->exec("ALTER TABLE `{$table}` DROP COLUMN `{$column}`");
+            gjc_table_columns($db, $table, true);
+        }
+    }
+}
+
+function gjc_order_has_legacy_items_json(PDO $db, string $source): bool
+{
+    if (!in_array($source, ['cart', 'qr'], true)) {
+        throw new InvalidArgumentException('Unknown order-item source.');
+    }
+    $table = $source === 'cart' ? 'cart_orders' : 'merchant_qr_orders';
+    return in_array('items_json', gjc_table_columns($db, $table, true), true);
+}
+
+function gjc_ensure_order_items_schema(PDO $db): void
+{
+    static $ready = [];
+    $key = spl_object_id($db);
+    if (isset($ready[$key])) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Order-item schema must be initialized before a transaction.');
+    }
+    foreach (['cart_orders', 'merchant_qr_orders', 'merchant_inventory', 'transactions'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Order-item parent table is missing: ' . $table);
+        }
+    }
+    $db->exec("CREATE TABLE IF NOT EXISTS cart_order_items (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        cart_order_id INT UNSIGNED NOT NULL,
+        line_no INT UNSIGNED NOT NULL,
+        original_inventory_id INT UNSIGNED NOT NULL,
+        merchant_inventory_id INT UNSIGNED NULL,
+        item_name VARCHAR(150) NOT NULL,
+        qty INT UNSIGNED NOT NULL,
+        unit_price DECIMAL(10,2) NOT NULL,
+        sku VARCHAR(50) NULL,
+        stock_qty_snapshot INT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_cart_item_line (cart_order_id, line_no),
+        KEY idx_cart_item_inventory (merchant_inventory_id),
+        CONSTRAINT fk_cart_item_order FOREIGN KEY (cart_order_id) REFERENCES cart_orders(id)
+            ON DELETE CASCADE ON UPDATE RESTRICT,
+        CONSTRAINT fk_cart_item_inventory FOREIGN KEY (merchant_inventory_id) REFERENCES merchant_inventory(id)
+            ON DELETE SET NULL ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    $db->exec("CREATE TABLE IF NOT EXISTS qr_order_items (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        merchant_qr_order_id INT UNSIGNED NOT NULL,
+        merchant_inventory_id INT UNSIGNED NULL,
+        item_name VARCHAR(150) NOT NULL,
+        qty INT NOT NULL DEFAULT 1,
+        unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        PRIMARY KEY (id),
+        KEY idx_qoi_order (merchant_qr_order_id),
+        KEY idx_qoi_inventory (merchant_inventory_id),
+        CONSTRAINT fk_qoi_inventory FOREIGN KEY (merchant_inventory_id) REFERENCES merchant_inventory(id) ON DELETE SET NULL,
+        CONSTRAINT fk_qoi_order FOREIGN KEY (merchant_qr_order_id) REFERENCES merchant_qr_orders(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    $db->exec("CREATE TABLE IF NOT EXISTS transaction_items (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        transaction_id BIGINT UNSIGNED NOT NULL,
+        item_name VARCHAR(150) NOT NULL,
+        quantity INT UNSIGNED NOT NULL DEFAULT 1,
+        unit_price DECIMAL(10,2) NOT NULL,
+        subtotal DECIMAL(10,2) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id), KEY idx_txn_items_transaction (transaction_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    foreach (['qr_order_items' => ['original_inventory_id' => 'INT UNSIGNED NULL', 'line_no' => 'INT UNSIGNED NULL'],
+              'transaction_items' => ['line_no' => 'INT UNSIGNED NULL']] as $table => $adds) {
+        $columns = gjc_table_columns($db, $table, true);
+        foreach ($adds as $column => $definition) {
+            if (!in_array($column, $columns, true)) {
+                $db->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+            }
+        }
+    }
+    foreach (['qr_order_items' => ['uq_qr_item_line', 'merchant_qr_order_id'],
+              'transaction_items' => ['uq_transaction_item_line', 'transaction_id']] as $table => [$index, $parent]) {
+        $stmt = $db->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?');
+        $stmt->execute([$table, $index]);
+        if (!(int) $stmt->fetchColumn()) {
+            $db->exec("ALTER TABLE `{$table}` ADD UNIQUE KEY `{$index}` (`{$parent}`, line_no)");
+        }
+    }
+    $ready[$key] = true;
+}
+
+/** Validate recorded item facts without consulting today's prices. */
+function gjc_validate_order_item_lines(array $lines): array
+{
+    if (!$lines || !array_is_list($lines)) {
+        throw new RuntimeException('An order must have a nonempty list of items.');
+    }
+    foreach ($lines as &$line) {
+        if (!is_array($line) || !isset($line['id'], $line['qty'], $line['name'], $line['price'])
+            || !is_numeric($line['id']) || (float) $line['id'] !== (float) (int) $line['id'] || (int) $line['id'] <= 0
+            || !is_numeric($line['qty']) || (float) $line['qty'] !== (float) (int) $line['qty'] || (int) $line['qty'] <= 0
+            || !is_string($line['name']) || trim($line['name']) === '' || mb_strlen($line['name']) > 150
+            || !is_numeric($line['price']) || !is_finite((float) $line['price'])
+            || (float) $line['price'] < 0 || (float) $line['price'] > 99999999.99
+            || abs((float) $line['price'] - round((float) $line['price'], 2)) > 0.000001) {
+            throw new RuntimeException('Invalid recorded order item.');
+        }
+        $line['id'] = (int) $line['id'];
+        $line['qty'] = (int) $line['qty'];
+        $line['price'] = round((float) $line['price'], 2);
+        $subtotal = round($line['qty'] * $line['price'], 2);
+        if ($subtotal > 99999999.99 || (isset($line['line_total']) && abs((float) $line['line_total'] - $subtotal) > 0.000001)
+            || (isset($line['sku']) && (!is_string($line['sku']) || mb_strlen($line['sku']) > 50))) {
+            throw new RuntimeException('Invalid recorded item subtotal or SKU.');
+        }
+    }
+    unset($line);
+    return $lines;
+}
+
+function gjc_order_item_total(array $lines): float
+{
+    $cents = 0;
+    foreach ($lines as $line) {
+        $cents += (int) round((float) $line['price'] * 100) * (int) $line['qty'];
+    }
+    return $cents / 100;
+}
+
+function gjc_order_item_lines(PDO $db, string $source, int $orderId): array
+{
+    if (!in_array($source, ['cart', 'qr'], true)) {
+        throw new InvalidArgumentException('Unknown order-item source.');
+    }
+    $table = $source === 'cart' ? 'cart_order_items' : 'qr_order_items';
+    $parent = $source === 'cart' ? 'cart_order_id' : 'merchant_qr_order_id';
+    $stmt = $db->prepare("SELECT * FROM `{$table}` WHERE `{$parent}` = ? ORDER BY line_no, id");
+    $stmt->execute([$orderId]);
+    $lines = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ($row['line_no'] === null || (int) $row['line_no'] !== count($lines) + 1 || $row['original_inventory_id'] === null) {
+            throw new RuntimeException('Order-item backfill is incomplete.');
+        }
+        $line = ['id' => (int) $row['original_inventory_id'], 'name' => $row['item_name'],
+                 'qty' => (int) $row['qty'], 'price' => (float) $row['unit_price']];
+        if ($source === 'cart') {
+            $line['sku'] = $row['sku'];
+            $line['stock_qty'] = $row['stock_qty_snapshot'] === null ? null : (int) $row['stock_qty_snapshot'];
+            $line['line_total'] = round($line['qty'] * $line['price'], 2);
+        }
+        $lines[] = $line;
+    }
+    if ($lines) {
+        $lines = gjc_validate_order_item_lines($lines);
+        $orders = $source === 'cart' ? 'cart_orders' : 'merchant_qr_orders';
+        $stmt = $db->prepare("SELECT amount FROM `{$orders}` WHERE id = ?");
+        $stmt->execute([$orderId]);
+        $amount = $stmt->fetchColumn();
+        if ($amount === false || abs(gjc_order_item_total($lines) - (float) $amount) > 0.000001) {
+            throw new RuntimeException('Official items do not match the recorded order amount.');
+        }
+    }
+    return $lines;
+}
+
+/** Caller owns the order/child transaction; JSON is never read here. */
+function gjc_store_order_items(PDO $db, string $source, int $orderId, array $lines): void
+{
+    if (!$db->inTransaction() || !in_array($source, ['cart', 'qr'], true)) {
+        throw new RuntimeException('Order items require a valid source and an open transaction.');
+    }
+    $lines = gjc_validate_order_item_lines($lines);
+    $orders = $source === 'cart' ? 'cart_orders' : 'merchant_qr_orders';
+    $stmt = $db->prepare("SELECT
+        (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id,
+        o.amount FROM `{$orders}` o WHERE o.id = ? FOR UPDATE");
+    $stmt->execute([$orderId]);
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$order || abs(gjc_order_item_total($lines) - (float) $order['amount']) > 0.000001) {
+        throw new RuntimeException('Order items do not match the recorded order amount.');
+    }
+    if (gjc_order_item_lines($db, $source, $orderId)) {
+        throw new RuntimeException('Official order items already exist; refusing to overwrite them.');
+    }
+    foreach ($lines as $i => $line) {
+        $inventory = $db->prepare('SELECT merchant_user_id FROM merchant_inventory WHERE id = ?');
+        $inventory->execute([$line['id']]);
+        $owner = $inventory->fetchColumn();
+        if ($owner !== false && (int) $owner !== (int) $order['merchant_user_id']) {
+            throw new RuntimeException('Order item belongs to a different merchant.');
+        }
+        $link = $owner === false ? null : $line['id'];
+        if ($source === 'cart') {
+            $db->prepare('INSERT INTO cart_order_items (cart_order_id, line_no, original_inventory_id, merchant_inventory_id, item_name, qty, unit_price, sku, stock_qty_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                ->execute([$orderId, $i + 1, $line['id'], $link, $line['name'], $line['qty'], $line['price'], $line['sku'] ?? null, $line['stock_qty'] ?? null]);
+        } else {
+            $db->prepare('INSERT INTO qr_order_items (merchant_qr_order_id, line_no, original_inventory_id, merchant_inventory_id, item_name, qty, unit_price) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                ->execute([$orderId, $i + 1, $line['id'], $link, $line['name'], $line['qty'], $line['price']]);
+        }
+    }
+}
+
+function gjc_store_transaction_items(PDO $db, int $transactionId, array $lines): void
+{
+    if (!$db->inTransaction()) {
+        throw new RuntimeException('Receipt items require an open transaction.');
+    }
+    $lines = gjc_validate_order_item_lines($lines);
+    $stmt = $db->prepare('SELECT amount FROM transactions WHERE id = ? FOR UPDATE');
+    $stmt->execute([$transactionId]);
+    $amount = $stmt->fetchColumn();
+    if ($amount === false || abs(gjc_order_item_total($lines) - (float) $amount) > 0.000001) {
+        throw new RuntimeException('Receipt items do not match the recorded payment amount.');
+    }
+    $stmt = $db->prepare('SELECT item_name, quantity, unit_price, subtotal, line_no FROM transaction_items WHERE transaction_id = ? ORDER BY line_no, id');
+    $stmt->execute([$transactionId]);
+    $existing = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($existing) {
+        if (count($existing) !== count($lines)) {
+            throw new RuntimeException('Conflicting existing receipt items.');
+        }
+        foreach ($existing as $i => $row) {
+            $line = $lines[$i];
+            if ((int) $row['line_no'] !== $i + 1 || $row['item_name'] !== $line['name']
+                || (int) $row['quantity'] !== $line['qty'] || (float) $row['unit_price'] !== $line['price']
+                || (float) $row['subtotal'] !== round($line['qty'] * $line['price'], 2)) {
+                throw new RuntimeException('Conflicting existing receipt items.');
+            }
+        }
+        return;
+    }
+    foreach ($lines as $i => $line) {
+        $db->prepare('INSERT INTO transaction_items (transaction_id, line_no, item_name, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$transactionId, $i + 1, $line['name'], $line['qty'], $line['price'], round($line['qty'] * $line['price'], 2)]);
+    }
+}
+
+/** Explicit, atomic historical backfill; refuses to replace conflicting facts. */
+function gjc_backfill_order_items(PDO $db): void
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Order-item backfill requires an explicit CLI call outside a transaction.');
+    }
+    foreach (['cart_orders', 'merchant_qr_orders'] as $table) {
+        if (!in_array('items_json', gjc_table_columns($db, $table, true), true)) {
+            throw new RuntimeException('Legacy JSON backfill is unavailable after Group A CONTRACT.');
+        }
+    }
+    gjc_ensure_order_items_schema($db);
+    $db->beginTransaction();
+    try {
+        $plans = [];
+        foreach (['cart' => 'cart_orders', 'qr' => 'merchant_qr_orders'] as $source => $table) {
+            foreach ($db->query("SELECT id, items_json, amount, status, paid_ref FROM `{$table}` ORDER BY id FOR UPDATE")->fetchAll(PDO::FETCH_ASSOC) as $order) {
+                $decoded = json_decode($order['items_json'], true, 512, JSON_THROW_ON_ERROR);
+                if (!is_array($decoded)) {
+                    throw new RuntimeException('Invalid historical item snapshot.');
+                }
+                $lines = gjc_validate_order_item_lines($decoded);
+                if (abs(gjc_order_item_total($lines) - (float) $order['amount']) > 0.000001) {
+                    throw new RuntimeException('Historical order total mismatch.');
+                }
+                $plans[] = [$source, $order, $lines];
+            }
+        }
+        foreach ($plans as [$source, $order, $lines]) {
+            $orderId = (int) $order['id'];
+            if ($source === 'qr') {
+                $stmt = $db->prepare('SELECT * FROM qr_order_items WHERE merchant_qr_order_id = ? ORDER BY id FOR UPDATE');
+                $stmt->execute([$orderId]);
+                $existing = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                if ($existing) {
+                    foreach ($lines as $i => $line) {
+                        $match = null;
+                        foreach ($existing as $j => $row) {
+                            if ($row['item_name'] === $line['name'] && (int) $row['qty'] === $line['qty']
+                                && (float) $row['unit_price'] === $line['price']
+                                && ($row['merchant_inventory_id'] === null || (int) $row['merchant_inventory_id'] === $line['id'])
+                                && ($row['original_inventory_id'] === null || (int) $row['original_inventory_id'] === $line['id'])
+                                && ($row['line_no'] === null || (int) $row['line_no'] === $i + 1)) {
+                                $match = $j;
+                                break;
+                            }
+                        }
+                        if ($match === null) {
+                            throw new RuntimeException('Conflicting existing QR items for order ' . $orderId);
+                        }
+                        $row = $existing[$match];
+                        if ($row['original_inventory_id'] === null || $row['line_no'] === null) {
+                            $db->prepare('UPDATE qr_order_items SET original_inventory_id = ?, line_no = ? WHERE id = ?')
+                                ->execute([$line['id'], $i + 1, $row['id']]);
+                        }
+                        unset($existing[$match]);
+                    }
+                    if ($existing) {
+                        throw new RuntimeException('Unexpected extra QR items for order ' . $orderId);
+                    }
+                } else {
+                    gjc_store_order_items($db, $source, $orderId, $lines);
+                }
+            } else {
+                $existing = gjc_order_item_lines($db, $source, $orderId);
+                if ($existing) {
+                    if (count($existing) !== count($lines)) {
+                        throw new RuntimeException('Conflicting existing cart items.');
+                    }
+                    foreach ($lines as $i => $line) {
+                        $saved = $existing[$i];
+                        foreach (['id', 'name', 'qty', 'price', 'sku', 'stock_qty', 'line_total'] as $field) {
+                            if (($saved[$field] ?? null) != ($line[$field] ?? null)) {
+                                throw new RuntimeException('Conflicting existing cart items.');
+                            }
+                        }
+                    }
+                } else {
+                    gjc_store_order_items($db, $source, $orderId, $lines);
+                }
+            }
+            if ($order['status'] === 'paid') {
+                $stmt = $db->prepare('SELECT id, amount FROM transactions WHERE reference_no = ?');
+                $stmt->execute([$order['paid_ref']]);
+                $payment = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$payment || abs((float) $payment['amount'] - (float) $order['amount']) > 0.000001) {
+                    throw new RuntimeException('Historical order has no matching payment.');
+                }
+                gjc_store_transaction_items($db, (int) $payment['id'], $lines);
+            }
+        }
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
     }
 }
 
@@ -3004,24 +5902,6 @@ function gjc_student_wallet(PDO $db, int $userId): array
         }
     }
 
-    if ($userId && gjc_table_exists($db, "wallet")) {
-        $userColumn = gjc_column($db, "wallet", ["userID", "user_id"]);
-        if ($userColumn) {
-            $stmt = $db->prepare(
-                "SELECT * FROM wallet WHERE {$userColumn} = ? LIMIT 1",
-            );
-            $stmt->execute([$userId]);
-            $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($wallet) {
-                return [
-                    "id" => (int) ($wallet["walletID"] ?? ($wallet["id"] ?? 0)),
-                    "balance" => (float) ($wallet["balance"] ?? 0),
-                    "source" => "wallet",
-                ];
-            }
-        }
-    }
-
     return ["id" => 0, "balance" => 0.0, "source" => "none"];
 }
 
@@ -3053,7 +5933,7 @@ function gjc_merchant_wallet(PDO $db, int $userId): array
 }
 
 /**
- * Sales a stall hasn't remitted yet: everything since the wallet's last
+ * Staff-operated sales a stall hasn't remitted yet, since the wallet's last
  * remittance today, or since midnight if it hasn't remitted at all today.
  * This is what the Remit Sales button submits, and what the merchant
  * dashboard shows as the pending amount waiting to be remitted — see
@@ -3085,10 +5965,12 @@ function gjc_merchant_unremitted_sales(PDO $db, int $walletId): array
             CirculationEngine::TXN_VOUCHER_PAYMENT,
         ];
         $placeholders = implode(", ", array_fill(0, count($earningTypes), "?"));
+        $staffSale = gjc_merchant_staff_sale_sql($db);
         $stmt = $db->prepare(
-            "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM transactions
+            "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM transactions t
               WHERE merchant_wallet_id = ?
                 AND transaction_type IN ({$placeholders})
+                AND status = 'completed' AND {$staffSale}
                 AND created_at > ?",
         );
         $stmt->execute(array_merge([$walletId], $earningTypes, [$since]));
@@ -3099,11 +5981,8 @@ function gjc_merchant_unremitted_sales(PDO $db, int $walletId): array
 }
 
 /**
- * Sales a stall HAS remitted today: 0 until the staff remits at least once
- * today, then the sum of today's remittance(s). This is the confirmed
- * "Today's Sales" figure the merchant dashboard headlines — see
- * gjc_merchant_unremitted_sales() for the pending amount still waiting on
- * a remittance.
+ * Today's completed sales: direct/admin sales count immediately, while
+ * staff-operated sales count after remittance. Each ledger row counts once.
  */
 function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
 {
@@ -3112,13 +5991,15 @@ function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
     $periodStart = null;
     $periodEnd = null;
 
-    if ($walletId > 0 && gjc_table_exists($db, "sales_remittances")) {
+    if ($walletId > 0 && gjc_table_exists($db, "transactions")) {
+        $confirmed = gjc_merchant_confirmed_sale_sql($db);
         $stmt = $db->prepare(
-            "SELECT COALESCE(SUM(amount), 0), COALESCE(SUM(txn_count), 0), MIN(period_start), MAX(period_end)
-               FROM sales_remittances
-              WHERE merchant_wallet_id = ? AND DATE(period_end) = CURDATE()",
+            "SELECT COALESCE(SUM(t.amount), 0), COUNT(*), MIN(t.created_at), MAX(t.created_at)
+               FROM transactions t
+              WHERE t.merchant_wallet_id = ? AND DATE(t.created_at) = CURDATE()
+                AND t.transaction_type IN (?, ?) AND t.status = 'completed' AND {$confirmed}",
         );
-        $stmt->execute([$walletId]);
+        $stmt->execute([$walletId, CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT]);
         [$amount, $count, $periodStart, $periodEnd] = $stmt->fetch(PDO::FETCH_NUM);
     }
 
@@ -3128,6 +6009,32 @@ function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
         "period_start" => $periodStart,
         "period_end" => $periodEnd,
     ];
+}
+
+/** Identify the register operator separately from the student/parent payer. */
+function gjc_merchant_staff_sale_sql(PDO $db): string
+{
+    $operator = 't.initiated_by';
+    if (gjc_table_exists($db, 'merchant_qr_orders')
+        && in_array('created_by', gjc_table_columns($db, 'merchant_qr_orders'), true)) {
+        $operator = "COALESCE((SELECT q.created_by FROM merchant_qr_orders q
+            WHERE q.merchant_wallet_id = t.merchant_wallet_id AND q.paid_ref = t.reference_no
+            LIMIT 1), t.initiated_by)";
+    }
+    return "EXISTS (SELECT 1 FROM users operator_user
+        JOIN merchant_wallets operator_wallet ON operator_wallet.id = t.merchant_wallet_id
+        WHERE operator_user.userID = {$operator}
+          AND operator_user.userID <> operator_wallet.user_id
+          AND operator_user.merchant_owner_id = operator_wallet.user_id)";
+}
+
+/** Direct sales count immediately; staff sales count after remittance, once each. */
+function gjc_merchant_confirmed_sale_sql(PDO $db): string
+{
+    $staffSale = gjc_merchant_staff_sale_sql($db);
+    return "(NOT ({$staffSale}) OR EXISTS (SELECT 1 FROM sales_remittances r
+        WHERE r.merchant_wallet_id = t.merchant_wallet_id AND DATE(r.period_end) = CURDATE()
+          AND t.created_at > r.period_start AND t.created_at <= r.period_end))";
 }
 
 function gjc_merchant_owner_id(PDO $db, ?int $userId = null): int
@@ -3220,6 +6127,10 @@ function gjc_meeting_time_slots(): array
  */
 function gjc_ensure_meeting_scheduling_schema(PDO $db): void
 {
+    if(gjc_table_exists($db,'meeting_holidays')&&gjc_table_exists($db,'meeting_settings')
+        &&in_array('down_payment_default_amount',gjc_table_columns($db,'meeting_settings'),true)
+        &&$db->query('SELECT id FROM meeting_settings WHERE id=1')->fetchColumn()!==false)return;
+    if($db->inTransaction())throw new RuntimeException('Meeting schema setup must precede a transaction.');
     $db->exec(
         "CREATE TABLE IF NOT EXISTS meeting_holidays (
             id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -3442,7 +6353,7 @@ function gjc_find_next_meeting_slot(PDO $db, int $lookaheadDays = 180): ?array
 
     $bookedStmt = $db->prepare(
         "SELECT TIME_FORMAT(meetup_scheduled_at, '%H:%i') AS t
-           FROM stall_applications
+           FROM " . gjc_stall_application_source($db) . "
           WHERE meetup_scheduled_at IS NOT NULL
             AND status NOT IN ('cancelled', 'expired', 'rejected')
             AND DATE(meetup_scheduled_at) = ?"
@@ -3476,30 +6387,15 @@ function gjc_find_next_meeting_slot(PDO $db, int $lookaheadDays = 180): ?array
  */
 function gjc_assign_meeting_slot(PDO $db, int $appId, ?string $location = null): ?array
 {
-    $location = $location ?? gjc_meeting_default_location($db);
-
-    $db->prepare("SELECT GET_LOCK('gjc_stall_scheduler', 10)")->execute();
-    try {
-        $slot = gjc_find_next_meeting_slot($db);
-        if ($slot === null) {
-            return null;
-        }
-        $scheduledAt = $slot['date'] . ' ' . $slot['time'] . ':00';
-        $db->prepare(
-            "UPDATE stall_applications
-                SET meetup_scheduled_at = ?, meetup_location = ?
-              WHERE id = ?"
-        )->execute([$scheduledAt, $location, $appId]);
-
-        return [
-            'date'     => $slot['date'],
-            'time'     => $slot['time'],
-            'datetime' => $scheduledAt,
-            'location' => $location,
-        ];
-    } finally {
-        $db->prepare("SELECT RELEASE_LOCK('gjc_stall_scheduler')")->execute();
-    }
+    if($db->inTransaction())throw new RuntimeException('Meeting assignment must own its transaction.');
+    $location=$location??gjc_meeting_default_location($db);
+    if((int)$db->query("SELECT GET_LOCK('gjc_stall_scheduler',10)")->fetchColumn()!==1)throw new RuntimeException('Meeting scheduler is busy.');
+    try{return gjc_stall_application_write($db,function()use($db,$appId,$location):?array{
+        $slot=gjc_find_next_meeting_slot($db);if($slot===null)return null;
+        $scheduledAt=$slot['date'].' '.$slot['time'].':00';
+        if(!gjc_stall_application_update($db,$appId,['meetup_scheduled_at'=>$scheduledAt,'meetup_location'=>$location],['status'=>'pending_verification']))return null;
+        return ['date'=>$slot['date'],'time'=>$slot['time'],'datetime'=>$scheduledAt,'location'=>$location];
+    });}finally{$db->query("SELECT RELEASE_LOCK('gjc_stall_scheduler')")->fetchColumn();}
 }
 
 function gjc_transaction_type_options(): array
@@ -3626,15 +6522,11 @@ function gjc_transaction_is_success(string $status): bool
 /**
  * Line items behind a paid order, keyed by the transaction's reference_no.
  *
- * The transactions row itself never carries them: both checkout flows keep an
- * items_json snapshot on their own order row and link back with
- * paid_ref = transactions.reference_no — cart_orders for the in-app Shop Cart,
- * merchant_qr_orders for POS / QR pay. Same join parent/activity.php uses for
- * its Items column, narrowed to a single record.
+ * Receipt rows are authoritative for paid items. Relational order rows are
+ * the fallback for an order-linked payment; historical JSON is never read.
  *
  * Returns a normalised list of ['name', 'qty', 'price', 'line_total'], or []
  * for a transaction with no order behind it (top-ups, transfers, encashments).
- * merchant_qr_orders items carry no line_total, so it is derived from qty x price.
  */
 function gjc_transaction_line_items(PDO $db, string $referenceNo): array
 {
@@ -3643,45 +6535,38 @@ function gjc_transaction_line_items(PDO $db, string $referenceNo): array
         return [];
     }
 
-    $json = null;
-    foreach (["cart_orders", "merchant_qr_orders"] as $table) {
-        if ($json !== null || !gjc_table_exists($db, $table)) {
-            continue;
-        }
-        $stmt = $db->prepare(
-            "SELECT items_json FROM {$table} WHERE paid_ref = ? LIMIT 1",
-        );
-        $stmt->execute([$referenceNo]);
-        $found = $stmt->fetchColumn();
-        if ($found !== false && $found !== null && $found !== "") {
-            $json = (string) $found;
-        }
-    }
-
-    if ($json === null) {
-        return [];
-    }
-
-    $decoded = json_decode($json, true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
+    gjc_ensure_order_items_schema($db);
+    $stmt = $db->prepare('SELECT i.item_name, i.quantity, i.unit_price, i.subtotal, i.line_no, t.amount AS recorded_amount
+        FROM transaction_items i JOIN transactions t ON t.id = i.transaction_id
+        WHERE t.reference_no = ? ORDER BY i.line_no, i.id');
+    $stmt->execute([$referenceNo]);
     $items = [];
-    foreach ($decoded as $item) {
-        if (!is_array($item)) {
-            continue;
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ($row['line_no'] === null || (int) $row['line_no'] !== count($items) + 1
+            || abs((float) $row['subtotal'] - round((int) $row['quantity'] * (float) $row['unit_price'], 2)) > 0.000001) {
+            throw new RuntimeException('Receipt-item backfill is incomplete.');
         }
-        $qty = max(1, (int) ($item["qty"] ?? 1));
-        $price = (float) ($item["price"] ?? 0);
-        $items[] = [
-            "name" => (string) ($item["name"] ?? "Item"),
-            "qty" => $qty,
-            "price" => $price,
-            "line_total" => isset($item["line_total"])
-                ? (float) $item["line_total"]
-                : round($price * $qty, 2),
-        ];
+        $items[] = ['name' => $row['item_name'], 'qty' => (int) $row['quantity'],
+                    'price' => (float) $row['unit_price'], 'line_total' => (float) $row['subtotal']];
+    }
+    if ($items) {
+        $total = array_sum(array_column($items, 'line_total'));
+        if (abs($total - (float) $row['recorded_amount']) > 0.000001) {
+            throw new RuntimeException('Official receipt items do not match the recorded payment amount.');
+        }
+        return $items;
+    }
+    foreach (['cart' => 'cart_orders', 'qr' => 'merchant_qr_orders'] as $source => $table) {
+        $stmt = $db->prepare("SELECT id FROM `{$table}` WHERE paid_ref = ? ORDER BY id LIMIT 1");
+        $stmt->execute([$referenceNo]);
+        $orderId = $stmt->fetchColumn();
+        if ($orderId !== false) {
+            foreach (gjc_order_item_lines($db, $source, (int) $orderId) as $line) {
+                $items[] = ['name' => $line['name'], 'qty' => $line['qty'], 'price' => $line['price'],
+                            'line_total' => round($line['qty'] * $line['price'], 2)];
+            }
+            break;
+        }
     }
 
     return $items;
@@ -4372,14 +7257,349 @@ function gjc_token_display(float $phpAmount): string
     return number_format($tokens, 1) . " GC";
 }
 
+/**
+ * Retain copied wallet-owner IDs until a separately approved CONTRACT.
+ * Metadata only: a table's compatibility columns must be all present or all absent.
+ */
+function gjc_has_legacy_wallet_user_ids(PDO $db, string $table): bool
+{
+    $legacyColumns = [
+        'cart_orders' => ['student_user_id', 'merchant_user_id', 'parent_user_id'],
+        'merchant_qr_orders' => ['merchant_user_id'],
+        'parent_alerts' => ['student_user_id'],
+    ];
+    if (!isset($legacyColumns[$table])) {
+        throw new InvalidArgumentException('Unsupported wallet-owner compatibility table.');
+    }
+    $columns = gjc_table_columns($db, $table, true);
+    $present = count(array_intersect($legacyColumns[$table], $columns));
+    if ($present !== 0 && $present !== count($legacyColumns[$table])) {
+        throw new RuntimeException('Wallet-owner compatibility columns must be all present or all absent.');
+    }
+    return $present !== 0;
+}
+
+/**
+ * Explicit historical-voucher CONTRACT. Read-only unless applying with a private export.
+ */
+function gjc_ensure_group_b_voucher_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Voucher CONTRACT requires CLI, ewallet, and no transaction.');
+    }
+    if (!gjc_table_exists($db, 'vouchers')) {
+        throw new RuntimeException('Historical vouchers table is missing.');
+    }
+    $columns = gjc_table_columns($db, 'vouchers', true);
+    $removed = ['original_amount', 'is_non_refundable'];
+    $present = array_intersect($removed, $columns);
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== 2) {
+        throw new RuntimeException('Voucher duplicates are partially contracted.');
+    }
+    foreach (['id', 'initial_value', 'is_refundable', 'remaining_balance', 'status'] as $column) {
+        if (!in_array($column, $columns, true)) {
+            throw new RuntimeException('Required historical voucher fact is missing.');
+        }
+    }
+    $rows = $db->query('SELECT * FROM vouchers ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows) !== 2 || array_map(static fn($row) => (int) $row['id'], $rows) !== [1, 2]) {
+        throw new RuntimeException('Historical voucher cohort changed; reapprove the plan.');
+    }
+    $ledger = $db->prepare("SELECT transaction_type, amount, vault_before, vault_after
+        FROM transactions WHERE voucher_id = ? AND status = 'completed'
+          AND transaction_type IN ('voucher_create', 'voucher_expire') ORDER BY id");
+    foreach ($rows as $voucher) {
+        $initial = (float) $voucher['initial_value'];
+        if ($voucher['status'] !== 'expired' || $initial <= 0 || (int) $voucher['is_refundable'] !== 1
+            || (float) $voucher['original_amount'] !== 0.0 || (int) $voucher['is_non_refundable'] !== 1) {
+            throw new RuntimeException('Unexpected voucher facts; no DROP applied.');
+        }
+        $ledger->execute([(int) $voucher['id']]);
+        $entries = $ledger->fetchAll(PDO::FETCH_ASSOC);
+        if (count($entries) !== 2 || $entries[0]['transaction_type'] !== 'voucher_create'
+            || $entries[1]['transaction_type'] !== 'voucher_expire'
+            || (float) $entries[0]['amount'] !== $initial || (float) $entries[1]['amount'] !== $initial
+            || round((float) $entries[0]['vault_before'] - (float) $entries[0]['vault_after'], 2) !== $initial
+            || round((float) $entries[1]['vault_after'] - (float) $entries[1]['vault_before'], 2) !== $initial) {
+            throw new RuntimeException('Voucher facts conflict with the immutable ledger.');
+        }
+    }
+    $dependencies = $db->query("SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = 'vouchers'
+        AND COLUMN_NAME IN ('original_amount', 'is_non_refundable')) OR
+        (REFERENCED_TABLE_NAME = 'vouchers' AND REFERENCED_COLUMN_NAME IN ('original_amount', 'is_non_refundable')))")
+        ->fetchAll(PDO::FETCH_ASSOC);
+    $indexes = $db->query("SELECT INDEX_NAME FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vouchers'
+          AND COLUMN_NAME IN ('original_amount', 'is_non_refundable')")->fetchAll(PDO::FETCH_ASSOC);
+    if ($dependencies || $indexes) {
+        throw new RuntimeException('Unexpected voucher constraint or index depends on duplicates.');
+    }
+    $objects = array_merge(
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc
+            JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE() AND tc.TABLE_NAME = 'vouchers'")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if (preg_match('/\\b(original_amount|is_non_refundable)\\b/i', $object['body'] ?? '')) {
+            throw new RuntimeException('Database object depends on voucher duplicates: ' . $object['name']);
+        }
+    }
+    $plan = ['vouchers' => 'ALTER TABLE vouchers DROP COLUMN original_amount, DROP COLUMN is_non_refundable'];
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A private voucher export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    $schema = $db->query('SHOW CREATE TABLE vouchers')->fetch(PDO::FETCH_NUM)[1];
+    if (($archive['schema'] ?? null) !== $schema || ($archive['rows'] ?? null) !== $rows) {
+        throw new RuntimeException('Private voucher export differs from current data.');
+    }
+    $db->exec($plan['vouchers']);
+    return $plan;
+}
+
+/**
+ * Explicit Group C CONTRACT; read-only by default and requires a matching private export.
+ * MySQL commits each ALTER independently; a rerun checks any remaining column.
+ */
+function gjc_ensure_group_c_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()
+        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
+        throw new RuntimeException('Group C CONTRACT requires CLI, ewallet, and no transaction.');
+    }
+    $targets = ['cap_increase_log' => 'amount_added', 'system_settings' => 'school_revenue_balance'];
+    $plan = [];
+    $current = [];
+    foreach ($targets as $table => $column) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Required Group C table is missing: ' . $table);
+        }
+        if (!in_array($column, gjc_table_columns($db, $table, true), true)) {
+            continue;
+        }
+        if ($table === 'cap_increase_log') {
+            $invalid = $db->query('SELECT COUNT(*) FROM cap_increase_log
+                WHERE amount_added IS NULL OR old_cap IS NULL OR new_cap IS NULL
+                   OR amount_added <> new_cap - old_cap')->fetchColumn();
+            if ((int) $invalid !== 0) {
+                throw new RuntimeException('Cap log contains conflicting derived values.');
+            }
+        } else {
+            $settings = $db->query('SELECT id, school_revenue_balance FROM system_settings ORDER BY id')
+                ->fetchAll(PDO::FETCH_ASSOC);
+            if (count($settings) !== 1 || (int) $settings[0]['id'] !== 1
+                || $settings[0]['school_revenue_balance'] === null
+                || (float) $settings[0]['school_revenue_balance'] !== 0.0
+                || !gjc_table_exists($db, 'school_revenue_ledger')
+                || (int) $db->query('SELECT COUNT(*) FROM school_revenue_ledger')->fetchColumn() !== 0) {
+                throw new RuntimeException('Obsolete revenue facts changed; reapprove the plan.');
+            }
+        }
+        $key = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = ? AND COLUMN_NAME = ?)
+                OR (REFERENCED_TABLE_NAME = ? AND REFERENCED_COLUMN_NAME = ?))");
+        $key->execute([$table, $column, $table, $column]);
+        $index = $db->prepare("SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+        $index->execute([$table, $column]);
+        if ((int) $key->fetchColumn() !== 0 || (int) $index->fetchColumn() !== 0) {
+            throw new RuntimeException('A key or index depends on the Group C column.');
+        }
+        $current[$table] = [
+            'schema' => $db->query('SHOW CREATE TABLE ' . $table)->fetch(PDO::FETCH_NUM)[1],
+            'rows' => $db->query('SELECT * FROM ' . $table . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC),
+        ];
+        $plan[$table] = 'ALTER TABLE ' . $table . ' DROP COLUMN ' . $column;
+    }
+    if (!$plan) {
+        return [];
+    }
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT EVENT_NAME AS name, EVENT_DEFINITION AS body FROM information_schema.EVENTS
+            WHERE EVENT_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) AS name, GENERATION_EXPRESSION AS body
+            FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                AND GENERATION_EXPRESSION <> ''")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if ($object['body'] === null) {
+            throw new RuntimeException('Cannot inspect database object: ' . $object['name']);
+        }
+        foreach ($plan as $table => $sql) {
+            if (preg_match('/\\b' . preg_quote($targets[$table], '/') . '\\b/i', $object['body'])) {
+                throw new RuntimeException('Database object depends on Group C column: ' . $object['name']);
+            }
+        }
+    }
+    if (!$apply) {
+        return $plan;
+    }
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException('A matching private Group C export is required.');
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    foreach ($current as $table => $facts) {
+        if (($archive['tables'][$table] ?? null) !== $facts) {
+            throw new RuntimeException('Private Group C export differs from current table: ' . $table);
+        }
+    }
+    foreach ($plan as $table => $sql) {
+        $db->exec($sql);
+        gjc_table_columns($db, $table, true);
+    }
+    return $plan;
+}
+
+/** Defines normalized cap logs for fresh installs; preserves existing tables. */
+function gjc_ensure_cap_increase_log_schema(PDO $db): void
+{
+    if (gjc_table_exists($db, 'cap_increase_log')) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Cap log schema creation must run before a transaction.');
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `cap_increase_log` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `super_admin_id` int unsigned NOT NULL COMMENT 'FK -> users.id -- must be super-admin role',
+  `old_cap` decimal(15,2) NOT NULL,
+  `new_cap` decimal(15,2) NOT NULL,
+  `reason` text COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Mandatory justification for audit compliance',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `source` enum('super_admin_mint','tuition_credit','fee_waiver_claim') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `source_ref_id` int unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+    gjc_table_columns($db, 'cap_increase_log', true);
+}
+
+/** Preserve cap-log compatibility writes until amount_added is contracted. */
+function gjc_cap_log_has_legacy_amount_added(PDO $db): bool
+{
+    if (!gjc_table_exists($db, 'cap_increase_log')) {
+        throw new RuntimeException('The cap increase log table is missing.');
+    }
+    return in_array('amount_added', gjc_table_columns($db, 'cap_increase_log', true), true);
+}
+
+/** Defines historical voucher tables; preserves existing rows and schema. */
+function gjc_ensure_historical_vouchers_schema(PDO $db): void
+{
+    if (gjc_table_exists($db, 'vouchers')) {
+        return;
+    }
+    if (!gjc_table_exists($db, 'users')) {
+        throw new RuntimeException('Historical voucher schema requires the users table.');
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `vouchers` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `qr_code_hash` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `voucher_code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+  `issued_by` int NOT NULL COMMENT 'FK -> users.id (cashier or admin who created it)',
+  `is_refundable` tinyint(1) NOT NULL DEFAULT '0',
+  `visitor_name` varchar(120) COLLATE utf8mb4_general_ci NOT NULL,
+  `visitor_contact` varchar(60) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `initial_value` decimal(15,2) DEFAULT NULL,
+  `remaining_balance` decimal(10,2) NOT NULL COMMENT 'Unspent points -- stays in the economy, non-refundable',
+  `status` enum('active','used','expired','void') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active',
+  `expires_at` datetime NOT NULL,
+  `expired_at` datetime DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `last_used_at` datetime DEFAULT NULL,
+  `use_count` smallint unsigned NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `voucher_code` (`voucher_code`),
+  UNIQUE KEY `qr_code_hash` (`qr_code_hash`),
+  KEY `idx_v_hash` (`qr_code_hash`),
+  KEY `idx_v_status` (`status`),
+  KEY `idx_v_expiry` (`expires_at`,`status`),
+  KEY `fk_core_vouchers_issued_by` (`issued_by`),
+  CONSTRAINT `fk_core_vouchers_issued_by` FOREIGN KEY (`issued_by`) REFERENCES `users` (`userID`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    );
+}
+
+/** Defines new P2P tables with wallet IDs; existing tables are preserved. */
+function gjc_ensure_p2p_transfers_schema(PDO $db): void
+{
+    if (gjc_table_exists($db, 'p2p_transfers')) {
+        return;
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `p2p_transfers` (
+    `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `reference_no`      VARCHAR(40) NOT NULL,
+    `from_wallet_id`    INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
+    `to_wallet_id`      INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
+    `amount`            DECIMAL(15,2) NOT NULL,
+    `message`           VARCHAR(255) NULL DEFAULT NULL,
+    `status`            ENUM('completed','failed','reversed') NOT NULL DEFAULT 'completed',
+    `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `reference_no` (`reference_no`),
+    KEY `idx_p2p_from` (`from_wallet_id`),
+    KEY `idx_p2p_to` (`to_wallet_id`),
+    KEY `idx_p2p_date` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  COMMENT='Peer-to-peer token transfers between students (atomic, transactionally safe)'"
+    );
+}
+
+/**
+ * Keep P2P compatibility writes until the copied user IDs are contracted.
+ * This checks metadata only; it does not change the schema.
+ */
+function gjc_p2p_has_legacy_user_ids(PDO $db): bool
+{
+    $columns = gjc_table_columns($db, 'p2p_transfers', true);
+    $hasFrom = in_array('from_user_id', $columns, true);
+    $hasTo = in_array('to_user_id', $columns, true);
+    if ($hasFrom !== $hasTo) {
+        throw new RuntimeException('P2P user-ID compatibility columns must be present or absent together.');
+    }
+    return $hasFrom;
+}
+
 function gjc_p2p_daily_sent(PDO $db, int $userId): float
 {
     if (!gjc_table_exists($db, "p2p_transfers")) {
         return 0.0;
     }
     $stmt = $db->prepare(
-        "SELECT COALESCE(SUM(amount), 0) FROM p2p_transfers
-          WHERE from_user_id = ? AND DATE(created_at) = CURDATE() AND status = 'completed'",
+        "SELECT COALESCE(SUM(p.amount), 0) FROM p2p_transfers p
+           JOIN student_wallets sw ON sw.id = p.from_wallet_id
+          WHERE sw.user_id = ? AND DATE(p.created_at) = CURDATE() AND p.status = 'completed'",
     );
     $stmt->execute([$userId]);
     return (float) $stmt->fetchColumn();
@@ -4392,7 +7612,7 @@ function gjc_ensure_parent_schema(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS parents (
             id                    INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id               INT UNSIGNED NOT NULL UNIQUE,
+            user_id               INT NOT NULL UNIQUE,
             low_balance_threshold DECIMAL(10,2) NOT NULL DEFAULT 50.00,
             created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB"
@@ -4402,7 +7622,7 @@ function gjc_ensure_parent_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS parent_student_links (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             parent_id       INT UNSIGNED NOT NULL,
-            student_user_id INT UNSIGNED NOT NULL,
+            student_user_id INT NOT NULL,
             linked_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_link (parent_id, student_user_id),
             INDEX idx_parent  (parent_id),
@@ -4414,7 +7634,6 @@ function gjc_ensure_parent_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS parent_alerts (
             id                INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             parent_id         INT UNSIGNED NOT NULL,
-            student_user_id   INT UNSIGNED NOT NULL,
             student_wallet_id INT UNSIGNED NOT NULL,
             balance_at_alert  DECIMAL(10,2) NOT NULL,
             threshold         DECIMAL(10,2) NOT NULL,
@@ -4466,19 +7685,21 @@ function gjc_check_parent_balance_alert(PDO $db, int $walletId): void
     foreach ($parents as $parent) {
         // Throttle: one unread alert per parent-student pair per day
         $chk = $db->prepare(
-            "SELECT COUNT(*) FROM parent_alerts
-              WHERE parent_id = ? AND student_user_id = ?
-                AND DATE(created_at) = CURDATE() AND is_read = 0"
+            "SELECT COUNT(*) FROM parent_alerts pa
+               JOIN student_wallets sw ON sw.id = pa.student_wallet_id
+              WHERE pa.parent_id = ? AND sw.user_id = ?
+                AND DATE(pa.created_at) = CURDATE() AND pa.is_read = 0"
         );
         $chk->execute([$parent['parent_id'], $wallet['user_id']]);
         if ((int) $chk->fetchColumn() === 0) {
+            $legacyUserIds = gjc_has_legacy_wallet_user_ids($db, 'parent_alerts');
             $db->prepare(
                 "INSERT INTO parent_alerts
-                    (parent_id, student_user_id, student_wallet_id, balance_at_alert, threshold)
-                 VALUES (?, ?, ?, ?, ?)"
+                    (parent_id" . ($legacyUserIds ? ", student_user_id" : "") . ", student_wallet_id, balance_at_alert, threshold)
+                 VALUES (?, " . ($legacyUserIds ? "?, " : "") . "?, ?, ?)"
             )->execute([
                 $parent['parent_id'],
-                $wallet['user_id'],
+                ...($legacyUserIds ? [$wallet['user_id']] : []),
                 $walletId,
                 $wallet['balance'],
                 $parent['low_balance_threshold'],
@@ -5181,6 +8402,13 @@ function gjc_student_maintenance_fees(PDO $db, int $studentUserId): array
  */
 function gjc_ensure_notifications_schema(PDO $db): void
 {
+    // Even CREATE TABLE IF NOT EXISTS can implicitly commit a caller's payment.
+    if (gjc_table_exists($db, 'notifications')) {
+        return;
+    }
+    if ($db->inTransaction()) {
+        throw new RuntimeException('Notification schema must be prepared before starting a transaction.');
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS notifications (
             id         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -5924,3 +9152,107 @@ function gjc_merchant_document_files(PDO $db, int $ownerId, ?array $application 
 
     return $files;
 }
+
+/** Explicit approved CLI CONTRACT only. Page loads never call this helper. */
+function gjc_ensure_stall_application_contract_schema(PDO $db, bool $apply=false): array
+{
+    if(PHP_SAPI!=='cli'||$db->inTransaction()||$db->query('SELECT DATABASE()')->fetchColumn()!=='ewallet')
+        throw new RuntimeException('D2 CONTRACT requires CLI, ewallet and no transaction.');
+    $stored=[
+        "SELECT VIEW_DEFINITION AS definition FROM information_schema.VIEWS WHERE TABLE_SCHEMA=DATABASE()",
+        "SELECT ACTION_STATEMENT AS definition FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()",
+        "SELECT ROUTINE_DEFINITION AS definition FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE()",
+        "SELECT EVENT_DEFINITION AS definition FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()"
+    ];
+    foreach($stored as $sql)foreach($db->query($sql)->fetchAll(PDO::FETCH_COLUMN) as $definition)
+        if(preg_match('/\b(stall_applications|archived_rejections)\b/i',(string)$definition))
+            throw new RuntimeException('Stored database application dependency requires review.');
+    if(gjc_ensure_stall_application_details_schema($db,false)!==[])
+        throw new RuntimeException('Complete normalized application schema is required.');
+    gjc_table_columns($db,'stall_applications',true);
+    $legacy=gjc_stall_application_has_legacy($db);$plan=[];
+    if($legacy){
+        $m=gjc_stall_application_projection_metadata();
+        $expressions=$m['normalized_expressions'];
+        $names=[];foreach(['first_name','middle_name','last_name','suffix'] as $field)$names[]="NULLIF((".$expressions[$field]."),'')";
+        $expressions['proprietor_name']="TRIM(CONCAT_WS(' ',".implode(',',$names).'))';
+        $select=[];foreach($m['logical_columns'] as $field){$value=$expressions[$field]??'sa.'.$field;
+            if(in_array($field,$m['actor_fields'],true))$value='CAST(('.$value.') AS SIGNED)';
+            $select[]=$value.' AS '.$field;
+        }
+        $from=' FROM stall_applications sa '.implode(' ',$m['joins']);
+        $raw=$db->query('SELECT * FROM stall_applications ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+        $normal=$db->query('SELECT '.implode(',',$select).$from.' ORDER BY sa.id')->fetchAll(PDO::FETCH_ASSOC);
+        if($normal!==$raw)throw new RuntimeException('Complete normalized application profiles must match before CONTRACT.');
+        $missing=['ap.application_id','mt.application_id','py.application_id','ct.application_id','dc.application_id','ad.application_id','b.id','c.id','p.id'];
+        foreach(range(0,4) as $i)$missing[]='nd'.$i.'.application_id';
+        if($db->query('SELECT sa.id'.$from.' WHERE '.implode(' OR ',array_map(fn($field)=>$field.' IS NULL',$missing)).' LIMIT 1')->fetchColumn()!==false)
+            throw new RuntimeException('Required normalized application details are missing.');
+        $events=(int)$db->query("SELECT COUNT(*) FROM stall_applications a WHERE a.status='rejected' AND NOT EXISTS
+            (SELECT 1 FROM stall_application_rejections r WHERE r.application_id=a.id
+             AND BINARY r.rejection_reason <=> BINARY a.rejection_reason
+             AND r.rejected_by <=> a.reviewed_by AND r.rejected_at <=> a.reviewed_at
+             AND r.rejected_at_step=a.current_step AND r.reactivated_at IS NULL)")->fetchColumn();
+        if($events)throw new RuntimeException('Current rejected applications require retained rejection history.');
+        $fks=$db->query("SELECT TABLE_NAME,COLUMN_NAME,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC);
+        foreach($fks as $fk)if(($fk['TABLE_NAME']==='stall_applications'&&in_array($fk['COLUMN_NAME'],$m['legacy_fields'],true))
+            ||($fk['REFERENCED_TABLE_NAME']==='stall_applications'&&in_array($fk['REFERENCED_COLUMN_NAME'],$m['legacy_fields'],true)))
+            throw new RuntimeException('Legacy field is still constrained by a foreign key.');
+        $plan['stall_applications']='ALTER TABLE stall_applications '.implode(', ',array_map(fn($field)=>'DROP COLUMN '.$field,$m['legacy_fields']));
+    }
+    if(gjc_table_exists($db,'archived_rejections')){
+        if((int)$db->query('SELECT COUNT(*) FROM archived_rejections')->fetchColumn()!==0)
+            throw new RuntimeException('Legacy rejection archive is not empty; separate migration required.');
+        if((int)$db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE()
+            AND REFERENCED_TABLE_NAME IS NOT NULL AND (TABLE_NAME='archived_rejections' OR REFERENCED_TABLE_NAME='archived_rejections')")->fetchColumn())
+            throw new RuntimeException('Legacy archive has foreign-key dependencies.');
+        $plan['archived_rejections']='DROP TABLE archived_rejections';
+    }
+    if($apply){foreach($plan as $table=>$sql)$db->exec($sql);gjc_table_columns($db,'stall_applications',true);}
+    return $plan;
+}
+
+/** Explicit approved CLI CONTRACT; defaults to a read-only plan. */
+function gjc_ensure_lease_due_date_contract_schema(PDO $db, bool $apply=false): array
+{
+    if(PHP_SAPI!=='cli'||$db->inTransaction()||$db->query('SELECT DATABASE()')->fetchColumn()!=='ewallet')
+        throw new RuntimeException('Lease due-date CONTRACT requires CLI, ewallet and no transaction.');
+    if(!gjc_table_exists($db,'merchant_leases')||!gjc_table_exists($db,'merchant_rent_payments'))
+        throw new RuntimeException('Existing lease and rent-payment schema is required.');
+    $columns=gjc_table_columns($db,'merchant_leases',true);
+    if(!in_array('next_due_date',$columns,true))return [];
+    $definition=$db->query("SHOW COLUMNS FROM merchant_leases LIKE 'next_due_date'")->fetch(PDO::FETCH_ASSOC);
+    if(!$definition||$definition['Type']!=='date'||$definition['Null']!=='NO')
+        throw new RuntimeException('Unexpected legacy lease date definition.');
+    $stored=[
+        "SELECT VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA=DATABASE()",
+        "SELECT ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()",
+        "SELECT ROUTINE_DEFINITION FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE()",
+        "SELECT EVENT_DEFINITION FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()"
+    ];
+    foreach($stored as $sql)foreach($db->query($sql)->fetchAll(PDO::FETCH_COLUMN) as $definition)
+        if(preg_match('/\bmerchant_leases\b/i',(string)$definition))
+            throw new RuntimeException('Stored lease dependency requires separate review.');
+    $dependencies=(int)$db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE()
+        AND REFERENCED_TABLE_NAME IS NOT NULL AND
+        ((TABLE_NAME='merchant_leases' AND COLUMN_NAME='next_due_date')
+        OR (REFERENCED_TABLE_NAME='merchant_leases' AND REFERENCED_COLUMN_NAME='next_due_date'))")->fetchColumn();
+    if($dependencies)throw new RuntimeException('Lease due date has foreign-key dependencies.');
+    if(!class_exists('MerchantTenantDirectory'))require_once __DIR__.'/MerchantTenantDirectory.php';
+    $directory=new MerchantTenantDirectory($db);
+    $rows=$db->query('SELECT * FROM merchant_leases ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    $directory->primePaymentCache(array_column($rows,'id'));
+    foreach($rows as $row)if($directory->derivedNextDueDate($row)!==$row['next_due_date'])
+        throw new RuntimeException('Lease due-date cache must match the current calculation before CONTRACT.');
+    $indexes=$db->query("SELECT INDEX_NAME,COLUMN_NAME,SEQ_IN_INDEX FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='merchant_leases' ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $due=array_values(array_filter($indexes,fn($row)=>$row['COLUMN_NAME']==='next_due_date'));
+    if($due!==[['INDEX_NAME'=>'idx_lease_due','COLUMN_NAME'=>'next_due_date','SEQ_IN_INDEX'=>1]]
+        ||count(array_filter($indexes,fn($row)=>$row['INDEX_NAME']==='idx_lease_due'))!==1)
+        throw new RuntimeException('Unexpected legacy due-date index.');
+    $plan=['merchant_leases'=>'ALTER TABLE merchant_leases DROP COLUMN next_due_date'];
+    if($apply){$db->exec($plan['merchant_leases']);gjc_table_columns($db,'merchant_leases',true);}
+    return $plan;
+}
+

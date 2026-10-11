@@ -1,0 +1,1 @@
+ALTER TABLE users MODIFY COLUMN merchant_owner_id INT NULL DEFAULT NULL COMMENT 'FK -> users.userID â€” links Merchant Staff to their Merchant Admin', ADD INDEX idx_users_merchant_owner (merchant_owner_id), ADD CONSTRAINT fk_users_merchant_owner FOREIGN KEY (merchant_owner_id) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT;

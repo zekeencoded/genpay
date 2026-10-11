@@ -16,6 +16,7 @@ header('Content-Type: application/json');
 gjc_require_role(['student']);
 gjc_ensure_inventory_sku_index($db);
 gjc_ensure_cart_orders_schema($db);
+gjc_ensure_order_items_schema($db);
 
 $action = trim((string) ($_POST['action'] ?? ''));
 
@@ -147,7 +148,9 @@ try {
             }
 
             $existingStmt = $db->prepare(
-                "SELECT id FROM cart_orders WHERE student_user_id = ? AND status = 'pending' LIMIT 1"
+                "SELECT id FROM cart_orders
+                  WHERE student_wallet_id IN (SELECT id FROM student_wallets WHERE user_id = ?)
+                    AND status = 'pending' LIMIT 1"
             );
             $existingStmt->execute([$studentUserId]);
             if ($existingStmt->fetchColumn()) {
@@ -186,22 +189,36 @@ try {
                 $snapshot['lines']
             ));
             $refNo = gjc_reference('CART');
+            $legacyItemsJson = gjc_order_has_legacy_items_json($db, 'cart');
 
-            $db->prepare(
-                "INSERT INTO cart_orders
-                    (reference_no, student_user_id, student_wallet_id, merchant_user_id, merchant_wallet_id,
-                     description, items_json, amount, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')"
-            )->execute([
-                $refNo,
-                $studentUserId,
-                $studentWallet['id'],
-                $merchantUserId,
-                $merchantWallet['id'],
-                $itemsSummary,
-                json_encode($snapshot['lines'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                $snapshot['total'],
-            ]);
+            $db->beginTransaction();
+            try {
+                $legacyUserIds = gjc_has_legacy_wallet_user_ids($db, 'cart_orders');
+                $db->prepare(
+                    "INSERT INTO cart_orders
+                        (reference_no" . ($legacyUserIds ? ", student_user_id" : "") . ", student_wallet_id"
+                        . ($legacyUserIds ? ", merchant_user_id" : "") . ", merchant_wallet_id,
+                         description" . ($legacyItemsJson ? ", items_json" : "") . ", amount, status)
+                     VALUES (?, " . ($legacyUserIds ? "?, " : "") . "?, " . ($legacyUserIds ? "?, " : "") . "?, ?, " . ($legacyItemsJson ? "?, " : "") . "?, 'pending')"
+                )->execute([
+                    $refNo,
+                    ...($legacyUserIds ? [$studentUserId] : []),
+                    $studentWallet['id'],
+                    ...($legacyUserIds ? [$merchantUserId] : []),
+                    $merchantWallet['id'],
+                    $itemsSummary,
+                    ...($legacyItemsJson
+                        ? [json_encode($snapshot['lines'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]
+                        : []),
+                    $snapshot['total'],
+                ]);
+                $orderId = (int) $db->lastInsertId();
+                gjc_store_order_items($db, 'cart', $orderId, $snapshot['lines']);
+                $db->commit();
+            } catch (Throwable $e) {
+                $db->rollBack();
+                throw $e;
+            }
 
             $_SESSION['cart'] = ['merchant_user_id' => null, 'items' => []];
 
@@ -222,10 +239,13 @@ try {
 
         case 'get_pending_order': {
             $stmt = $db->prepare(
-                "SELECT reference_no, merchant_user_id, items_json, amount, status
-                   FROM cart_orders
-                  WHERE student_user_id = ? AND status = 'pending'
-                  ORDER BY created_at DESC
+                "SELECT o.id, o.reference_no,
+                        (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id,
+                        o.amount, o.status
+                   FROM cart_orders o
+                  WHERE o.student_wallet_id IN (SELECT id FROM student_wallets WHERE user_id = ?)
+                    AND o.status = 'pending'
+                  ORDER BY o.created_at DESC
                   LIMIT 1"
             );
             $stmt->execute([gjc_user_id()]);
@@ -236,7 +256,7 @@ try {
                 exit;
             }
 
-            $lines = json_decode((string) $row['items_json'], true);
+            $lines = gjc_order_item_lines($db, 'cart', (int) $row['id']);
             echo json_encode([
                 'success' => true,
                 'order' => [
@@ -254,7 +274,9 @@ try {
         case 'cancel_my_order': {
             $studentUserId = gjc_user_id();
             $stmt = $db->prepare(
-                "SELECT * FROM cart_orders WHERE student_user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
+                "SELECT * FROM cart_orders
+                  WHERE student_wallet_id IN (SELECT id FROM student_wallets WHERE user_id = ?)
+                    AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
             );
             $stmt->execute([$studentUserId]);
             $order = $stmt->fetch(PDO::FETCH_ASSOC);

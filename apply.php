@@ -135,7 +135,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $dupStmt = $db->prepare(
         "SELECT email, contact_number, business_name, proprietor_name
-           FROM stall_applications
+           FROM " . gjc_stall_application_source($db) . "
           WHERE status IN ('pending_verification', 'awarded')
             AND (email = ? OR contact_number = ?
                  OR LOWER(business_name) = LOWER(?) OR LOWER(proprietor_name) = LOWER(?))"
@@ -224,31 +224,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 fn($part) => $part !== ""
             )));
 
-            $ins = $db->prepare(
-                "INSERT INTO stall_applications
-                    (business_name, proprietor_name, first_name, middle_name, last_name, suffix, sex,
-                     street, barangay, city, province, contact_number, email, preferred_stall_id,
-                     profile_picture, business_permit, sanitary_permit, gjc_requirements,
-                     clearance, terms_accepted, status, current_step)
-                 VALUES (?,?,?,?,?,?,?, ?,?,?,?, ?,?,?, 'pending_path','pending_path','pending_path','pending_path','pending_path', 1, 'pending_verification', 1)"
-            );
-            $ins->execute([
-                $old["business_name"],
-                $proprietorName,
-                $old["first_name"],
-                $old["middle_name"] !== "" ? $old["middle_name"] : null,
-                $old["last_name"],
-                $old["suffix"]   !== "" ? $old["suffix"]   : null,
-                $old["sex"],
-                $old["street"],
-                $old["barangay"],
-                $old["city"],
-                $old["province"],
-                $old["contact_number"],
-                $old["email"],
-                $old["preferred_stall_id"] !== "" ? $old["preferred_stall_id"] : null,
+            $appId=gjc_stall_application_create($db,[
+                'business_name'=>$old['business_name'],'first_name'=>$old['first_name'],
+                'middle_name'=>$old['middle_name']!==''?$old['middle_name']:null,'last_name'=>$old['last_name'],
+                'suffix'=>$old['suffix']!==''?$old['suffix']:null,'sex'=>$old['sex'],
+                'street'=>$old['street'],'barangay'=>$old['barangay'],'city'=>$old['city'],'province'=>$old['province'],
+                'contact_number'=>$old['contact_number'],'email'=>$old['email'],
+                'preferred_stall_id'=>$old['preferred_stall_id']!==''?$old['preferred_stall_id']:null,
+                'profile_picture'=>'pending_path','business_permit'=>'pending_path','sanitary_permit'=>'pending_path',
+                'gjc_requirements'=>'pending_path','clearance'=>'pending_path','terms_accepted'=>1,
+                'status'=>'pending_verification','current_step'=>1,
             ]);
-            $appId = (int) $db->lastInsertId();
 
             $finalDir = BASE_PATH . "/uploads/stall_applications/" . $appId;
             if (!rename($tmpDir, $finalDir)) {
@@ -260,19 +246,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $realPaths[$field] = "uploads/stall_applications/" . $appId . "/" . $info["fname"];
             }
 
-            $db->prepare(
-                "UPDATE stall_applications
-                 SET profile_picture=?, business_permit=?, sanitary_permit=?,
-                     gjc_requirements=?, clearance=?
-                 WHERE id=?"
-            )->execute([
-                $realPaths["profile_picture"],
-                $realPaths["business_permit"],
-                $realPaths["sanitary_permit"],
-                $realPaths["gjc_requirements"],
-                $realPaths["clearance"],
-                $appId,
-            ]);
+            gjc_stall_application_update($db,$appId,$realPaths);
 
             $db->commit();
 
@@ -295,9 +269,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $slot['location']
                     );
                     if ($mailResult['sent']) {
-                        $db->prepare(
-                            "UPDATE stall_applications SET meetup_scheduled_email_sent_at = NOW() WHERE id = ?"
-                        )->execute([$appId]);
+                        gjc_stall_application_update($db,$appId,['meetup_scheduled_email_sent_at'=>GJC_APPLICATION_DB_NOW]);
                     }
                     $meetingInfo = [
                         'datetime'  => $slot['datetime'],

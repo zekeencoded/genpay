@@ -14,23 +14,8 @@ $currentPage = 'restricted_products';
 $autoDisabled = gjc_enforce_restrictions_on_inventory($db);
 gjc_ensure_product_violation_schema($db);
 
-$violators = [];
-if (in_array('restricted_violation_count', gjc_table_columns($db, 'users'), true)) {
-    // Suspensions that already served their days clear lazily here, so the
-    // table below only ever badges live ones.
-    try {
-        $db->exec("UPDATE users SET restricted_suspended_until = NULL WHERE restricted_suspended_until IS NOT NULL AND restricted_suspended_until <= NOW()");
-    } catch (\Throwable $ignored) {}
-    $violators = $db->query(
-        "SELECT u.userID, u.first_name, u.last_name, u.restricted_violation_count, u.restricted_violation_last_at,
-                u.restricted_suspended_until,
-                m.stall_name, m.stall_id
-           FROM users u
-      LEFT JOIN merchant m ON m.userID = u.userID
-          WHERE u.restricted_violation_count > 0 OR u.restricted_suspended_until IS NOT NULL
-          ORDER BY (u.restricted_suspended_until IS NOT NULL) DESC, u.restricted_violation_count DESC, u.restricted_violation_last_at DESC"
-    )->fetchAll(PDO::FETCH_ASSOC);
-}
+gjc_expire_product_suspensions($db);
+$violators = gjc_product_violators($db);
 
 $products = [];
 if (gjc_table_exists($db, 'restricted_products')) {

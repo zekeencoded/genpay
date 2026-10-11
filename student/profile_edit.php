@@ -54,10 +54,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
             if ($updates) {
                 $values[] = $currentUser['id'];
-                $stmt = $db->prepare('UPDATE users SET ' . implode(', ', $updates) . " WHERE {$idColumn} = ?");
-                $stmt->execute($values);
-                header('Location: ' . STUDENT_URL . '/profile.php?updated=1');
-                exit;
+                try {
+                    gjc_save_profile_with_address(
+                        $db, (int) $currentUser['id'],
+                        'UPDATE users SET ' . implode(', ', $updates) . " WHERE {$idColumn} = ?",
+                        $values, $details['values']
+                    );
+                    header('Location: ' . STUDENT_URL . '/profile.php?updated=1');
+                    exit;
+                } catch (Throwable $e) {
+                    error_log('student/profile_edit.php: ' . $e->getMessage());
+                    $error = 'Profile could not be saved. Please try again.';
+                }
             }
         }
     }

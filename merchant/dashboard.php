@@ -68,18 +68,22 @@ $voidedOrdersToday = [];
 if ($isMerchantStaff) {
     if (gjc_table_exists($db, 'cart_orders')) {
         $voidStmt = $db->prepare(
-            "SELECT reference_no AS reference, description, amount, created_at
+            "SELECT id, 'cart' AS source, reference_no AS reference, description, amount, created_at
                FROM cart_orders
-              WHERE merchant_user_id = ? AND status = 'voided' AND DATE(created_at) = CURDATE()"
+              WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                AND status = 'voided' AND DATE(created_at) = CURDATE()
+              ORDER BY created_at DESC, id DESC LIMIT 8"
         );
         $voidStmt->execute([$ownerMerchId]);
         $voidedOrdersToday = array_merge($voidedOrdersToday, $voidStmt->fetchAll(PDO::FETCH_ASSOC));
     }
     if (gjc_table_exists($db, 'merchant_qr_orders')) {
         $voidStmt = $db->prepare(
-            "SELECT short_code AS reference, description, amount, created_at
+            "SELECT id, 'qr' AS source, short_code AS reference, description, amount, created_at
                FROM merchant_qr_orders
-              WHERE merchant_user_id = ? AND status = 'voided' AND DATE(created_at) = CURDATE()"
+              WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                AND status = 'voided' AND DATE(created_at) = CURDATE()
+              ORDER BY created_at DESC, id DESC LIMIT 8"
         );
         $voidStmt->execute([$ownerMerchId]);
         $voidedOrdersToday = array_merge($voidedOrdersToday, $voidStmt->fetchAll(PDO::FETCH_ASSOC));
@@ -240,8 +244,8 @@ if ($canEncash && gjc_table_exists($db, 'stall_applications')) {
     $leaseStmt = $db->prepare(
         "SELECT sa.business_name, sa.rental_start_date, sa.deposit_amount, sa.advance_amount,
                 sa.payment_schedule_day, sa.contract_file, sa.awarded_at,
-                ml.stall_name, ml.monthly_rent, ml.next_due_date, ml.lease_start
-           FROM stall_applications sa
+                ml.stall_name, ml.monthly_rent, NULL AS next_due_date, ml.lease_start, ml.lease_end, ml.status AS lease_status, ml.id AS lease_id
+           FROM " . gjc_stall_application_source($db, 'sa') . "
       LEFT JOIN merchant_leases ml
              ON ml.merchant_user_id = sa.merchant_user_id AND ml.status = 'active'
           WHERE sa.merchant_user_id = ? AND sa.status = 'awarded'
@@ -250,6 +254,19 @@ if ($canEncash && gjc_table_exists($db, 'stall_applications')) {
     );
     $leaseStmt->execute([$ownerMerchId]);
     $lease = $leaseStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($lease) {
+        $lease['next_due_date'] = null;
+        if ($lease['lease_id'] !== null) {
+            $lease['next_due_date'] = (new MerchantTenantDirectory($db))->derivedNextDueDate([
+                'id' => (int) $lease['lease_id'],
+                'monthly_rent' => $lease['monthly_rent'],
+                'lease_start' => $lease['lease_start'],
+                'lease_end' => $lease['lease_end'],
+                'status' => $lease['lease_status'],
+            ]);
+        }
+        unset($lease['lease_id'], $lease['lease_end'], $lease['lease_status']);
+    }
     $hasContract = $lease && !empty($lease['contract_file']);
 }
 
@@ -269,7 +286,7 @@ $currentPage = 'dashboard';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=63">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -354,7 +371,7 @@ $currentPage = 'dashboard';
                         <span class="sd-stat-icon is-spent"><i class="fa-solid fa-chart-line"></i></span>
                     </div>
                     <h2 class="sd-num" id="todaysSalesValue"><?php echo gjc_money($todaysSales); ?></h2>
-                    <p>Remitted today &middot; click to view all</p>
+                    <p>Admin sales and staff remittances today &middot; click to view all</p>
                 </div>
 
                 <?php if ($isMerchantStaff): ?>
@@ -500,32 +517,33 @@ $currentPage = 'dashboard';
 
                 <?php if ($isMerchantStaff): ?>
                 <div class="col-12 col-xl-4">
-                    <div class="merchant-premium-panel h-100">
+                    <div class="merchant-premium-panel h-100 merchant-voided-panel">
                         <div class="merchant-panel-header">
                             <div>
                                 <h3>Voided Transactions</h3>
-                                <p>Orders cancelled before payment</p>
+                                <p>Today's orders cancelled before payment</p>
                             </div>
                         </div>
 
                         <?php if (empty($voidedOrdersToday)): ?>
                         <div class="text-center text-muted py-4">No voided orders today.</div>
                         <?php else: ?>
-                        <div class="merchant-quick-actions">
+                        <div class="merchant-voided-list" tabindex="0" aria-label="Today's voided transactions">
                             <?php foreach ($voidedOrdersToday as $vo): ?>
-                            <div class="d-flex justify-content-between align-items-start gap-2 py-2" style="border-bottom:1px solid var(--ad-line)">
-                                <div>
+                            <a class="merchant-voided-row" href="<?= MERCHANT_URL ?>/voided_transactions.php?source=<?= gjc_e($vo['source']) ?>&amp;token=<?= urlencode(gjc_make_view_token((int) $vo['id'], 'merchant_voided_' . $vo['source'])) ?>">
+                                <div class="merchant-voided-description">
                                     <div style="font-weight:700"><?= gjc_e($vo['reference']) ?></div>
                                     <div style="font-size:12px;color:var(--text-muted)"><?= gjc_e($vo['description'] ?: 'Order') ?></div>
                                 </div>
                                 <div class="text-end">
-                                    <div style="font-weight:700"><?= gjc_money((float) $vo['amount']) ?></div>
+                                    <div style="font-weight:700"><?= gjc_gc_price((float) $vo['amount']) ?></div>
                                     <div style="font-size:12px;color:var(--text-muted)"><?= date('h:i A', strtotime($vo['created_at'])) ?></div>
                                 </div>
-                            </div>
+                            </a>
                             <?php endforeach; ?>
                         </div>
                         <?php endif; ?>
+                        <a href="<?= MERCHANT_URL ?>/voided_transactions.php" class="merchant-view-btn merchant-voided-all">Show all voided transactions <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
                     </div>
                 </div>
                 <?php else: ?>
@@ -1005,6 +1023,7 @@ $currentPage = 'dashboard';
             try {
                 const fd = new FormData();
                 fd.append('action', 'remit_sales');
+                fd.append('csrf_token', <?php echo json_encode(gjc_csrf_token()); ?>);
                 const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
                 const data = await res.json();
 
@@ -1094,3 +1113,4 @@ $currentPage = 'dashboard';
 </body>
 
 </html>
+

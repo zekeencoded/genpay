@@ -32,15 +32,13 @@ UPDATE `users` SET `sub_role` = 'merchant_admin' WHERE `roleID` = 2 AND `sub_rol
 UPDATE `users` SET `sub_role` = 'super_admin'   WHERE `roleID` = 3 AND `sub_role` IS NULL;
 
 -- ============================================================
--- 3. ADD token_rate & service_fee & revenue_balance to system_settings
+-- 3. ADD token_rate & service_fee to system_settings
 -- ============================================================
 ALTER TABLE `system_settings`
     ADD COLUMN IF NOT EXISTS `token_rate` DECIMAL(10,4) NOT NULL DEFAULT 0.1000
         COMMENT '1 PHP = 0.1 Tokens (₱10 per token). Cosmetic display only.',
     ADD COLUMN IF NOT EXISTS `service_fee` DECIMAL(10,2) NOT NULL DEFAULT 2.00
-        COMMENT 'Fee deducted from credited amount on each top-up (₱2)',
-    ADD COLUMN IF NOT EXISTS `school_revenue_balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00
-        COMMENT 'Cumulative service fee revenue collected by the school';
+        COMMENT 'Fee deducted from credited amount on each top-up (₱2)';
 
 -- ============================================================
 -- 4. EXTEND transactions.transaction_type enum
@@ -78,8 +76,6 @@ CREATE TABLE IF NOT EXISTS `p2p_transfers` (
     `reference_no`      VARCHAR(40) NOT NULL,
     `from_wallet_id`    INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
     `to_wallet_id`      INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
-    `from_user_id`      INT UNSIGNED NOT NULL,
-    `to_user_id`        INT UNSIGNED NOT NULL,
     `amount`            DECIMAL(15,2) NOT NULL,
     `message`           VARCHAR(255) NULL DEFAULT NULL,
     `status`            ENUM('completed','failed','reversed') NOT NULL DEFAULT 'completed',
@@ -88,7 +84,6 @@ CREATE TABLE IF NOT EXISTS `p2p_transfers` (
     UNIQUE KEY `reference_no` (`reference_no`),
     KEY `idx_p2p_from` (`from_wallet_id`),
     KEY `idx_p2p_to` (`to_wallet_id`),
-    KEY `idx_p2p_from_user` (`from_user_id`),
     KEY `idx_p2p_date` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   COMMENT='Peer-to-peer token transfers between students (atomic, transactionally safe)';
@@ -243,7 +238,6 @@ CREATE TABLE IF NOT EXISTS `merchant_applications` (
     `owner_email`       VARCHAR(255) NOT NULL,
     `owner_contact`     VARCHAR(20) NOT NULL,
     `stall_number`      VARCHAR(30) NULL DEFAULT NULL,
-    `product_types`     TEXT NOT NULL COMMENT 'Comma-separated list of products to be sold',
     `stage`             ENUM(
                             'submitted',
                             'compliance_review',
@@ -277,13 +271,14 @@ CREATE TABLE IF NOT EXISTS `merchant_applications` (
 -- ============================================================
 CREATE OR REPLACE VIEW `v_p2p_daily_totals` AS
 SELECT
-    `from_user_id`,
-    DATE(`created_at`) AS `transfer_date`,
-    SUM(`amount`)      AS `daily_total`,
-    COUNT(*)           AS `transfer_count`
-FROM `p2p_transfers`
-WHERE `status` = 'completed'
-GROUP BY `from_user_id`, DATE(`created_at`);
+    sw.user_id AS `from_user_id`,
+    DATE(p.created_at) AS `transfer_date`,
+    SUM(p.amount) AS `daily_total`,
+    COUNT(*) AS `transfer_count`
+FROM `p2p_transfers` p
+JOIN `student_wallets` sw ON sw.id = p.from_wallet_id
+WHERE p.status = 'completed'
+GROUP BY sw.user_id, DATE(p.created_at);
 
 COMMIT;
 

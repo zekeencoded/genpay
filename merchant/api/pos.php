@@ -10,6 +10,7 @@ header('Content-Type: application/json');
 gjc_require_role(['merchant']);
 gjc_ensure_merchant_qr_orders_schema($db);
 gjc_ensure_cart_orders_schema($db);
+gjc_ensure_order_items_schema($db);
 gjc_ensure_parent_schema($db);
 gjc_ensure_sales_remittances_schema($db);
 
@@ -27,6 +28,10 @@ try {
         $totalAmt = round((float) ($_POST['total'] ?? 0), 2);
         $itemsJson = (string) ($_POST['items'] ?? '[]');
         $items = json_decode($itemsJson, true);
+        $requestKey = (string) ($_POST['request_key'] ?? '');
+        if (!preg_match('/^[a-f0-9]{32}$/', $requestKey)) {
+            throw new RuntimeException('Refresh the POS page and generate the QR again.');
+        }
 
         if ($totalAmt <= 0 || !is_array($items) || empty($items)) {
             echo json_encode(['success' => false, 'message' => 'Invalid QR order details.']);
@@ -93,21 +98,66 @@ try {
         $token = bin2hex(random_bytes(16));
         $shortCode = gjc_generate_order_short_code($db);
         $expiresAt = date('Y-m-d H:i:s', strtotime('+5 minutes'));
+        $legacyItemsJson = gjc_order_has_legacy_items_json($db, 'qr');
 
-        $db->prepare(
-            "INSERT INTO merchant_qr_orders
-                (token, short_code, merchant_user_id, merchant_wallet_id, description, items_json, amount, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-        )->execute([
-            $token,
-            $shortCode,
-            $ownerMerchId,
-            (int) $merchantWallet['id'],
-            $description,
-            json_encode($validatedItems, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            $serverTotal,
-            $expiresAt,
-        ]);
+        // PHP holds the session lock for this request, so a concurrent retry
+        // cannot insert another ticket for the same register draft.
+        $requests = $_SESSION['pos_qr_requests'] ?? [];
+        $existingId = (int) ($requests[$requestKey] ?? 0);
+        $existing = null;
+        if ($existingId) {
+            $stmt = $db->prepare('SELECT id, token, short_code, status, expires_at
+                FROM merchant_qr_orders WHERE id = ? AND merchant_wallet_id = ?');
+            $stmt->execute([$existingId, (int) $merchantWallet['id']]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($existing && $existing['status'] === 'paid') {
+                throw new RuntimeException('This order is already paid. Clear the cart to start the next order.');
+            }
+            if ($existing && $existing['status'] === 'pending' && strtotime($existing['expires_at']) > time()) {
+                if (gjc_order_item_lines($db, 'qr', $existingId) !== $validatedItems) {
+                    throw new RuntimeException('This cart changed. Clear the cart and generate a new QR.');
+                }
+                $orderId = $existingId;
+                $token = $existing['token'];
+                $shortCode = $existing['short_code'];
+                $expiresAt = $existing['expires_at'];
+            } else {
+                $existing = null;
+            }
+        }
+
+        if (!$existing) {
+            $db->beginTransaction();
+            try {
+                $legacyUserIds = gjc_has_legacy_wallet_user_ids($db, 'merchant_qr_orders');
+                $db->prepare(
+                    "INSERT INTO merchant_qr_orders
+                        (token, short_code" . ($legacyUserIds ? ", merchant_user_id" : "") . ", merchant_wallet_id, created_by, description"
+                        . ($legacyItemsJson ? ", items_json" : "") . ", amount, expires_at)
+                     VALUES (?, ?, " . ($legacyUserIds ? "?, " : "") . "?, ?, ?, " . ($legacyItemsJson ? "?, " : "") . "?, ?)"
+                )->execute([
+                    $token,
+                    $shortCode,
+                    ...($legacyUserIds ? [$ownerMerchId] : []),
+                    (int) $merchantWallet['id'],
+                    $merchantUserId,
+                    $description,
+                    ...($legacyItemsJson
+                        ? [json_encode($validatedItems, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]
+                        : []),
+                    $serverTotal,
+                    $expiresAt,
+                ]);
+                $orderId = (int) $db->lastInsertId();
+                gjc_store_order_items($db, 'qr', $orderId, $validatedItems);
+                $db->commit();
+            } catch (Throwable $e) {
+                $db->rollBack();
+                throw $e;
+            }
+            $requests[$requestKey] = $orderId;
+            $_SESSION['pos_qr_requests'] = array_slice($requests, -100, null, true);
+        }
 
         // Token-only payload: the student side resolves merchant/item/amount
         // server-side (student/api/validate_qr.php), so the QR itself leaks
@@ -119,7 +169,7 @@ try {
 
         echo json_encode([
             'success' => true,
-            'order_id' => (int) $db->lastInsertId(),
+            'order_id' => $orderId,
             'qr_payload' => json_encode($qrPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'short_code' => substr($shortCode, 0, 4) . '-' . substr($shortCode, 4),
             'summary' => 'Total: ' . gjc_gc_amount($serverTotal) . ' GC (PHP ' . number_format($serverTotal, 2) . ') - ' . count($validatedItems) . ' item type(s)',
@@ -139,7 +189,8 @@ try {
         $stmt = $db->prepare(
             "SELECT id, status, paid_ref, paid_at, expires_at
                FROM merchant_qr_orders
-              WHERE id = ? AND merchant_user_id = ?
+              WHERE id = ?
+                AND merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
               LIMIT 1"
         );
         $stmt->execute([$orderId, $ownerMerchId]);
@@ -169,17 +220,24 @@ try {
     if ($action === 'list_queue') {
         $db->prepare(
             "UPDATE merchant_qr_orders SET status = 'expired'
-              WHERE merchant_user_id = ? AND status = 'pending' AND expires_at < NOW()"
+              WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                AND status = 'pending' AND expires_at < NOW()"
         )->execute([$ownerMerchId]);
 
         $posStmt = $db->prepare(
-            "SELECT id, description, amount, status, created_at
+            "(SELECT id, description, amount, status, created_at
                FROM merchant_qr_orders
-              WHERE merchant_user_id = ?
-              ORDER BY created_at DESC
-              LIMIT 15"
+              WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                AND status = 'pending')
+             UNION ALL
+             (SELECT id, description, amount, status, created_at
+                FROM merchant_qr_orders
+               WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                 AND status = 'paid' AND created_at >= CURDATE()
+               ORDER BY created_at DESC, id DESC
+               LIMIT 15)"
         );
-        $posStmt->execute([$ownerMerchId]);
+        $posStmt->execute([$ownerMerchId, $ownerMerchId]);
         $orders = array_map(function ($row) {
             return [
                 'uid' => 'pos-' . $row['id'],
@@ -199,9 +257,9 @@ try {
         $pendingCartStmt = $db->prepare(
             "SELECT id, description, amount, status, created_at
                FROM cart_orders
-              WHERE merchant_user_id = ? AND status != 'paid'
-              ORDER BY created_at DESC
-              LIMIT 15"
+              WHERE merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+                AND status = 'pending'
+              ORDER BY created_at DESC, id DESC"
         );
         $pendingCartStmt->execute([$ownerMerchId]);
         foreach ($pendingCartStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -225,7 +283,8 @@ try {
                     AND transaction_type = 'payment'
                     AND status = 'completed'
                     AND reference_no LIKE 'CART-%'
-                  ORDER BY created_at DESC
+                    AND created_at >= CURDATE()
+                  ORDER BY created_at DESC, id DESC
                   LIMIT 15"
             );
             $cartStmt->execute([$merchantWallet['id']]);
@@ -243,7 +302,21 @@ try {
         }
 
         usort($orders, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
-        $orders = array_slice($orders, 0, 15);
+        // Recent history must never push unpaid tickets out of the live queue.
+        $doneCount = 0;
+        $orders = array_values(array_filter($orders, static function ($order) use (&$doneCount) {
+            return $order['status'] === 'pending' || ($order['status'] === 'paid' && ++$doneCount <= 15);
+        }));
+        foreach ($orders as &$order) {
+            $order['stage'] = match ($order['status']) {
+                'pending' => 'awaiting_payment',
+                'paid' => 'served',
+                default => $order['status'],
+            };
+            $order['queue_no'] = $order['id'];
+        }
+        unset($order);
+        $orders = array_reverse($orders);
 
         echo json_encode(['success' => true, 'orders' => $orders]);
         exit;
@@ -300,25 +373,24 @@ try {
         $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
         $sales = [];
 
-        $remittedToday = gjc_merchant_remitted_sales_today($db, $merchantWallet['id']);
+        $confirmed = gjc_merchant_confirmed_sale_sql($db);
 
-        if ($merchantWallet['id'] > 0 && $remittedToday['period_end'] && gjc_table_exists($db, 'transactions')) {
+        if ($merchantWallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
             $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
             $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 
             $stmt = $db->prepare(
                 "SELECT reference_no, transaction_type, amount, notes, created_at
-                   FROM transactions
+                   FROM transactions t
                   WHERE merchant_wallet_id = ?
                     AND transaction_type IN ({$placeholders})
-                    AND created_at > ?
-                    AND created_at <= ?
+                    AND status = 'completed' AND DATE(created_at) = CURDATE()
+                    AND {$confirmed}
                   ORDER BY created_at DESC"
             );
             $stmt->execute(array_merge(
                 [$merchantWallet['id']],
-                $earningTypes,
-                [$remittedToday['period_start'], $remittedToday['period_end']]
+                $earningTypes
             ));
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 // 'notes' holds the item summary ("2x Rice Meal, 1x Iced Tea") for both
@@ -341,6 +413,12 @@ try {
 
     // ── REMIT SALES (self-declared, no approval) ─────────────────────────────────
     if ($action === 'remit_sales') {
+        if (!gjc_is_merchant_staff()) {
+            throw new RuntimeException('Merchant Admin sales are credited automatically; only staff remit sales.');
+        }
+        if (!gjc_csrf_verify()) {
+            throw new RuntimeException('Security check failed. Refresh the page and try again.');
+        }
         $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
         if ($merchantWallet['id'] === 0) {
             echo json_encode(['success' => false, 'message' => 'Merchant wallet not found.']);
@@ -415,7 +493,8 @@ try {
                 "SELECT mqo.*, u.first_name, u.last_name
                    FROM merchant_qr_orders mqo
                    LEFT JOIN users u ON u.userID = mqo.paid_by
-                  WHERE mqo.id = ? AND mqo.merchant_user_id = ?"
+                  WHERE mqo.id = ?
+                    AND mqo.merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)"
             );
             $stmt->execute([$orderId, $ownerMerchId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -424,8 +503,14 @@ try {
                 exit;
             }
 
-            $items = json_decode((string) $row['items_json'], true);
+            $items = gjc_order_item_lines($db, 'qr', (int) $row['id']);
             $studentName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+
+            if ($row['status'] === 'pending' && strtotime((string) $row['expires_at']) <= time()) {
+                $db->prepare("UPDATE merchant_qr_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
+                    ->execute([$orderId]);
+                $row['status'] = 'expired';
+            }
 
             echo json_encode([
                 'success' => true,
@@ -436,6 +521,13 @@ try {
                 'status' => $row['status'],
                 'created_at' => $row['created_at'],
                 'paid_at' => $row['paid_at'],
+                'qr_payload' => $row['status'] === 'pending'
+                    ? json_encode(['type' => 'payment', 'token' => $row['token']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                    : null,
+                'short_code' => $row['status'] === 'pending'
+                    ? substr((string) $row['short_code'], 0, 4) . '-' . substr((string) $row['short_code'], 4)
+                    : null,
+                'expires_at' => $row['expires_at'],
                 'student_name' => $studentName !== '' ? $studentName : null,
             ]);
             exit;
@@ -443,12 +535,15 @@ try {
 
         if ($source === 'cart_pending') {
             $stmt = $db->prepare(
-                // COALESCE so a parent-placed order (buyer_role 'parent',
-                // student_user_id NULL) resolves its buyer too — see parent/cart.php.
+                // Resolve either buyer through the wallet owner, including parent orders.
                 "SELECT co.*, u.first_name, u.last_name
                    FROM cart_orders co
-                   LEFT JOIN users u ON u.userID = COALESCE(co.student_user_id, co.parent_user_id)
-                  WHERE co.id = ? AND co.merchant_user_id = ?"
+                   LEFT JOIN student_wallets sw ON sw.id = co.student_wallet_id
+                   LEFT JOIN parent_wallets pw ON pw.id = co.parent_wallet_id
+                   LEFT JOIN parents p ON p.id = pw.parent_id
+                   LEFT JOIN users u ON u.userID = COALESCE(sw.user_id, p.user_id)
+                  WHERE co.id = ?
+                    AND co.merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)"
             );
             $stmt->execute([$orderId, $ownerMerchId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -457,12 +552,11 @@ try {
                 exit;
             }
 
-            $items = json_decode((string) $row['items_json'], true);
+            $items = gjc_order_item_lines($db, 'cart', (int) $row['id']);
             $studentName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
 
-            // The stall's static Wallet QR (same payload the buyer's Shop Cart
-            // pay_order expects), shown in the order view so the counter can
-            // present it without leaving the queue. Pending orders only.
+            // Bind the queue QR to this pre-order so a stale image cannot
+            // pay a later pending order at the same shop.
             $walletQrUrl = null;
             if ($row['status'] === 'pending') {
                 $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
@@ -474,6 +568,7 @@ try {
                 }
                 $walletQrPayload = json_encode([
                     'type' => 'merchant_wallet',
+                    'order_reference' => $row['reference_no'],
                     'merchant_wallet_id' => $merchantWallet['id'],
                     'merchant_user_id' => $ownerMerchId,
                     'merchant' => $stallName,
@@ -502,11 +597,10 @@ try {
         if ($source === 'cart') {
             $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
             $stmt = $db->prepare(
-                "SELECT t.*, u.first_name, u.last_name, co.items_json
+                "SELECT t.*, u.first_name, u.last_name
                    FROM transactions t
                    LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
                    LEFT JOIN users u ON u.userID = sw.user_id
-                   LEFT JOIN cart_orders co ON co.paid_ref = t.reference_no
                   WHERE t.id = ? AND t.merchant_wallet_id = ?"
             );
             $stmt->execute([$orderId, $merchantWallet['id']]);
@@ -517,7 +611,7 @@ try {
             }
 
             $studentName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            $items = json_decode((string) ($row['items_json'] ?? ''), true);
+            $items = gjc_transaction_line_items($db, (string) $row['reference_no']);
 
             echo json_encode([
                 'success' => true,
@@ -554,11 +648,13 @@ try {
         // to read. Both tables carry these seven; only the human-facing reference
         // differs between them.
         $auditColumns = $table === 'cart_orders'
-            ? 'id, reference_no AS reference, merchant_user_id, merchant_wallet_id, amount, status, description, created_at'
-            : 'id, short_code AS reference, merchant_user_id, merchant_wallet_id, amount, status, description, created_at';
+            ? 'id, reference_no AS reference, (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = cart_orders.merchant_wallet_id) AS merchant_user_id, merchant_wallet_id, amount, status, description, created_at'
+            : 'id, short_code AS reference, (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = merchant_qr_orders.merchant_wallet_id) AS merchant_user_id, merchant_wallet_id, amount, status, description, created_at';
 
         $own = $db->prepare(
-            "SELECT {$auditColumns} FROM {$table} WHERE id = ? AND merchant_user_id = ? AND status = 'pending'"
+            "SELECT {$auditColumns} FROM {$table} WHERE id = ?
+              AND merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
+              AND status = 'pending'"
         );
         $own->execute([$orderId, $ownerMerchId]);
         $order = $own->fetch(PDO::FETCH_ASSOC);
@@ -755,6 +851,8 @@ try {
                 'POS Sale: ' . $itemsSummary,
                 gjc_active_school_year_id($db),
             ]);
+
+            gjc_store_transaction_items($db, (int) $db->lastInsertId(), $items);
 
             // 6. Maintenance fee — billed to tuition, never taken from the wallet.
             $feePayerStmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ?");

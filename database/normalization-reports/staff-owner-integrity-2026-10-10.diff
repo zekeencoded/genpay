@@ -1,0 +1,85 @@
+diff --git "a/C:\\laragon\\www\\genpay\\storage\\backups\\staff-owner-plan-2026-10-10\\original-app.php.txt" "b/C:\\laragon\\www\\genpay\\storage\\backups\\staff-owner-plan-2026-10-10\\planned-app.php.txt"
+index eceff62..d29c1d9 100644
+--- "a/C:\\laragon\\www\\genpay\\storage\\backups\\staff-owner-plan-2026-10-10\\original-app.php.txt"
++++ "b/C:\\laragon\\www\\genpay\\storage\\backups\\staff-owner-plan-2026-10-10\\planned-app.php.txt"
+@@ -2680,6 +2680,80 @@ function gjc_ensure_user_profile_schema(PDO $db): void
+     }
+ }
+ 
++/** Explicit staff-owner integrity change, read-only unless separately approved. */
++function gjc_ensure_staff_owner_integrity_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
++{
++    if (PHP_SAPI !== 'cli' || $db->inTransaction()
++        || $db->query('SELECT DATABASE()')->fetchColumn() !== 'ewallet') {
++        throw new RuntimeException('Staff owner integrity requires CLI, ewallet and no transaction.');
++    }
++    if (!gjc_table_exists($db, 'users')) {
++        throw new RuntimeException('Staff owner integrity requires users.');
++    }
++    $id = $db->query("SHOW COLUMNS FROM users LIKE 'userID'")->fetch(PDO::FETCH_ASSOC);
++    $owner = $db->query("SHOW FULL COLUMNS FROM users LIKE 'merchant_owner_id'")->fetch(PDO::FETCH_ASSOC);
++    if (!$id || strtolower($id['Type']) !== 'int' || !$owner
++        || !in_array(strtolower($owner['Type']), ['int', 'int unsigned'], true)
++        || $owner['Null'] !== 'YES' || $owner['Default'] !== null || $owner['Extra'] !== '') {
++        throw new RuntimeException('Unexpected staff owner column definitions.');
++    }
++    $keys = $db->query("SELECT k.COLUMN_NAME,k.CONSTRAINT_NAME,k.REFERENCED_TABLE_NAME,
++        k.REFERENCED_COLUMN_NAME,r.DELETE_RULE,r.UPDATE_RULE
++        FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r
++        ON r.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA AND r.TABLE_NAME=k.TABLE_NAME
++        AND r.CONSTRAINT_NAME=k.CONSTRAINT_NAME
++        WHERE k.TABLE_SCHEMA=DATABASE() AND k.TABLE_NAME='users' AND k.COLUMN_NAME='merchant_owner_id'
++        ORDER BY k.CONSTRAINT_NAME")->fetchAll(PDO::FETCH_ASSOC);
++    $expected = [['COLUMN_NAME'=>'merchant_owner_id','CONSTRAINT_NAME'=>'fk_users_merchant_owner',
++        'REFERENCED_TABLE_NAME'=>'users','REFERENCED_COLUMN_NAME'=>'userID',
++        'DELETE_RULE'=>'RESTRICT','UPDATE_RULE'=>'RESTRICT']];
++    $indexes = $db->query("SELECT INDEX_NAME,COLUMN_NAME,NON_UNIQUE,SEQ_IN_INDEX
++        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users'
++        AND (COLUMN_NAME='merchant_owner_id' OR INDEX_NAME='idx_users_merchant_owner')
++        ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
++    $expectedIndex = [['INDEX_NAME'=>'idx_users_merchant_owner','COLUMN_NAME'=>'merchant_owner_id',
++        'NON_UNIQUE'=>1,'SEQ_IN_INDEX'=>1]];
++    if ($keys === $expected && strtolower($owner['Type']) === 'int' && $indexes === $expectedIndex) {
++        return [];
++    }
++    if ($keys || $indexes) {
++        throw new RuntimeException('Unexpected existing staff owner key or index.');
++    }
++    $nameUsed = (int) $db->query("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
++        WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME='fk_users_merchant_owner'")->fetchColumn();
++    $incoming = (int) $db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
++        WHERE REFERENCED_TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME='users'
++        AND REFERENCED_COLUMN_NAME='merchant_owner_id'")->fetchColumn();
++    if ($nameUsed || $incoming) {
++        throw new RuntimeException('Staff owner constraint name or incoming dependency conflict.');
++    }
++    $invalid = (int) $db->query('SELECT COUNT(*) FROM users s LEFT JOIN users o ON o.userID=s.merchant_owner_id
++        WHERE s.merchant_owner_id IS NOT NULL AND (o.userID IS NULL OR s.merchant_owner_id>2147483647
++            OR s.merchant_owner_id<=0 OR s.merchant_owner_id=s.userID OR s.roleID<>6
++            OR o.roleID NOT IN (2,5) OR o.merchant_owner_id IS NOT NULL)')->fetchColumn();
++    if ($invalid) {
++        throw new RuntimeException('Unexpected owner data requires a separate review.');
++    }
++    $comment = $db->quote((string) $owner['Comment']);
++    $plan = ['users'=>'ALTER TABLE users MODIFY COLUMN merchant_owner_id INT NULL DEFAULT NULL COMMENT '.$comment
++        . ', ADD INDEX idx_users_merchant_owner (merchant_owner_id), ADD CONSTRAINT fk_users_merchant_owner'
++        . ' FOREIGN KEY (merchant_owner_id) REFERENCES users(userID) ON DELETE RESTRICT ON UPDATE RESTRICT'];
++    if (!$apply) {
++        return $plan;
++    }
++    if (!$archivePath || !is_file($archivePath)) {
++        throw new RuntimeException('An exact immediate private users export is required.');
++    }
++    $archive = json_decode(file_get_contents($archivePath),true,512,JSON_THROW_ON_ERROR);
++    if (($archive['schema_users'] ?? null) !== $db->query('SHOW CREATE TABLE users')->fetch(PDO::FETCH_NUM)[1]
++        || ($archive['users'] ?? null) !== $db->query('SELECT * FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC)) {
++        throw new RuntimeException('Private export differs from current users.');
++    }
++    $db->exec($plan['users']);
++    gjc_table_columns($db,'users',true);
++    return $plan;
++}
++
+ /** Explicit violations CONTRACT; never called by normal page requests. */
+ function gjc_ensure_group_d_user_violation_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+ {

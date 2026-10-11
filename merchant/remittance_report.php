@@ -47,12 +47,14 @@ if ($staffName === '') {
 
 $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
 $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
+$staffSale = gjc_merchant_staff_sale_sql($db);
 $rowsStmt = $db->prepare(
     "SELECT reference_no, transaction_type, amount, notes, created_at, initiated_by
-       FROM transactions
+       FROM transactions t
       WHERE merchant_wallet_id = ?
         AND transaction_type IN ({$placeholders})
         AND created_at > ? AND created_at <= ?
+        AND t.status = 'completed' AND {$staffSale}
       ORDER BY created_at ASC"
 );
 $rowsStmt->execute(array_merge([$remit['merchant_wallet_id']], $earningTypes, [$remit['period_start'], $remit['period_end']]));

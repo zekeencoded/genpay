@@ -46,8 +46,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $idCol) {
             }
             if ($updates) {
                 $values[] = $currentUser['id'];
-                $db->prepare('UPDATE users SET ' . implode(', ', $updates) . " WHERE {$idCol} = ?")->execute($values);
-                $notice = 'Profile updated successfully!';
+                try {
+                    gjc_save_profile_with_address(
+                        $db, (int) $currentUser['id'],
+                        'UPDATE users SET ' . implode(', ', $updates) . " WHERE {$idCol} = ?",
+                        $values, $details['values']
+                    );
+                    $notice = 'Profile updated successfully!';
+                } catch (Throwable $e) {
+                    error_log('parent/profile.php: ' . $e->getMessage());
+                    $error = 'Profile could not be saved. Please try again.';
+                }
             }
         }
 

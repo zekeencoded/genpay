@@ -1,0 +1,76 @@
+# GenPay current schema inventory — 10 October 2026
+
+Read-only live inventory of ewallet after the approved Groups A–D changes. Group E remains unapplied. Row counts are a point-in-time snapshot. Full column/type/default/key details are in genpay-current-schema-2026-10-10.json. No user records or password values are included.
+
+| Table | Rows | Columns | Primary key | Foreign-key column links |
+| --- | ---: | ---: | --- | ---: |
+| address_locations | 116 | 4 | id | 1 |
+| app_settings | 10 | 4 | setting_key | 0 |
+| auth_remember_tokens | 9 | 6 | id | 1 |
+| cap_increase_log | 7 | 8 | id | 0 |
+| cart_order_items | 86 | 10 | id | 2 |
+| cart_orders | 37 | 14 | id | 5 |
+| course | 24 | 3 | courseID | 0 |
+| encashment_requests | 0 | 12 | id | 4 |
+| enrollment_roster_staging | 0 | 9 | id | 0 |
+| fee_revenue_log | 27 | 9 | id | 0 |
+| fee_waiver_credit_logs | 21 | 8 | id | 0 |
+| fee_waiver_credits | 126 | 10 | id | 0 |
+| imported_student_registry | 120 | 18 | id | 0 |
+| maintenance_fee_collections | 4 | 7 | id | 0 |
+| maintenance_fees | 15 | 12 | id | 0 |
+| meeting_holidays | 1 | 5 | id | 0 |
+| meeting_settings | 1 | 6 | id | 0 |
+| merchant | 4 | 8 | merchantID | 2 |
+| merchant_accounts | 2 | 6 | id | 3 |
+| merchant_application_product_types | 1 | 3 | id | 1 |
+| merchant_applications | 1 | 21 | id | 0 |
+| merchant_card_views | 4 | 3 | merchant_id | 0 |
+| merchant_inventory | 11 | 18 | id | 0 |
+| merchant_leases | 4 | 15 | id | 1 |
+| merchant_qr_orders | 25 | 12 | id | 3 |
+| merchant_rent_payments | 14 | 10 | id | 0 |
+| merchant_wallets | 5 | 5 | id | 1 |
+| notifications | 98 | 9 | id | 0 |
+| p2p_transfers | 6 | 8 | id | 3 |
+| parent_alerts | 7 | 7 | id | 1 |
+| parent_student_links | 93 | 4 | id | 2 |
+| parent_topup_requests | 0 | 12 | id | 0 |
+| parent_wallets | 2 | 5 | id | 1 |
+| parents | 87 | 4 | id | 1 |
+| payment_verifications | 0 | 8 | id | 1 |
+| qr_order_items | 79 | 8 | id | 2 |
+| qr_tokens | 0 | 6 | qrID | 1 |
+| restricted_products | 22 | 14 | id | 0 |
+| role | 6 | 2 | roleID | 0 |
+| sales_remittances | 6 | 10 | id | 0 |
+| school_revenue_ledger | 0 | 7 | id | 0 |
+| school_year_balances | 0 | 7 | id | 0 |
+| school_years | 1 | 6 | id | 0 |
+| stall_application_addresses | 4 | 3 | application_id | 2 |
+| stall_application_applicants | 4 | 8 | application_id | 1 |
+| stall_application_contracts | 4 | 6 | application_id | 2 |
+| stall_application_decisions | 4 | 14 | application_id | 7 |
+| stall_application_documents | 20 | 3 | application_id, document_kind | 1 |
+| stall_application_meetings | 4 | 6 | application_id | 2 |
+| stall_application_payments | 4 | 12 | application_id | 2 |
+| stall_application_rejections | 1 | 10 | id | 3 |
+| stall_applications | 4 | 10 | id | 1 |
+| stalls | 10 | 11 | stall_id | 0 |
+| student_enrollments | 0 | 9 | id | 0 |
+| student_fees | 121 | 5 | id | 0 |
+| student_info | 126 | 6 | stud_infoID | 2 |
+| student_wallets | 125 | 7 | id | 1 |
+| system_settings | 1 | 8 | id | 0 |
+| systemic_audit_trail | 985 | 21 | log_id | 1 |
+| topup_requests | 6 | 15 | id | 4 |
+| transaction_items | 98 | 8 | id | 1 |
+| transactions | 95 | 21 | id | 6 |
+| tuition_credits | 1 | 20 | id | 1 |
+| user_addresses | 224 | 2 | user_id | 2 |
+| user_suspensions | 1 | 8 | user_id | 2 |
+| user_violations | 2 | 4 | user_id | 1 |
+| users | 224 | 24 | userID | 2 |
+| voucher_payment_log | 0 | 9 | id | 4 |
+| vouchers | 2 | 17 | id | 1 |
+| withdrawal_requests | 2 | 12 | id | 4 |

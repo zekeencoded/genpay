@@ -24,6 +24,9 @@ if ($userId !== null) {
     $stmt = $db->prepare("SELECT * FROM users WHERE {$idCol} = ? LIMIT 1");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($user) {
+        $user = gjc_with_user_address($db, $user, (int) $userId);
+    }
 }
 
 if (!$user) {

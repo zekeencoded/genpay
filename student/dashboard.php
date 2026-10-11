@@ -14,6 +14,10 @@ if (isset($_SESSION['force_change'])) {
 $currentUser = gjc_current_user($db);
 $wallet      = gjc_student_wallet($db, (int) $currentUser['id']);
 $studentName = $currentUser['name'];
+$studentFirstName = trim((string) ($currentUser['raw']['first_name'] ?? ''));
+if ($studentFirstName === '') {
+    $studentFirstName = preg_split('/\s+/', trim($studentName))[0];
+}
 $balance     = (float) $wallet['balance'];
 
 // Not enrolled for the active school year. gjc_enforce_student_lock() has
@@ -126,7 +130,7 @@ $currentPage = 'dashboard';
         <main class="sd-main">
 
             <?php
-            $topbarTitle = $e($greeting) . ', ' . $e($studentName) . ' &#128075;';
+            $topbarTitle = $e($greeting) . ', ' . $e($studentFirstName);
             $topbarSubtitle = "Here's what's happening with your wallet today.";
             // Kept on phones: this one is the greeting, not a caption
             // restating the title. It is the only page where the bar is

@@ -133,24 +133,26 @@ try {
 
             gjc_ensure_user_profile_schema($db);
             $columns = gjc_table_columns($db, 'users');
-            $values = array_intersect_key(
-                ['contact_number' => $phone !== '' ? $phone : '0'] + $address,
-                array_flip($columns)
-            );
+            $profileValues = ['contact_number' => $phone !== '' ? $phone : '0'] + $address;
+            $values = array_intersect_key($profileValues, array_flip($columns));
 
             $oldStmt = $db->prepare('SELECT ' . implode(', ', array_keys($values)) . ' FROM users WHERE userID = ?');
             $oldStmt->execute([$userId]);
             $old = $oldStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $old = gjc_with_user_address($db, $old, $userId);
 
             $set = implode(', ', array_map(static fn($c) => "{$c} = ?", array_keys($values)));
-            $db->prepare("UPDATE users SET {$set} WHERE userID = ?")->execute([...array_values($values), $userId]);
+            gjc_save_profile_with_address(
+                $db, $userId, "UPDATE users SET {$set} WHERE userID = ?",
+                [...array_values($values), $userId], $address
+            );
 
-            $changed = array_keys(array_filter($values, static fn($v, $c) => (string) ($old[$c] ?? '') !== (string) $v, ARRAY_FILTER_USE_BOTH));
+            $changed = array_keys(array_filter($profileValues, static fn($v, $c) => (string) ($old[$c] ?? '') !== (string) $v, ARRAY_FILTER_USE_BOTH));
             if ($changed) {
                 logAudit(
                     $db, $userId, gjc_current_role(), 'MERCHANT_PROFILE_UPDATE', 'users',
                     ['event' => 'contact_update'] + array_intersect_key($old, array_flip($changed)),
-                    ['event' => 'contact_update'] + array_intersect_key($values, array_flip($changed)),
+                    ['event' => 'contact_update'] + array_intersect_key($profileValues, array_flip($changed)),
                     $merchant['stall_id'] ?? null,
                     [
                         'target_id' => $userId,

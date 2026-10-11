@@ -50,25 +50,38 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'contact_number' => $phone !== '' ? $phone : '0',
             ] + $details['values'];
             $values = array_intersect_key($values, array_flip($columns));
+            $auditValues = $values + array_intersect_key($details['values'], array_flip([
+                'address_barangay', 'address_city', 'address_province',
+            ]));
 
             $set = implode(', ', array_map(static fn($c) => "{$c} = ?", array_keys($values)));
-            $db->prepare("UPDATE users SET {$set} WHERE userID = ?")
-               ->execute([...array_values($values), (int) $currentUser['id']]);
+            try {
+                gjc_save_profile_with_address(
+                    $db, (int) $currentUser['id'],
+                    "UPDATE users SET {$set} WHERE userID = ?",
+                    [...array_values($values), (int) $currentUser['id']], $details['values']
+                );
+            } catch (Throwable $e) {
+                error_log('merchant/profile_edit.php: ' . $e->getMessage());
+                $error = 'Profile could not be saved. Please try again.';
+            }
 
-            logAudit(
-                $db,
-                (int) $currentUser['id'],
-                gjc_current_role(),
-                'USER_ACCOUNT',
-                'users',
-                array_intersect_key($currentUser['raw'] ?? [], $values),
-                ['event' => 'profile_updated', 'changed_via' => 'merchant_staff_profile'] + $values,
-                null,
-                ['target_id' => (int) $currentUser['id']]
-            );
-
-            header('Location: ' . MERCHANT_URL . '/profile.php?updated=1');
-            exit;
+            if ($error === '') {
+                logAudit(
+                    $db,
+                    (int) $currentUser['id'],
+                    gjc_current_role(),
+                    'USER_ACCOUNT',
+                    'users',
+                    array_intersect_key($currentUser['raw'] ?? [], $auditValues),
+                    ['event' => 'profile_updated', 'changed_via' => 'merchant_staff_profile'] + $auditValues,
+                    null,
+                    ['target_id' => (int) $currentUser['id']]
+                );
+    
+                header('Location: ' . MERCHANT_URL . '/profile.php?updated=1');
+                exit;
+            }
         }
     }
 }

@@ -4,12 +4,14 @@
 
 .cart-line-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .cart-line {
-    display: flex; align-items: center; gap: 12px;
+    display: grid; grid-template-columns: minmax(0, 1fr) max-content 84px 28px;
+    align-items: center; gap: 12px;
     padding: 12px 14px; border-radius: 12px; background: var(--sd-mint);
     border: 1px solid var(--sd-line);
 }
-.cart-line-name { flex: 1; font-weight: 700; font-size: 14px; color: var(--sd-ink); }
-.cart-line-sku { font-size: 11px; color: var(--sd-muted); }
+.cart-line > :first-child { min-width: 0; }
+.cart-line-name { font-weight: 700; font-size: 14px; color: var(--sd-ink); overflow-wrap: anywhere; }
+.cart-line-sku { font-size: 11px; color: var(--sd-muted); overflow-wrap: anywhere; }
 .cart-line-qty { display: flex; align-items: center; gap: 6px; }
 .cart-line-qty button {
     width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--sd-line);
@@ -18,8 +20,8 @@
 }
 .cart-line-qty button:hover { border-color: var(--sd-forest-700); }
 .cart-line-qty span { min-width: 22px; text-align: center; font-weight: 700; font-size: 13px; }
-.cart-line-price { font-weight: 800; font-size: 14px; color: var(--sd-forest-700); min-width: 72px; text-align: right; }
-.cart-line-remove { color: var(--sd-red); background: none; border: none; font-size: 16px; cursor: pointer; }
+.cart-line-price { font-weight: 800; font-size: 14px; color: var(--sd-forest-700); text-align: right; white-space: nowrap; }
+.cart-line-remove { width: 28px; height: 28px; padding: 0; color: var(--sd-red); background: none; border: none; font-size: 16px; cursor: pointer; }
 .cart-empty { text-align: center; padding: 36px 16px; color: var(--sd-muted); font-size: 13px; }
 .cart-total-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -68,4 +70,16 @@
     body.sp-page .sp-cart-sheet.is-open { transform: translateY(0); }
     body.sp-page .sp-scanner #cartAlerts { display: none; }
     .sp-sheet-close { display: grid; }
+}
+
+@media (max-width: 480px) {
+    .cart-line {
+        grid-template-columns: minmax(0, 1fr) 82px 72px 20px;
+        gap: 6px;
+        padding: 12px 10px;
+    }
+    .cart-line-qty { gap: 4px; justify-content: center; }
+    .cart-line-qty button { flex-shrink: 0; }
+    .cart-line-price { justify-self: end; }
+    .cart-line-remove { width: 20px; justify-self: end; }
 }

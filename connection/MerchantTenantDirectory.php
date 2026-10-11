@@ -26,13 +26,11 @@ class MerchantTenantDirectory
                 ml.monthly_rent,
                 ml.lease_start,
                 ml.lease_end,
-                ml.next_due_date,
                 ml.status AS lease_status"
             : "NULL AS lease_id,
                 0 AS monthly_rent,
                 NULL AS lease_start,
                 NULL AS lease_end,
-                NULL AS next_due_date,
                 NULL AS lease_status";
         $leaseJoin = $hasLeases
             ? "LEFT JOIN merchant_leases ml ON ml.id = (
@@ -164,6 +162,23 @@ class MerchantTenantDirectory
         ];
     }
 
+    /** Existing rent calculation, with the existing lease-end fallback. */
+    public function derivedNextDueDate(array $lease, ?array $account = null): string
+    {
+        $account = $account ?? $this->leaseAccount($lease);
+        return (string) ($account['next_due_date'] ?? $lease['lease_end']);
+    }
+
+    /** Keep result keys intact while projecting the date from current rent facts. */
+    public function withDerivedDueDates(array $leases): array
+    {
+        $this->primePaymentCache(array_column($leases, 'id'));
+        foreach ($leases as &$lease) {
+            $lease['next_due_date'] = $this->derivedNextDueDate($lease);
+        }
+        unset($lease);
+        return $leases;
+    }
     public function activeLease(int $merchantUserId): ?array
     {
         if (!gjc_table_exists($this->db, 'merchant_leases')) {
@@ -217,11 +232,9 @@ class MerchantTenantDirectory
         $account  = $this->leaseAccount($normalised, $schedule);
 
         return $normalised + [
-            // The stored next_due_date drifts (it used to be bumped a month on
-            // every payment, however much was actually paid). The derived one
-            // is recomputed from the schedule each time, so it is what shows.
-            'next_due_date' => $account['next_due_date'] ?? (string) $lease['next_due_date'],
-            'stored_next_due_date' => (string) $lease['next_due_date'],
+            'next_due_date' => $this->derivedNextDueDate($normalised, $account),
+            // Retained response key during verification; no current caller uses it.
+            'stored_next_due_date' => (string) ($lease['next_due_date'] ?? $this->derivedNextDueDate($normalised, $account)),
             'lifespan_months' => $account['term_months'],
             'schedule' => $schedule,
             'account' => $account,
@@ -412,7 +425,7 @@ class MerchantTenantDirectory
 
     /**
      * Recompute next_due_date from the schedule and write it back, so the
-     * column other pages read never drifts away from the payment records.
+     * compatibility column while present; after CONTRACT this returns the calculated date.
      */
     public function syncNextDueDate(int $leaseId): ?string
     {
@@ -428,8 +441,11 @@ class MerchantTenantDirectory
         // the lease end date rather than leaving a stale date in the past.
         $nextDue = $account['next_due_date'] ?? (string) $lease['lease_end'];
 
-        $this->db->prepare("UPDATE merchant_leases SET next_due_date = ? WHERE id = ?")
-                 ->execute([$nextDue, $leaseId]);
+        // Compatibility write exists only until the approved CONTRACT removes the column.
+        if (in_array('next_due_date', gjc_table_columns($this->db, 'merchant_leases'), true)) {
+            $this->db->prepare("UPDATE merchant_leases SET next_due_date = ? WHERE id = ?")
+                     ->execute([$nextDue, $leaseId]);
+        }
 
         return $nextDue;
     }

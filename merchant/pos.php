@@ -59,7 +59,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=20">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=22">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         .lw-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
@@ -242,7 +242,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                     <div class="pos-qr-box" id="posQrBox">
                         <div class="pos-qr-status is-pending" id="posQrStatus">Waiting for payment&hellip;</div>
                         <strong id="posQrTitle">Ready for student scan</strong>
-                        <span id="posQrHint">Ask the student to open Shop Cart, tap &ldquo;Pay Now&rdquo;, and scan this QR.</span>
+                        <span id="posQrHint">Ask the student to open Shop Cart, scan this QR, or enter the POS code to check the bill.</span>
                         <div class="pos-qr-frame">
                             <div class="pos-qr-canvas" id="posQrCanvas"></div>
                             <span class="pos-qr-corner tl"></span>
@@ -257,7 +257,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                         <span id="posQrSummary"></span>
                         <div class="pos-qr-guide">
                             <div class="pos-qr-guide-step"><strong>1</strong><span>Show this QR to the student.</span></div>
-                            <div class="pos-qr-guide-step"><strong>2</strong><span>They scan it from the Shop Cart&rsquo;s &ldquo;Pay Now&rdquo; mode.</span></div>
+                            <div class="pos-qr-guide-step"><strong>2</strong><span>They open Shop Cart and scan this QR or enter its POS code.</span></div>
                             <div class="pos-qr-guide-step"><strong>3</strong><span>Wait for the status to flip to Paid before handing over the order.</span></div>
                         </div>
                     </div>
@@ -351,6 +351,7 @@ document.getElementById('posTxnSearch')?.addEventListener('input', applyTxnFilte
 
 // \u2500\u2500 Cart management \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function addToCart(card) {
+    if (qrRequestPending) return;
     const id    = card.dataset.id;
     const name  = card.dataset.name;
     const price = parseFloat(card.dataset.price);
@@ -369,6 +370,7 @@ function addToCart(card) {
 }
 
 function changeQty(id, delta) {
+    if (qrRequestPending) return;
     if (!cart[id]) return;
     cart[id].qty += delta;
     if (cart[id].qty <= 0) {
@@ -418,6 +420,8 @@ function renderCart() {
 }
 
 function clearCart() {
+    if (qrRequestPending) return;
+    qrDraftKey = '';
     Object.keys(cart).forEach(k => delete cart[k]);
     document.querySelectorAll('.pos-product-card').forEach(c => c.classList.remove('in-cart'));
     stopStatusPolling();
@@ -436,6 +440,9 @@ function orderTotals() {
 
 const POS_CSRF = <?= json_encode(gjc_csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
 let posStatusTimer = null;
+let qrRequestPending = false;
+let qrDraftSignature = '';
+let qrDraftKey = '';
 
 function setQrStatus(state, text) {
     const pill = document.getElementById('posQrStatus');
@@ -478,6 +485,7 @@ function startStatusPolling(orderId) {
             }
 
             if (data.status === 'paid') {
+                qrDraftKey = '';
                 stopStatusPolling();
                 refreshLiveQueue();
                 // Order done: reset the cart but keep the box visible in its
@@ -506,12 +514,19 @@ function startStatusPolling(orderId) {
 }
 
 async function generatePaymentQr() {
+    if (qrRequestPending) return;
     const { items, total } = orderTotals();
     if (!items.length || total <= 0) {
         return;
     }
 
     const chargeBtn = document.getElementById('chargeBtn');
+    const signature = JSON.stringify(items);
+    if (!qrDraftKey || qrDraftSignature !== signature) {
+        qrDraftKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+        qrDraftSignature = signature;
+    }
+    qrRequestPending = true;
     chargeBtn.disabled = true;
     chargeBtn.textContent = 'Preparing QR...';
 
@@ -521,6 +536,7 @@ async function generatePaymentQr() {
         form.append('csrf_token', POS_CSRF);
         form.append('total', total.toFixed(2));
         form.append('items', JSON.stringify(items));
+        form.append('request_key', qrDraftKey);
 
         const response = await fetch('api/pos.php', {
             method: 'POST',
@@ -535,17 +551,19 @@ async function generatePaymentQr() {
 
         renderPosQr(result.qr_payload);
         document.getElementById('posQrTitle').textContent = 'Ready for student scan';
-        document.getElementById('posQrHint').textContent = 'Ask the student to open Shop Cart, tap "Pay Now", and scan this QR.';
+        document.getElementById('posQrHint').textContent = 'Ask the student to open Shop Cart and scan this QR, or enter the POS code.';
         document.getElementById('posQrShortCode').textContent = result.short_code || '----';
         document.getElementById('posQrSummary').textContent = result.summary || `Total: ${gcAmount(total)} GC (\u2248 \u20b1${total.toFixed(2)})`;
         setQrStatus('pending', 'Waiting for payment\u2026');
         document.getElementById('posQrBox').style.display = 'block';
         startStatusPolling(result.order_id);
-        refreshLiveQueue();
+        setPosTab('queue');
+        await refreshLiveQueue();
     } catch (error) {
         alert('Unable to create payment QR. Please try again.');
     } finally {
-        chargeBtn.disabled = false;
+        qrRequestPending = false;
+        chargeBtn.disabled = !(merchantWalletId && orderTotals().total > 0);
         chargeBtn.textContent = 'Generate Payment QR';
     }
 }
@@ -560,6 +578,7 @@ const queueDetailEl   = document.getElementById('queueDetailView');
 let queueOrders = [];
 let lastQueueSignature = '';
 let openQueueUid = null;
+let queueDetailRequest = 0;
 
 // A ticket stays in the live queue until it is paid (or voided/expired).
 const QUEUE_BADGES = {
@@ -671,8 +690,8 @@ async function refreshLiveQueue() {
 
         // The order being inspected changed (e.g. the student just paid): refresh it.
         const after = queueOrders.find(o => o.uid === openQueueUid);
-        if (openQueueUid && before && after && before.stage !== after.stage) {
-            openQueueOrder(openQueueUid);
+        if (openQueueUid && before && (!after || before.stage !== after.stage)) {
+            await openQueueOrder(openQueueUid, before);
         }
     } catch (error) {
         // Keep showing the last known queue on a transient network error.
@@ -680,6 +699,7 @@ async function refreshLiveQueue() {
 }
 
 function closeQueueOrder() {
+    queueDetailRequest++;
     openQueueUid = null;
     queueDetailEl.hidden = true;
     queueDetailEl.innerHTML = '';
@@ -708,9 +728,10 @@ async function voidQueueOrder(uid, btn) {
 }
 
 // Inspect an order in place: items, total, and what the student must do to pay.
-async function openQueueOrder(uid) {
-    const order = queueOrders.find(o => o.uid === uid);
+async function openQueueOrder(uid, previousOrder = null) {
+    const order = queueOrders.find(o => o.uid === uid) || previousOrder;
     if (!order) return;
+    const request = ++queueDetailRequest;
     openQueueUid = uid;
     posRegisterView.hidden = true;
     queueDetailEl.hidden = false;
@@ -725,7 +746,7 @@ async function openQueueOrder(uid) {
         fd.append('source', order.source);
         const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
         const data = await res.json();
-        if (openQueueUid !== uid) return;   // the cashier moved on while it loaded
+        if (openQueueUid !== uid || request !== queueDetailRequest) return;
 
         if (!data.success) {
             queueDetailEl.innerHTML = backBtn + `<div class="alert alert-danger mt-2 mb-0">${escapeHtml(data.message || 'Unable to load this order.')}</div>`;
@@ -746,7 +767,7 @@ async function openQueueOrder(uid) {
             }).join('')
             : `<tr><td colspan="3" class="text-muted text-center">${escapeHtml(data.description || 'No itemized details recorded.')}</td></tr>`;
 
-        const stage = data.stage || order.stage;
+        const stage = data.stage || (data.status === 'paid' ? 'served' : data.status === 'pending' ? 'awaiting_payment' : data.status);
         const badge = QUEUE_BADGES[stage] || `<span class="badge bg-light text-dark">${escapeHtml(data.status)}</span>`;
         const paidTime = data.paid_at ? new Date(data.paid_at.replace(' ', 'T')).toLocaleString() : null;
         const isPending = data.status === 'pending';
@@ -755,8 +776,8 @@ async function openQueueOrder(uid) {
         if (isPending && data.wallet_qr_url) {
             payBlock = `
                 <div class="pq-pay">
-                    <img src="${escapeHtml(data.wallet_qr_url)}" alt="Shop Wallet QR">
-                    <div>Pre-order: the student scans this Wallet QR from their Shop Cart to pay <strong>${gcAmount(Number(data.amount || 0))} GC</strong>.</div>
+                    <img src="${escapeHtml(data.wallet_qr_url)}" alt="Order payment QR">
+                    <div>Pre-order: scan this order's payment QR from Shop Cart to pay <strong>${gcAmount(Number(data.amount || 0))} GC</strong>.</div>
                 </div>`;
         } else if (isPending && data.qr_payload) {
             payBlock = `
@@ -794,6 +815,7 @@ async function openQueueOrder(uid) {
             });
         }
     } catch (error) {
+        if (openQueueUid !== uid || request !== queueDetailRequest) return;
         queueDetailEl.innerHTML = backBtn + '<div class="alert alert-danger mt-2 mb-0">Unable to reach the server. Please try again.</div>';
     }
 }

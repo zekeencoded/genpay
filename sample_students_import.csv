@@ -1,6 +1,6 @@
-student_id_number,first_name,last_name,course_program,email,phone_number,suffix,parent_name,parent_email,parent_contact
-GJC2026-2001,Andrea,Santos,BSIT,andrea.santos@student.gjc.edu.ph,09171234567,,Maria Santos,maria.santos@gmail.com,09181234567
-GJC2026-2002,Miguel,Santos,BSA,miguel.santos@student.gjc.edu.ph,09171234568,,Maria Santos,maria.santos@gmail.com,09181234567
-GJC2026-2003,Rafael,Dela Cruz,BSHM,rafael.delacruz@student.gjc.edu.ph,09221234501,III,Jose Dela Cruz,jose.delacruz@gmail.com,09182223344
-GJC2026-2004,Bea,Reyes,BSED-MATH,bea.reyes@student.gjc.edu.ph,09221234502,,,,
-GJC2026-2005,Paolo,Mendoza,BSBA-MM,paolo.mendoza@student.gjc.edu.ph,09221234503,Jr.,,,
+student_id_number,first_name,last_name,course_program,email,phone_number,middle_name,suffix,year_level,sex,date_of_birth,address_barangay,address_city,address_province,parent_name,parent_email,parent_contact
+GJC2026-2001,Andrea,Santos,BSIT,andrea.santos@student.gjc.edu.ph,09171234567,Reyes,,2,Female,2006-03-04,San Fernando Sur,Cabiao,Nueva Ecija,Maria Santos,maria.santos@gmail.com,09181234567
+GJC2026-2002,Miguel,Santos,BSA,miguel.santos@student.gjc.edu.ph,09171234568,Reyes,,1,Male,2007-05-16,San Fernando Sur,Cabiao,Nueva Ecija,Maria Santos,maria.santos@gmail.com,09181234567
+GJC2026-2003,Rafael,Dela Cruz,BSHM,rafael.delacruz@student.gjc.edu.ph,09221234501,Santos,III,3,Male,2005-08-12,,,,Jose Dela Cruz,jose.delacruz@gmail.com,09182223344
+GJC2026-2004,Bea,Reyes,BSED-MATH,bea.reyes@student.gjc.edu.ph,09221234502,,,1,Female,,,,,,,
+GJC2026-2005,Paolo,Mendoza,BSBA-MM,paolo.mendoza@student.gjc.edu.ph,09221234503,,Jr.,4,,,,,,,,

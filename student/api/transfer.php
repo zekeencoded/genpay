@@ -217,17 +217,18 @@ try {
                 gjc_active_school_year_id($db),
             ]);
 
-            // 5. Log p2p_transfers record
+            // 5. Log p2p_transfers record; retain copied IDs until CONTRACT.
+            $legacyUserIds = gjc_p2p_has_legacy_user_ids($db);
             $db->prepare(
                 "INSERT INTO p2p_transfers
-                    (reference_no, from_wallet_id, to_wallet_id, from_user_id, to_user_id, amount, message, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')"
+                    (reference_no, from_wallet_id, to_wallet_id"
+                    . ($legacyUserIds ? ", from_user_id, to_user_id" : "") . ", amount, message, status)
+                 VALUES (?, ?, ?, " . ($legacyUserIds ? "?, ?, " : "") . "?, ?, 'completed')"
             )->execute([
                 $refNo,
                 $senderWallet['id'],
                 $recipientWallet['id'],
-                $currentUserId,
-                $recipientUserId,
+                ...($legacyUserIds ? [$currentUserId, $recipientUserId] : []),
                 $amount,
                 $message ?: null,
             ]);

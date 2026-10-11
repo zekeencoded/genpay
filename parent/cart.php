@@ -53,13 +53,13 @@ $csrfToken = gjc_csrf_token();
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=9">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/cart.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=12">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/cart.css?v=11">
 
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 
-<body class="gp-theme sp-page">
+<body class="gp-theme sp-page sp-shop-cart">
 
     <div class="parent-layout">
 
@@ -69,7 +69,7 @@ $csrfToken = gjc_csrf_token();
 
             <?php
             $topbarTitle = 'Shop Cart';
-            $topbarSubtitle = 'Scan each item&rsquo;s barcode, submit your order, then pay at the counter by scanning the shop&rsquo;s Wallet QR.';
+            $topbarSubtitle = 'Scan each item&rsquo;s barcode, submit your order, then scan the payment QR at the counter.';
             require __DIR__ . '/../includes/partials/topbar_parent.php';
             ?>
 
@@ -141,6 +141,7 @@ $csrfToken = gjc_csrf_token();
                             </div>
                         </div>
 
+                        <div class="sp-scanner-controls">
                         <div class="sp-mobile-caption sp-mobile-only">
                             <strong id="mobileCaptionTitle">Align the item&rsquo;s barcode</strong>
                             <span id="mobileCaptionSub">Items are added to your cart automatically</span>
@@ -150,12 +151,17 @@ $csrfToken = gjc_csrf_token();
                             <div id="mobileToastText"></div>
                         </div>
 
+                        <div class="sp-toolbar">
+                            <button type="button" class="sp-btn" id="switchCameraBtn">Switch Camera</button>
+                        </div>
+
+                        <div class="sp-scanner-actions">
                         <button type="button" class="sp-mobile-pill sp-mobile-only" id="viewCartBtnMobile">
                             <i class="fa-solid fa-cart-shopping"></i> <span id="viewCartBtnLabel">View Cart</span>
                         </button>
+                            <button id="openPosCodeBtn" type="button" class="sp-btn sp-code-toggle">Enter POS code</button>
+                        </div>
 
-                        <div class="sp-toolbar">
-                            <button type="button" class="sp-btn" id="switchCameraBtn">Switch Camera</button>
                         </div>
 
                         <div id="cartAlerts" class="mt-3"></div>
@@ -207,7 +213,7 @@ $csrfToken = gjc_csrf_token();
                                 <span id="pendingOrderTotal">&#8369;0.00</span>
                             </div>
 
-                            <p class="pending-order-note">Go to the counter and scan the shop&rsquo;s Wallet QR to pay.</p>
+                            <p class="pending-order-note">Go to the counter and scan the payment QR to pay.</p>
 
                             <button type="button" class="sp-btn-cancel cart-panel-btn mt-2" id="cancelOrderBtn">
                                 Cancel Order
@@ -250,10 +256,34 @@ $csrfToken = gjc_csrf_token();
                         </div>
                     </div>
                     <ul class="list-unstyled mt-3 mb-0" id="payConfirmLineList" style="font-size:13px;color:var(--sd-muted);"></ul>
+                    <p id="posBillNotice" class="text-muted mt-3 mb-0" hidden>
+                        This pays the POS bill shown above. Any submitted Shop Cart order remains pending.
+                    </p>
+
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <button type="button" class="sp-btn-cancel" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="sp-btn-pay" id="cartPayConfirmBtn">Confirm Payment</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade sp-modal" id="posCodeModal" tabindex="-1" aria-labelledby="posCodeModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="posCodeModalTitle" class="modal-title fw-bold">Enter POS code</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Use the code shown below the merchant&rsquo;s QR.</p>
+                    <form id="posCodeForm" class="sp-pos-code">
+                        <label for="posCodeInput" class="sp-pos-code-label">POS payment code</label>
+                        <input id="posCodeInput" type="text" maxlength="12" autocomplete="off" autocapitalize="characters"
+                            placeholder="e.g. ABCD-2345" required>
+                        <button id="posCodeSubmit" type="submit" class="sp-btn">Check Bill</button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -269,6 +299,8 @@ $csrfToken = gjc_csrf_token();
     const CSRF = <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?>;
     const CART_API = "<?= PARENT_URL ?>/api/cart.php";
     const CHECKOUT_API = "<?= PARENT_URL ?>/api/checkout.php";
+    const POS_VALIDATE_API = "<?= PARENT_URL ?>/api/validate_qr.php";
+    const POS_CHECKOUT_API = "<?= PARENT_URL ?>/api/pay_pos_qr.php";
     const PESOS_PER_GC = <?= GJC_PESOS_PER_GC ?>;
 
     // Smart GC formatting: whole numbers stay whole ("2"), otherwise up to 2 decimals ("14.59").
@@ -318,6 +350,7 @@ $csrfToken = gjc_csrf_token();
     let scanLoopRunning = false;
     let currentFacingMode = "environment";
     let scanCooldown = false;
+    let lastDecodeAt = 0;
     let scanningPaused = false;
     let lastDetectedPayload = "";
     let currentPendingOrder = null; // set once the student has Submitted an Order, cleared on pay/cancel
@@ -453,11 +486,11 @@ $csrfToken = gjc_csrf_token();
         pendingOrderView.classList.toggle("d-none", !hasPending);
         cartPanelTitle.textContent = hasPending ? "Your Order" : "Your Cart";
         scannerHint.textContent = hasPending
-            ? "Go to the counter and scan the shop's Wallet QR to pay."
+            ? "Go to the counter and scan the payment QR to pay."
             : "Point the camera at an item's barcode on the cardboard menu.";
 
         mobileCaptionTitle.textContent = hasPending
-            ? "Scan the shop's Wallet QR"
+            ? "Scan the payment QR"
             : "Align the item's barcode";
         mobileCaptionSub.textContent = hasPending
             ? "Pay at the counter to finish your order"
@@ -592,8 +625,63 @@ $csrfToken = gjc_csrf_token();
             `<li>${line.qty}&times; ${escapeHtml(line.name)} &mdash; ${gcAmt(line.line_total)} GC</li>`
         ).join("");
 
+        document.getElementById("posBillNotice").hidden = true;
         cartPayConfirmModal.show();
     }
+
+    async function lookupPosQr(input) {
+        setPaused(true);
+        try {
+            const form = new FormData();
+            form.append("csrf_token", CSRF);
+            form.append("code", input);
+            const response = await fetch(POS_VALIDATE_API, { method: "POST", body: form });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || "Unable to validate this POS code.");
+            pendingWalletPayload = { type: "payment", token: result.token };
+            cartSheet.classList.remove("is-open");
+            payConfirmMerchant.textContent = result.merchant;
+            payConfirmItemCount.textContent = result.lines.reduce((sum, line) => sum + line.qty, 0) + " item(s)";
+            payConfirmTotal.textContent = gcAmt(Number(result.amount)) + " GC";
+            document.getElementById("payConfirmPhp").textContent = "₱" + Number(result.amount).toFixed(2);
+            payConfirmLineList.innerHTML = result.lines.map(line =>
+                `<li>${line.qty}&times; ${escapeHtml(line.name)} &mdash; ${gcAmt(line.qty * line.price)} GC</li>`
+            ).join("");
+            document.getElementById("posBillNotice").hidden = false;
+            cartPayConfirmModal.show();
+        } catch (error) {
+            pendingWalletPayload = null;
+            setPaused(false);
+            showAlert(error.message || "Unable to check the POS bill. Please try again.");
+        }
+    }
+
+    const posCodeModalEl = document.getElementById("posCodeModal");
+    const posCodeModal = bootstrap.Modal.getOrCreateInstance(posCodeModalEl);
+    document.getElementById("openPosCodeBtn").addEventListener("click", () => {
+        setPaused(true);
+        posCodeModal.show();
+    });
+    posCodeModalEl.addEventListener("shown.bs.modal", () => document.getElementById("posCodeInput").focus());
+    posCodeModalEl.addEventListener("hidden.bs.modal", () => {
+        if (!pendingWalletPayload) setPaused(false);
+    });
+
+    document.getElementById("posCodeForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = document.getElementById("posCodeSubmit");
+        const code = document.getElementById("posCodeInput").value.trim();
+        if (!code) return;
+        button.disabled = true;
+        try {
+            await new Promise(resolve => {
+                posCodeModalEl.addEventListener("hidden.bs.modal", resolve, { once: true });
+                posCodeModal.hide();
+            });
+            await lookupPosQr(code);
+        }
+        finally { button.disabled = false; }
+    });
 
     cartPayConfirmModalEl.addEventListener("hidden.bs.modal", () => {
         pendingWalletPayload = null;
@@ -613,11 +701,17 @@ $csrfToken = gjc_csrf_token();
 
         try {
             const form = new FormData();
-            form.append("action", "pay_order");
+            form.append("action", walletPayload.type === "payment" ? "pay_qr_order" : "pay_order");
             form.append("csrf_token", CSRF);
-            form.append("merchant_wallet_id", walletPayload.merchant_wallet_id);
-            form.append("merchant_user_id", walletPayload.merchant_user_id);
-            const response = await fetch(CHECKOUT_API, { method: "POST", body: form });
+            if (walletPayload.type === "payment") {
+                form.append("token", walletPayload.token);
+            } else {
+                form.append("merchant_wallet_id", walletPayload.merchant_wallet_id);
+                form.append("merchant_user_id", walletPayload.merchant_user_id);
+                if (walletPayload.order_reference) form.append("order_reference", walletPayload.order_reference);
+            }
+            const response = await fetch(walletPayload.type === "payment" ? POS_CHECKOUT_API : CHECKOUT_API,
+                { method: "POST", body: form });
             const result = await response.json();
 
             if (!result.success) {
@@ -628,7 +722,7 @@ $csrfToken = gjc_csrf_token();
 
             cartPayConfirmModal.hide();
             showAlert(`Payment completed. Reference: ${result.reference}`, "success");
-            currentPendingOrder = null;
+            if (walletPayload.type !== "payment") currentPendingOrder = null;
             updateUiState();
             refreshCart();
             if (window.gjcRefreshNotifications) window.gjcRefreshNotifications();
@@ -645,12 +739,26 @@ $csrfToken = gjc_csrf_token();
         let parsed = null;
         try { parsed = JSON.parse(raw); } catch (ignored) { /* not JSON, treat as plain code */ }
 
+        if (parsed && parsed.type === "payment") {
+            if (typeof parsed.token !== "string" || !/^[a-f0-9]{32,64}$/i.test(parsed.token)) {
+                showAlert("Invalid POS payment QR.");
+                return;
+            }
+            await lookupPosQr(parsed.token);
+            return;
+        }
+
+
         if (currentPendingOrder) {
             if (!parsed || parsed.type !== "merchant_wallet") {
                 showAlert("That's not a Shop Wallet QR. Ask the merchant for their wallet QR to pay.");
                 return;
             }
 
+            if (parsed.order_reference && parsed.order_reference !== currentPendingOrder.reference) {
+                showAlert("This payment QR belongs to a different order. Ask the merchant to open your order's QR.", "warning");
+                return;
+            }
             openPayConfirmModal(parsed);
             return;
         }
@@ -678,7 +786,7 @@ $csrfToken = gjc_csrf_token();
         setCameraStatus("Starting Camera");
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } } });
             activeStream = stream;
             video.srcObject = stream;
             hideFrameMsg();
@@ -698,21 +806,26 @@ $csrfToken = gjc_csrf_token();
         }
     }
 
-    function scanLoop() {
+    function scanLoop(timestamp) {
         if (!activeStream) {
             scanLoopRunning = false;
             return;
         }
-
-        if (!scanningPaused && video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        // Keep the video live, but decode at most eight resized frames per second.
+        if (!document.hidden && !scanningPaused && !scanCooldown
+            && timestamp - lastDecodeAt >= 125
+            && video.readyState === video.HAVE_ENOUGH_DATA
+            && video.videoWidth > 0 && video.videoHeight > 0) {
+            lastDecodeAt = timestamp;
+            const scale = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
+            const width = Math.max(1, Math.round(video.videoWidth * scale));
+            const height = Math.max(1, Math.round(video.videoHeight * scale));
+            if (canvas.width !== width) canvas.width = width;
+            if (canvas.height !== height) canvas.height = height;
+            canvasContext.drawImage(video, 0, 0, width, height);
+            const imageData = canvasContext.getImageData(0, 0, width, height);
             const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
-
-            if (code && code.data && code.data !== lastDetectedPayload && !scanCooldown) {
+            if (code && code.data && code.data !== lastDetectedPayload) {
                 lastDetectedPayload = code.data;
                 scanCooldown = true;
                 handleScannedPayload(code.data).finally(() => {

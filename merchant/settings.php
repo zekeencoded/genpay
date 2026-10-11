@@ -18,7 +18,7 @@ if (gjc_is_merchant_staff()) {
     exit;
 }
 
-gjc_ensure_user_profile_schema($db); // the address_* columns read below
+gjc_ensure_user_profile_schema($db); // canonical personal-details schema
 $currentUser = gjc_current_user($db);
 $userId = (int) $currentUser['id'];
 
@@ -28,8 +28,7 @@ $stmt = $db->prepare(
     "SELECT m.merchantID, m.stall_name, m.stall_id, m.operational_status, m.created_at AS tenant_since,
             s.label AS stall_label, s.row_label, s.col_number, s.area_sqm, s.monthly_rate, s.status AS stall_status,
             u.profile_img, u.first_name, u.middle_name, u.last_name, u.suffix,
-            u.email, u.contact_number, u.status AS account_status, u.created_at AS account_created,
-            u.address_barangay, u.address_city, u.address_province
+            u.email, u.contact_number, u.status AS account_status, u.created_at AS account_created
        FROM merchant m
        LEFT JOIN stalls s ON s.stall_id = m.stall_id
        LEFT JOIN users  u ON u.userID = m.userID
@@ -38,6 +37,13 @@ $stmt = $db->prepare(
 );
 $stmt->execute([$userId]);
 $merchant = $stmt->fetch(PDO::FETCH_ASSOC);
+if ($merchant) {
+    $addressFields = ['address_barangay', 'address_city', 'address_province'];
+    $merchant = array_replace(
+        $merchant, array_fill_keys($addressFields, null),
+        array_intersect_key($currentUser['raw'] ?? [], array_flip($addressFields))
+    );
+}
 
 // ── The application record, where the richer detail lives ────────────────
 // Merchants onboarded before the application workflow have no row here, so
@@ -50,7 +56,7 @@ if (gjc_table_exists($db, 'stall_applications')) {
                 business_permit, sanitary_permit, clearance, gjc_requirements,
                 deposit_amount, advance_amount, rental_start_date, payment_schedule_day,
                 contract_file, contract_ref, awarded_at
-           FROM stall_applications
+           FROM " . gjc_stall_application_source($db) . "
           WHERE merchant_user_id = ? AND status = 'awarded'
           ORDER BY awarded_at DESC, id DESC
           LIMIT 1"

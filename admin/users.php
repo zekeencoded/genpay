@@ -12,12 +12,6 @@ gjc_ensure_account_suspension_schema($db);
 // list can never show one whose end date already passed.
 gjc_expire_due_suspensions($db);
 
-// The suspension columns are added by the self-healer above; if that ALTER
-// couldn't run (older MySQL grant, say) the page still has to render, so the
-// suspension parts are selected only when they actually exist.
-$userCols = gjc_table_columns($db, 'users');
-$hasSuspensionCols = in_array('suspended_until', $userCols, true);
-
 $roleFilter    = trim((string) ($_GET['role'] ?? ''));
 $statusFilter  = strtolower(trim((string) ($_GET['status'] ?? '')));
 $excludeAdmin  = !empty($_GET['exclude_admin']);
@@ -43,12 +37,10 @@ $query = "
         u.roleID,
         u.sub_role,
         u.status,
-        " . ($hasSuspensionCols ? "u.suspended_until,\n        u.suspension_reason," : "") . "
         r.role_name as role,
         si.studentID as student_id
     FROM users u
     LEFT JOIN role r ON u.roleID = r.roleID
-    LEFT JOIN wallet w ON u.userID = w.userID
     LEFT JOIN student_info si ON si.userID = u.userID
 ";
 $conditions = [];
@@ -83,6 +75,7 @@ $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8
 
 $users = [];
 foreach ($dbUsers as $u) {
+    $u = gjc_with_user_suspension($db, $u, (int) $u['userID']);
     $roleName = ($u['role'] === 'finance') ? 'Finance' : ucfirst($u['role'] ?? 'User');
     $role = strtolower($u['role'] ?? '');
 

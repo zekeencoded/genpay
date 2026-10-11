@@ -135,12 +135,21 @@ foreach ($db->query(
     }
 }
 
-$existing = $db->query("SELECT userID, sex, date_of_birth, address_city FROM users")->fetchAll(PDO::FETCH_ASSOC);
+$userColumns = gjc_table_columns($db, 'users', true);
+$readCols = array_values(array_intersect(
+    ['userID','sex','date_of_birth','address_barangay','address_city','address_province'],
+    $userColumns
+));
+$existing = $db->query('SELECT ' . implode(', ', $readCols) . ' FROM users')->fetchAll(PDO::FETCH_ASSOC);
 $has = [];
-foreach ($existing as $r) { $has[(int) $r['userID']] = $r; }
+foreach ($existing as $r) {
+    $r = gjc_with_user_address($db, $r, (int) $r['userID']);
+    $has[(int) $r['userID']] = $r;
+}
 
 $cols = ['sex','date_of_birth','address_barangay','address_city','address_province'];
-$stmt = $db->prepare('UPDATE users SET ' . implode(', ', array_map(static fn($c) => "{$c} = ?", $cols)) . ' WHERE userID = ?');
+$writeCols = array_values(array_intersect($cols, $userColumns));
+$profileSql = 'UPDATE users SET ' . implode(', ', array_map(static fn($c) => "{$c} = ?", $writeCols)) . ' WHERE userID = ?';
 
 $written = 0; $skipped = 0; $shown = 0;
 $today = new DateTimeImmutable('today');
@@ -185,7 +194,11 @@ foreach ($users as $u) {
         continue;
     }
 
-    $stmt->execute([...$values, $uid]);
+    $profileValues = array_combine($cols, $values);
+    $writeValues = array_values(array_intersect_key($profileValues, array_flip($writeCols)));
+    gjc_save_profile_with_address(
+        $db, $uid, $profileSql, [...$writeValues, $uid], $profileValues
+    );
     $written++;
 }
 

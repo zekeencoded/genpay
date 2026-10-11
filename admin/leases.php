@@ -92,15 +92,17 @@ if ($leasesExist) {
     // we are here — older payments bumped that column by a flat month each time
     // they were recorded, so it had drifted away from the actual receipts. Other
     // pages (merchant/dashboard.php) read the column directly.
-    $dueFix = $db->prepare("UPDATE merchant_leases SET next_due_date = ? WHERE id = ?");
+    $hasDueCache = in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true);
+    $dueFix = $hasDueCache ? $db->prepare("UPDATE merchant_leases SET next_due_date = ? WHERE id = ?") : null;
     foreach ($rows as $i => $row) {
         $account = $directory->leaseAccount($row);
         $rows[$i]['account'] = $account;
 
         $derived = $account['next_due_date'] ?? (string) $row['lease_end'];
-        if ($derived && $derived !== (string) $row['next_due_date']) {
+        if ($dueFix && $derived && $derived !== (string) $row['next_due_date']) {
             $dueFix->execute([$derived, (int) $row['id']]);
         }
+        $rows[$i]['next_due_date'] = $derived;
     }
 
     if (gjc_table_exists($db, 'merchant_rent_payments')) {

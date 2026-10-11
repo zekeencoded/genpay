@@ -42,6 +42,23 @@ class CirculationEngine
     }
 
     /**
+     * Claims only an unfrozen student-wallet flag for the account-lockout caller.
+     * Uses the caller's PDO/transaction; changes no balance or ledger.
+     */
+    public function freezeStudentWalletForLockout(int $userId): bool
+    {
+        $stmt = $this->db->prepare("UPDATE student_wallets SET is_frozen = 1 WHERE user_id = ? AND is_frozen = 0");
+        $stmt->execute([$userId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /** Caller must have established suspension freeze ownership before release. */
+    public function unfreezeStudentWalletForLockout(int $userId): void
+    {
+        $this->db->prepare("UPDATE student_wallets SET is_frozen = 0 WHERE user_id = ?")->execute([$userId]);
+    }
+
+    /**
      * "1%" / "2%" straight off the rate constant. Every user-facing fee label
      * goes through this so a label can never drift from the maths again — the
      * old hardcoded "2%"/"1%" strings were both wrong by a factor of ten.
@@ -329,6 +346,137 @@ class CirculationEngine
             $this->db->rollBack();
             gjc_audit_rollback($this->db, $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Pay one server-recorded POS QR bill atomically. Client amounts are never used.
+     */
+    public function payPosQr(string $payerRole, int $payerUserId, string $token): array
+    {
+        if (!in_array($payerRole, ['student', 'parent'], true) || $payerUserId <= 0
+            || !preg_match('/^[a-f0-9]{32,64}$/i', $token) || $this->db->inTransaction()) {
+            throw new RuntimeException('Invalid POS payment request.');
+        }
+        $this->db->beginTransaction();
+        try {
+            $settings = $this->lockSettings();
+            $stmt = $this->db->prepare("SELECT id, merchant_wallet_id, amount, status, expires_at,
+                (expires_at <= NOW()) AS has_expired FROM merchant_qr_orders WHERE token = ? FOR UPDATE");
+            $stmt->execute([strtolower($token)]);
+            $order = $stmt->fetch();
+            if (!$order || $order['status'] !== 'pending' || (int) $order['has_expired'] === 1) {
+                throw new RuntimeException('This POS payment QR is unknown, expired, voided, or already paid.');
+            }
+            $merchantStmt = $this->db->prepare('SELECT id, user_id FROM merchant_wallets WHERE id = ? FOR UPDATE');
+            $merchantStmt->execute([(int) $order['merchant_wallet_id']]);
+            $merchant = $merchantStmt->fetch();
+            if (!$merchant || gjc_merchant_sales_blocked($this->db, (int) $merchant['user_id'])) {
+                throw new RuntimeException('This merchant cannot accept payments right now.');
+            }
+            $lines = gjc_order_item_lines($this->db, 'qr', (int) $order['id']);
+            if (!$lines) {
+                throw new RuntimeException('This POS bill has no recorded items.');
+            }
+            $amount = gjc_order_item_total($lines);
+            $this->assertPositive($amount);
+            if (abs($amount - (float) $order['amount']) > 0.000001) {
+                throw new RuntimeException('POS bill items do not match its recorded amount.');
+            }
+            if ($payerRole === 'student') {
+                $payerStmt = $this->db->prepare('SELECT id, balance, is_frozen, daily_spend_limit
+                    FROM student_wallets WHERE user_id = ? FOR UPDATE');
+            } else {
+                $payerStmt = $this->db->prepare('SELECT pw.id, pw.balance FROM parent_wallets pw
+                    JOIN parents p ON p.id = pw.parent_id WHERE p.user_id = ? FOR UPDATE');
+            }
+            $payerStmt->execute([$payerUserId]);
+            $payer = $payerStmt->fetch();
+            if (!$payer || (float) $payer['balance'] < $amount) {
+                throw new RuntimeException('Insufficient wallet balance.');
+            }
+            if ($payerRole === 'student') {
+                if ((int) $payer['is_frozen'] === 1) {
+                    throw new RuntimeException('Your wallet is frozen by a parent or guardian.');
+                }
+                if ((float) $payer['daily_spend_limit'] > 0) {
+                    $spent = $this->db->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions
+                        WHERE student_wallet_id = ? AND transaction_type = 'payment'
+                          AND status = 'completed' AND DATE(created_at) = CURDATE()");
+                    $spent->execute([(int) $payer['id']]);
+                    if ((float) $spent->fetchColumn() + $amount > (float) $payer['daily_spend_limit']) {
+                        throw new RuntimeException('Your daily spending limit would be exceeded.');
+                    }
+                }
+            }
+            $quantities = [];
+            foreach ($lines as $line) {
+                $quantities[$line['id']] = ($quantities[$line['id']] ?? 0) + $line['qty'];
+            }
+            ksort($quantities, SORT_NUMERIC);
+            foreach ($quantities as $itemId => $qty) {
+                $itemStmt = $this->db->prepare('SELECT stock_qty FROM merchant_inventory
+                    WHERE id = ? AND merchant_user_id = ? AND is_available = 1 AND is_restricted = 0 FOR UPDATE');
+                $itemStmt->execute([(int) $itemId, (int) $merchant['user_id']]);
+                $stock = $itemStmt->fetchColumn();
+                if ($stock === false || (int) $stock < $qty) {
+                    throw new RuntimeException('An item is unavailable or has insufficient stock. Ask for a new POS bill.');
+                }
+            }
+            if ($payerRole === 'student') {
+                $debit = $this->db->prepare('UPDATE student_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?');
+            } else {
+                $debit = $this->db->prepare('UPDATE parent_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?');
+            }
+            $debit->execute([$amount, (int) $payer['id'], $amount]);
+            if ($debit->rowCount() !== 1) {
+                throw new RuntimeException('Wallet balance changed. Payment was not completed.');
+            }
+            $this->db->prepare('UPDATE merchant_wallets SET balance = balance + ? WHERE id = ?')
+                ->execute([$amount, (int) $merchant['id']]);
+            foreach ($quantities as $itemId => $qty) {
+                $stock = $this->db->prepare('UPDATE merchant_inventory SET stock_qty = stock_qty - ?
+                    WHERE id = ? AND merchant_user_id = ? AND stock_qty >= ? AND is_available = 1 AND is_restricted = 0');
+                $stock->execute([$qty, (int) $itemId, (int) $merchant['user_id'], $qty]);
+                if ($stock->rowCount() !== 1) {
+                    throw new RuntimeException('Stock changed. Payment was not completed.');
+                }
+            }
+            $this->validateCirculation((float) $settings['total_circulation_cap']);
+            $notes = 'POS Sale: ' . implode(', ', array_map(static fn($line) =>
+                $line['qty'] . 'x ' . $line['name'], $lines));
+            $txnId = null;
+            $reference = $this->logTransaction(
+                self::TXN_PAYMENT, $payerUserId, $amount,
+                (float) $settings['cashier_vault_points'], (float) $settings['cashier_vault_points'],
+                studentWalletId: $payerRole === 'student' ? (int) $payer['id'] : null,
+                merchantWalletId: (int) $merchant['id'],
+                notes: $notes,
+                parentWalletId: $payerRole === 'parent' ? (int) $payer['id'] : null,
+                audit: ['new' => ['pos_order_id' => (int) $order['id']]],
+                transactionId: $txnId,
+            );
+            gjc_store_transaction_items($this->db, $txnId, $lines);
+            $paid = $this->db->prepare("UPDATE merchant_qr_orders SET status = 'paid',
+                paid_by = ?, paid_ref = ?, paid_at = NOW() WHERE id = ? AND status = 'pending'");
+            $paid->execute([$payerUserId, $reference, (int) $order['id']]);
+            if ($paid->rowCount() !== 1) {
+                throw new RuntimeException('This POS bill was already settled.');
+            }
+            if ($payerRole === 'student') {
+                gjc_record_maintenance_fee($this->db, $payerUserId, $reference, 'payment', $amount);
+            }
+            $this->db->commit();
+            gjc_audit_commit($this->db);
+            return ['success' => true, 'reference' => $reference, 'amount' => $amount,
+                'student_wallet_id' => $payerRole === 'student' ? (int) $payer['id'] : null,
+                'merchant_user_id' => (int) $merchant['user_id']];
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            gjc_audit_rollback($this->db, $error->getMessage());
+            throw $error;
         }
     }
 
@@ -818,17 +966,18 @@ class CirculationEngine
                 )
                 ->execute([$newCap, $increaseBy, $superAdminId]);
 
+            $legacyAmountAdded = gjc_cap_log_has_legacy_amount_added($this->db);
             $this->db
                 ->prepare(
                     "INSERT INTO cap_increase_log
-                    (super_admin_id, old_cap, new_cap, amount_added, reason)
-                 VALUES (?, ?, ?, ?, ?)",
+                    (super_admin_id, old_cap, new_cap" . ($legacyAmountAdded ? ", amount_added" : "") . ", reason)
+                 VALUES (?, ?, ?, " . ($legacyAmountAdded ? "?, " : "") . "?)",
                 )
                 ->execute([
                     $superAdminId,
                     $oldCap,
                     $newCap,
-                    $increaseBy,
+                    ...($legacyAmountAdded ? [$increaseBy] : []),
                     $reason,
                 ]);
 
@@ -914,17 +1063,18 @@ class CirculationEngine
                 )
                 ->execute([$amount, $studentWalletId]);
 
+            $legacyAmountAdded = gjc_cap_log_has_legacy_amount_added($this->db);
             $this->db
                 ->prepare(
                     "INSERT INTO cap_increase_log
-                    (super_admin_id, old_cap, new_cap, amount_added, reason, source, source_ref_id)
-                 VALUES (?, ?, ?, ?, ?, 'fee_waiver_claim', ?)",
+                    (super_admin_id, old_cap, new_cap" . ($legacyAmountAdded ? ", amount_added" : "") . ", reason, source, source_ref_id)
+                 VALUES (?, ?, ?, ". ($legacyAmountAdded ? "?, " : "") . "?, 'fee_waiver_claim', ?)",
                 )
                 ->execute([
                     $initiatedBy,
                     $oldCap,
                     $newCap,
-                    $amount,
+                    ...($legacyAmountAdded ? [$amount] : []),
                     "Fee Waiver Credit #{$creditId} claimed to student wallet.",
                     $creditId,
                 ]);
@@ -1079,6 +1229,7 @@ class CirculationEngine
         //   old     the before-state to record as old_value
         //   new     extra fields to merge into new_value
         array $audit = [],
+        ?int &$transactionId = null,
     ): string {
         $total = (float) $this->db
             ->query(
@@ -1122,10 +1273,13 @@ class CirculationEngine
                 $parentWalletId,
             ]);
 
+        // Later queries (including audit role lookup) can reset PDO's insert ID.
+        // Return the ledger ID separately from the public payment reference.
+        $transactionId = (int) $this->db->lastInsertId();
+
         // Persist fee fields if the migration has already added the columns
         if ($topUpSource !== null) {
             try {
-                $txnId = (int) $this->db->lastInsertId();
                 $this->db
                     ->prepare(
                         "UPDATE transactions
@@ -1140,7 +1294,7 @@ class CirculationEngine
                         $baseAmount,
                         $feeAmount,
                         $creditedAmount,
-                        $txnId,
+                        $transactionId,
                     ]);
             } catch (\Throwable $ignored) {
                 // Migration hasn't run yet — non-fatal, notes column already has the info

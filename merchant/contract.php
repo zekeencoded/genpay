@@ -25,7 +25,7 @@ if ($ownerId <= 0) {
 
 $stmt = $db->prepare(
     "SELECT contract_file
-       FROM stall_applications
+       FROM " . gjc_stall_application_source($db) . "
       WHERE merchant_user_id = ?
         AND status = 'awarded'
         AND contract_file IS NOT NULL
