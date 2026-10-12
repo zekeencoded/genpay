@@ -1,0 +1,9 @@
+product_name,category,match_type,reason
+Beer,alcohol,contains,Demo policy: alcoholic beverages are restricted.
+Wine,alcohol,contains,Demo policy: alcoholic beverages are restricted.
+Vodka,alcohol,contains,Demo policy: alcoholic beverages are restricted.
+Cigarette,tobacco,contains,Demo policy: tobacco products are restricted.
+Vape,tobacco,contains,Demo policy: vaping products are restricted.
+Energy Drink,beverage,contains,Demo policy: energy drinks require restriction review.
+Weight Loss Supplement,supplement,contains,Demo policy: unapproved supplements are restricted.
+Demo Restricted Candy,candy,exact,Demo policy: this exact sample item is restricted.

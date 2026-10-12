@@ -1645,6 +1645,12 @@ function gjc_funds_in_block_reason(PDO $db, int $userId): ?string
 {
     $suspension = gjc_account_suspension($db, $userId);
     if ($suspension === null) {
+        $student = $db->prepare('SELECT sw.is_frozen FROM student_wallets sw JOIN users u ON u.userID = sw.user_id WHERE sw.user_id = ? AND u.roleID = 1');
+        $student->execute([$userId]);
+        $frozen = $student->fetchColumn();
+        if ($frozen !== false && ((int) $frozen === 1 || gjc_student_wallet_state($db, $userId) !== 'active')) {
+            return 'This student wallet is frozen. Cash-in and incoming transfers are unavailable; the balance can still be withdrawn at the Finance office.';
+        }
         return null;
     }
     return gjc_suspension_notice($suspension, gjc_user_label($db, $userId) . "'s account")
@@ -3223,6 +3229,7 @@ function gjc_establish_login_session(array $user): void
     $_SESSION['userID'] = $userId;
     $_SESSION['user_id'] = $userId;
     $_SESSION['roleID'] = $roleId;
+    $_SESSION['password_fingerprint'] = hash('sha256', (string) ($user['password'] ?? ''));
 
     // Soft remap to sub_role (no DB changes to roleID); DB sub_role wins.
     $subRole = match ($roleId) {
@@ -3344,6 +3351,19 @@ function gjc_attempt_remember_login(PDO $db): void
     gjc_issue_remember_token($db, (int) $token['user_id']);
 }
 
+/** Reject sessions authenticated before a credential change, including older sessions. */
+function gjc_password_session_valid(array $user): bool
+{
+    $fingerprint = (string) ($_SESSION['password_fingerprint'] ?? '');
+    if ($fingerprint !== '') {
+        return hash_equals($fingerprint, hash('sha256', (string) ($user['password'] ?? '')));
+    }
+    // Older sessions cannot prove which password authenticated them. Requiring
+    // a fresh login prevents them becoming valid again after a student changes
+    // their temporary password and clears the forced-change flags.
+    return false;
+}
+
 function gjc_require_role(array $roles): void
 {
     // A returning visitor with a valid remember-me cookie gets their session
@@ -3393,9 +3413,18 @@ function gjc_require_role(array $roles): void
             if (in_array('status', gjc_table_columns($db, 'users'), true)) {
                 $idCol = gjc_column($db, 'users', ['id', 'userID']);
                 if ($idCol) {
-                    $chk = $db->prepare("SELECT status FROM users WHERE {$idCol} = ? LIMIT 1");
+                    $chk = $db->prepare("SELECT * FROM users WHERE {$idCol} = ? LIMIT 1");
                     $chk->execute([$userId]);
-                    if ($chk->fetchColumn() === 'Inactive') {
+                    $sessionUser = $chk->fetch(PDO::FETCH_ASSOC);
+                    if (!$sessionUser || !gjc_password_session_valid($sessionUser)) {
+                        gjc_clear_remember_token($db);
+                        session_unset();
+                        session_destroy();
+                        header("Location: " . BASE_URL . "/login.php?reason=password_reset");
+                        exit();
+                    }
+                    $_SESSION['password_fingerprint'] = hash('sha256', (string) $sessionUser['password']);
+                    if ($sessionUser['status'] === 'Inactive') {
                         session_unset();
                         session_destroy();
                         header("Location: " . BASE_URL . "/login.php?reason=deactivated");
@@ -8845,7 +8874,7 @@ function gjc_ensure_enrollment_schema(PDO $db): void
 /** The student_enrollments.status ENUM, in one place. */
 function gjc_enrollment_statuses(): array
 {
-    return ['enrolled', 'not_enrolled', 'on_leave', 'dropped', 'transferred', 'graduated'];
+    return ['enrolled', 'not_enrolled', 'dropped', 'transferred', 'graduated'];
 }
 
 /** The student_enrollments.source ENUM. 'api' is reserved for the registrar integration. */

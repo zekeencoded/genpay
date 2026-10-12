@@ -2,6 +2,10 @@
    pf-* / tu-* primitives. */
 
 /* ===== SUCCESS CARD (transfer) ===== */
+.sp-btn-pay.sg-btn-send-another {
+  background: var(--sd-forest-700);
+}
+
 .sg-success {
   text-align: center;
   padding: 26px 16px 10px;

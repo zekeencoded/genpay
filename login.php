@@ -21,6 +21,10 @@ $Record = new Record($db);
 $message = $Record->loginUser();
 $error = $message ?: $error;
 
+if (!$error && ($_GET['reason'] ?? '') === 'password_reset') {
+    $error = 'Your password changed. Sign in with your current password or the temporary password provided by the finance office.';
+}
+
 if (!$error && ($_GET['reason'] ?? '') === 'deactivated') {
     $error = 'Your account has been deactivated. Please contact your merchant admin.';
 }

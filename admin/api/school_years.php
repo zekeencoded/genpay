@@ -20,6 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
 require_once __DIR__ . '/../../connection/app.php';
+require_once __DIR__ . '/../../connection/school_year_enrollment.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -31,10 +32,6 @@ gjc_ensure_enrollment_schema($db);
 $action    = trim((string) ($_POST['action'] ?? ''));
 $adminId   = gjc_user_id();
 $adminRole = gjc_current_role();
-
-/** Statuses the not-returning review screen may assign. 'enrolled' is not one
- *  of them — a student who should be enrolled belongs on the roster CSV. */
-const SY_EXIT_STATUSES = ['graduated', 'dropped', 'transferred', 'on_leave', 'not_enrolled'];
 
 /** How many bucket rows the diff ships back. Counts are always exact. */
 const SY_DIFF_ROW_CAP = 500;
@@ -196,18 +193,8 @@ function sy_parse_roster_csv(string $path): array
     return ['rows' => $rows, 'rejected' => $rejected];
 }
 
-/**
- * Diffs a staged roster for $newYearId against the currently active year's
- * enrolled set. Every staged, matched student lands in exactly one of
- * returning / new_students; every currently-enrolled student who isn't on the
- * roster lands in not_returning, which is the bucket that matters — those are
- * the wallets that will be frozen, so their balances come along.
- *
- * "returning" means enrolled in the active year AND on the roster. A student
- * with a non-enrolled row for the active year (dropped, on leave) who reappears
- * on the roster is counted as new_students, because operationally they are
- * being opened fresh in the new year — this keeps every staged student in
- * exactly one bucket rather than silently falling out of the diff.
+/** Compare the uploaded statuses with existing students for the activation preview.
+ * Missing students and roster students with a non-enrolled status are frozen.
  */
 function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
 {
@@ -230,11 +217,15 @@ function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
 
     $stagedIds       = [];
     $stagedYrLvl     = [];
+    $enrolledIds = [];
+    $frozenRosterIds = [];
     $unmatchedNumbers = [];
     foreach ($stagedRows as $row) {
         if ((string) $row['match_status'] === 'matched' && $row['matched_user_id'] !== null) {
             $id = (int) $row['matched_user_id'];
             $stagedIds[$id]   = $id;
+            if ($row['status'] === 'enrolled') $enrolledIds[$id] = $id;
+            else $frozenRosterIds[$id] = $id;
             $stagedYrLvl[$id] = $row['yr_lvl'] !== null ? (string) $row['yr_lvl'] : '';
         } else {
             $unmatchedNumbers[] = (string) $row['student_id_number'];
@@ -252,9 +243,14 @@ function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
         }
     }
 
-    $returningIds    = array_values(array_intersect_key($stagedIds, $activeEnrolled));
-    $newIds          = array_values(array_diff_key($stagedIds, $activeEnrolled));
-    $notReturningIds = array_values(array_diff_key($activeEnrolled, $stagedIds));
+    $returningIds    = array_values(array_intersect_key($enrolledIds, $activeEnrolled));
+    $newIds          = array_values(array_diff_key($enrolledIds, $activeEnrolled));
+    $allStudents = [];
+    foreach ($db->query("SELECT si.userID FROM student_info si JOIN users u ON u.userID = si.userID WHERE u.roleID = 1")->fetchAll(PDO::FETCH_COLUMN) as $id) {
+        $allStudents[(int) $id] = (int) $id;
+    }
+    $notReturningIds = array_values(array_diff_key($allStudents, $stagedIds));
+    $frozenIds = array_values(array_unique(array_merge($notReturningIds, array_values($frozenRosterIds))));
 
     return [
         'active_school_year_id' => $activeYearId,
@@ -266,6 +262,7 @@ function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
         'new_ids'               => $newIds,
         'not_returning_ids'     => $notReturningIds,
         'roster_yr_lvl'         => $stagedYrLvl,
+        'frozen_ids' => $frozenIds,
     ];
 }
 
@@ -326,11 +323,54 @@ try {
         // ── Read-only: one student's info for the manual-override lookup ─
         case 'student_lookup': {
             $studentUserId = (int) ($_POST['student_user_id'] ?? 0);
+            if (isset($_POST['student_id_number'])) {
+                $lookup = $db->prepare('SELECT userID FROM student_info WHERE studentID = ? LIMIT 1');
+                $lookup->execute([trim((string) $_POST['student_id_number'])]);
+                $studentUserId = (int) $lookup->fetchColumn();
+            }
             $student = $studentUserId > 0 ? sy_fetch_student($db, $studentUserId) : null;
             if (!$student) {
                 sy_json(['success' => false, 'message' => 'Student not found.']);
             }
             sy_json(['success' => true, 'student' => $student]);
+        }
+
+        case 'set_student_status': {
+            $yearId = (int) ($_POST['school_year_id'] ?? 0);
+            if ($yearId <= 0 || $yearId !== gjc_active_school_year_id($db)) {
+                sy_json(['success' => false, 'message' => 'The active school year changed. Reload and try again.']);
+            }
+            $id = (int) ($_POST['student_user_id'] ?? 0);
+            $status = strtolower(trim((string) ($_POST['status'] ?? '')));
+            $student = sy_fetch_student($db, $id);
+            if (!$student || !in_array($status, gjc_enrollment_statuses(), true)) {
+                sy_json(['success' => false, 'message' => 'Select a valid student and status.']);
+            }
+            if ($student['graduated_at'] !== null && $status !== 'graduated' && gjc_sub_role() !== 'super_admin') {
+                sy_json(['success' => false, 'message' => 'Only a super admin can reverse a graduation.']);
+            }
+            $db->beginTransaction();
+            try {
+                $year = $db->prepare('SELECT is_active FROM school_years WHERE id = ? FOR UPDATE');
+                $year->execute([$yearId]);
+                if ((int) $year->fetchColumn() !== 1) {
+                    throw new RuntimeException('The active school year changed. Reload and try again.');
+                }
+                $student = sy_fetch_student($db, $id);
+                if ($student['graduated_at'] !== null && $status !== 'graduated' && gjc_sub_role() !== 'super_admin') {
+                    throw new RuntimeException('Only a super admin can reverse a graduation.');
+                }
+                if (!gjc_set_enrollment_status($db, $id, $yearId, $status, 'manual', $adminId, $student['yr_lvl'] ?: null)) {
+                    throw new RuntimeException('Could not update student status.');
+                }
+                $db->commit();
+                gjc_audit_commit($db);
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                gjc_audit_rollback($db, $e->getMessage());
+                throw $e;
+            }
+            sy_json(['success' => true, 'message' => 'Student status updated. Balance preserved; withdrawals through Finance remain available.']);
         }
 
         // ── Read-only: diff bucket counts for the rollover confirm dialog ──
@@ -356,7 +396,7 @@ try {
             // many wallets are about to be frozen with money still in them.
             $frozenWithBalance = 0;
             $frozenBalanceTotal = 0.0;
-            foreach (sy_student_rows($db, $diff['not_returning_ids']) as $row) {
+            foreach (sy_student_rows($db, $diff['frozen_ids']) as $row) {
                 if ($row['balance'] > 0) {
                     $frozenWithBalance++;
                     $frozenBalanceTotal += $row['balance'];
@@ -369,12 +409,13 @@ try {
                 'old_school_year_name'    => $active ? (string) $active['school_year_name'] : null,
                 'new_school_year_id'      => (int) $new['id'],
                 'new_school_year_name'    => (string) $new['school_year_name'],
-                'has_roster'              => $diff['staged_total'] > 0,
+                'has_roster'              => $diff['staged_matched'] > 0,
                 'roster_rows'             => $diff['staged_total'],
                 'enrolled_count'          => count($diff['returning_ids']) + count($diff['new_ids']),
                 'returning_count'         => count($diff['returning_ids']),
                 'new_count'               => count($diff['new_ids']),
                 'not_returning_count'     => count($diff['not_returning_ids']),
+                'frozen_count'            => count($diff['frozen_ids']),
                 'unmatched_count'         => $diff['staged_unmatched'],
                 'frozen_with_balance'     => $frozenWithBalance,
                 'frozen_balance_total'    => round($frozenBalanceTotal, 2),
@@ -530,157 +571,6 @@ try {
             ]);
         }
 
-        // ── The review screen: staged roster vs the active year's enrolled set ──
-        case 'preview_diff': {
-            $newYearId = (int) ($_POST['school_year_id'] ?? 0);
-            $batchId   = trim((string) ($_POST['batch_id'] ?? ''));
-            $year = sy_require_inactive_year($db, $newYearId);
-
-            $diff = sy_roster_diff($db, $newYearId, $batchId !== '' ? $batchId : null);
-            if ($diff['staged_total'] === 0) {
-                sy_json(['success' => false, 'message' => 'No roster is staged for that school year yet. Upload one first.']);
-            }
-
-            $notReturning = sy_student_rows($db, $diff['not_returning_ids']);
-            $withBalance  = 0;
-            $balanceTotal = 0.0;
-            foreach ($notReturning as $row) {
-                if ($row['balance'] > 0) {
-                    $withBalance++;
-                    $balanceTotal += $row['balance'];
-                }
-            }
-
-            sy_json([
-                'success'            => true,
-                'school_year_id'     => $newYearId,
-                'school_year_name'   => (string) $year['school_year_name'],
-                'roster_rows'        => $diff['staged_total'],
-                'unmatched_count'    => $diff['staged_unmatched'],
-                'unmatched_numbers'  => $diff['unmatched_numbers'],
-                'returning'          => [
-                    'count' => count($diff['returning_ids']),
-                    'rows'  => sy_student_rows($db, array_slice($diff['returning_ids'], 0, SY_DIFF_ROW_CAP), $diff['roster_yr_lvl']),
-                ],
-                'new_students'       => [
-                    'count' => count($diff['new_ids']),
-                    'rows'  => sy_student_rows($db, array_slice($diff['new_ids'], 0, SY_DIFF_ROW_CAP), $diff['roster_yr_lvl']),
-                ],
-                'not_returning'      => [
-                    'count'              => count($diff['not_returning_ids']),
-                    'with_balance'       => $withBalance,
-                    'balance_total'      => round($balanceTotal, 2),
-                    'rows'               => array_slice($notReturning, 0, SY_DIFF_ROW_CAP),
-                ],
-                'row_cap'            => SY_DIFF_ROW_CAP,
-                'allowed_statuses'   => SY_EXIT_STATUSES,
-            ]);
-        }
-
-        // ── Record what happens to the not-returning bucket ──────────────
-        // Statuses are written against the NEW year, not the closing one: they
-        // describe where the student stands in the year about to open. Rollover
-        // then leaves these rows alone, since they aren't on the roster.
-        case 'apply_statuses': {
-            $newYearId = (int) ($_POST['school_year_id'] ?? 0);
-            $year = sy_require_inactive_year($db, $newYearId);
-
-            // Three shapes: one status for the whole not-returning bucket, one
-            // status for an explicit list, or per-student pairs.
-            $bulkStatus = strtolower(trim((string) ($_POST['bulk_status'] ?? '')));
-            $applyAll   = (string) ($_POST['apply_all'] ?? '') === '1';
-            $pairs      = [];
-
-            if ($bulkStatus !== '' && $applyAll) {
-                // Recomputed server-side so the whole bucket is covered, not just
-                // the capped slice the review screen had room to show.
-                $diff = sy_roster_diff($db, $newYearId);
-                if ($diff['staged_total'] === 0) {
-                    sy_json(['success' => false, 'message' => 'No roster is staged for that school year yet.']);
-                }
-                foreach ($diff['not_returning_ids'] as $id) {
-                    $pairs[] = ['student_user_id' => (int) $id, 'status' => $bulkStatus];
-                }
-            } elseif ($bulkStatus !== '') {
-                $ids = json_decode((string) ($_POST['student_user_ids'] ?? '[]'), true);
-                if (!is_array($ids)) {
-                    sy_json(['success' => false, 'message' => 'Could not read the selected students.']);
-                }
-                foreach ($ids as $id) {
-                    $pairs[] = ['student_user_id' => (int) $id, 'status' => $bulkStatus];
-                }
-            } else {
-                $decoded = json_decode((string) ($_POST['statuses'] ?? '[]'), true);
-                if (!is_array($decoded)) {
-                    sy_json(['success' => false, 'message' => 'Could not read the submitted statuses.']);
-                }
-                foreach ($decoded as $entry) {
-                    if (!is_array($entry)) {
-                        continue;
-                    }
-                    $pairs[] = [
-                        'student_user_id' => (int) ($entry['student_user_id'] ?? 0),
-                        'status'          => strtolower(trim((string) ($entry['status'] ?? ''))),
-                    ];
-                }
-            }
-
-            $pairs = array_values(array_filter(
-                $pairs,
-                static fn(array $p): bool => $p['student_user_id'] > 0 && $p['status'] !== ''
-            ));
-            if (!$pairs) {
-                sy_json(['success' => false, 'message' => 'Nothing to apply — no students were selected.']);
-            }
-
-            foreach ($pairs as $pair) {
-                if (!in_array($pair['status'], SY_EXIT_STATUSES, true)) {
-                    sy_json(['success' => false, 'message' => "'{$pair['status']}' is not a status this screen can assign."]);
-                }
-            }
-
-            $db->beginTransaction();
-            try {
-                $applied = 0;
-                $counts  = [];
-                foreach ($pairs as $pair) {
-                    if (gjc_set_enrollment_status($db, $pair['student_user_id'], $newYearId, $pair['status'], 'manual', $adminId)) {
-                        $applied++;
-                        $counts[$pair['status']] = ($counts[$pair['status']] ?? 0) + 1;
-                    }
-                }
-
-                logAudit(
-                    $db, $adminId, $adminRole, 'ROSTER_APPLIED', 'student_enrollments',
-                    null,
-                    [
-                        'school_year_id'   => $newYearId,
-                        'school_year_name' => (string) $year['school_year_name'],
-                        'applied'          => $applied,
-                        'by_status'        => $counts,
-                    ],
-                    null,
-                    ['target_id' => $newYearId]
-                );
-
-                $db->commit();
-                gjc_audit_commit($db);
-            } catch (Throwable $e) {
-                if ($db->inTransaction()) {
-                    $db->rollBack();
-                }
-                gjc_audit_rollback($db, $e->getMessage());
-                throw $e;
-            }
-
-            sy_json([
-                'success'       => true,
-                'message'       => "Recorded {$applied} student status change(s) for {$year['school_year_name']}.",
-                'applied_count' => $applied,
-                'by_status'     => $counts,
-            ]);
-        }
-
         // ── The rollover: claim old off, claim new on, promote the roster,
         //    snapshot balances, never touch a single peso ─────────────────
         // old_school_year_id may be 0/absent — that's the bootstrap case (no
@@ -700,13 +590,13 @@ try {
             // Rolling over with nothing staged would leave every student without
             // an enrollment row for the new year — the whole student body frozen
             // in one click. Refuse before anything else happens.
-            $stagedStmt = $db->prepare("SELECT COUNT(*) FROM enrollment_roster_staging WHERE school_year_id = ?");
+            $stagedStmt = $db->prepare("SELECT COUNT(*) FROM enrollment_roster_staging WHERE school_year_id = ? AND match_status = 'matched'");
             $stagedStmt->execute([$newYearId]);
             $stagedTotal = (int) $stagedStmt->fetchColumn();
             if ($stagedTotal === 0) {
                 sy_json([
                     'success' => false,
-                    'message' => 'No roster has been uploaded for that school year. Upload the registrar roster and review the changes first — rolling over without one would freeze every student.',
+                    'message' => 'Upload a roster with at least one matching student before activating this year.',
                 ]);
             }
 
@@ -775,30 +665,7 @@ try {
                 // student numbers are left behind on purpose — there is no account
                 // to enrol. Audit is suppressed per row; one ROSTER_APPLIED entry
                 // below records the batch instead of thousands of identical ones.
-                $promoteStmt = $db->prepare(
-                    "SELECT matched_user_id, yr_lvl, status
-                       FROM enrollment_roster_staging
-                      WHERE school_year_id = ? AND match_status = 'matched' AND matched_user_id IS NOT NULL"
-                );
-                $promoteStmt->execute([$newYearId]);
-                $rosterRows = $promoteStmt->fetchAll(PDO::FETCH_ASSOC);
-
-                $promotedCount = 0;
-                foreach ($rosterRows as $rosterRow) {
-                    $ok = gjc_set_enrollment_status(
-                        $db,
-                        (int) $rosterRow['matched_user_id'],
-                        $newYearId,
-                        (string) $rosterRow['status'],
-                        'roster_import',
-                        $adminId,
-                        $rosterRow['yr_lvl'] !== null ? (string) $rosterRow['yr_lvl'] : null,
-                        false
-                    );
-                    if ($ok) {
-                        $promotedCount++;
-                    }
-                }
+                $promotedCount = gjc_apply_school_year_roster($db, $newYearId, $adminId);
 
                 $db->prepare("DELETE FROM enrollment_roster_staging WHERE school_year_id = ?")->execute([$newYearId]);
 
@@ -881,227 +748,6 @@ try {
                 'not_enrolled_count' => $notEnrolledCount,
                 'graduated_count'    => $graduatedCount,
             ]);
-        }
-
-        // ── Mark one student as graduated + freeze their wallet ─────────
-        // Routed through gjc_set_enrollment_status() so it can't diverge from
-        // the roster path: graduated_at and the per-year row move together.
-        case 'mark_graduate': {
-            $studentUserId = (int) ($_POST['student_user_id'] ?? 0);
-            if ($studentUserId <= 0) {
-                sy_json(['success' => false, 'message' => 'Student not found.']);
-            }
-
-            $before = sy_fetch_student($db, $studentUserId);
-            if (!$before) {
-                sy_json(['success' => false, 'message' => 'Student not found.']);
-            }
-            if ($before['graduated_at'] !== null) {
-                sy_json(['success' => false, 'message' => 'This student is already marked as graduated.']);
-            }
-
-            $activeYearId = gjc_active_school_year_id($db);
-            if ($activeYearId === null) {
-                sy_json(['success' => false, 'message' => 'Activate a school year first — graduation is recorded against the year it happened in.']);
-            }
-
-            $ok = gjc_set_enrollment_status(
-                $db, $studentUserId, $activeYearId, 'graduated', 'manual', $adminId,
-                $before['yr_lvl'] !== '' ? $before['yr_lvl'] : null
-            );
-            if (!$ok) {
-                sy_json(['success' => false, 'message' => 'Could not record the graduation.']);
-            }
-
-            logAudit(
-                $db, $adminId, $adminRole, 'STUDENT_GRADUATED', 'student_info',
-                ['student_user_id' => $studentUserId, 'graduated_at' => null],
-                ['student_user_id' => $studentUserId, 'school_year_id' => $activeYearId, 'graduated_at' => date('Y-m-d H:i:s'), 'balance_at_graduation' => $before['balance']],
-                null,
-                ['target_id' => $studentUserId]
-            );
-
-            sy_json([
-                'success'     => true,
-                'message'     => $before['balance'] > 0
-                    ? 'Student marked as graduated. Wallet is frozen — process a withdrawal/encashment for the remaining balance.'
-                    : 'Student marked as graduated. Wallet is now frozen.',
-                'balance'     => $before['balance'],
-                'has_balance' => $before['balance'] > 0,
-            ]);
-        }
-
-        // ── Reverse a graduation: clears graduated_at, unfreezes the wallet ──
-        case 'unmark_graduate': {
-            if (gjc_sub_role() !== 'super_admin') {
-                sy_json(['success' => false, 'message' => 'Only a super admin can reverse a graduation.']);
-            }
-
-            $studentUserId = (int) ($_POST['student_user_id'] ?? 0);
-            if ($studentUserId <= 0) {
-                sy_json(['success' => false, 'message' => 'Student not found.']);
-            }
-
-            $before = sy_fetch_student($db, $studentUserId);
-            if (!$before) {
-                sy_json(['success' => false, 'message' => 'Student not found.']);
-            }
-            if ($before['graduated_at'] === null && $before['enrollment_status'] !== 'graduated') {
-                sy_json(['success' => false, 'message' => 'This student is not marked as graduated.']);
-            }
-
-            $activeYearId = gjc_active_school_year_id($db);
-            if ($activeYearId === null) {
-                sy_json(['success' => false, 'message' => 'Activate a school year first — the re-enrollment is recorded against it.']);
-            }
-
-            $ok = gjc_set_enrollment_status(
-                $db, $studentUserId, $activeYearId, 'enrolled', 'manual', $adminId,
-                $before['yr_lvl'] !== '' ? $before['yr_lvl'] : null
-            );
-            if (!$ok) {
-                sy_json(['success' => false, 'message' => 'Could not reverse the graduation.']);
-            }
-
-            sy_json([
-                'success' => true,
-                'message' => 'Graduation reversed. The student is enrolled for the active school year and their wallet is unfrozen.',
-                'balance' => $before['balance'],
-            ]);
-        }
-
-        // ── Bulk graduate everyone at a given year level ─────────────────
-        // Year level is read from this year's enrollment row when there is one,
-        // falling back to student_info.yr_lvl for students who predate the
-        // roster. Same single write path as everything else.
-        case 'mark_graduate_bulk_year': {
-            $yrLvl = trim((string) ($_POST['yr_lvl'] ?? ''));
-            if ($yrLvl === '') {
-                sy_json(['success' => false, 'message' => 'Year level is required.']);
-            }
-
-            $activeYearId = gjc_active_school_year_id($db);
-            if ($activeYearId === null) {
-                sy_json(['success' => false, 'message' => 'Activate a school year first — graduation is recorded against the year it happened in.']);
-            }
-
-            $candStmt = $db->prepare(
-                "SELECT sw.user_id, sw.balance,
-                        TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) AS name,
-                        si.studentID,
-                        COALESCE(se.yr_lvl, si.yr_lvl) AS yr_lvl
-                   FROM student_info si
-                   JOIN student_wallets sw ON sw.user_id = si.userID
-                   JOIN users u ON u.userID = si.userID
-                   LEFT JOIN student_enrollments se
-                          ON se.student_user_id = si.userID AND se.school_year_id = ?
-                  WHERE COALESCE(se.yr_lvl, si.yr_lvl) = ? AND si.graduated_at IS NULL"
-            );
-            $candStmt->execute([$activeYearId, $yrLvl]);
-            $candidates = $candStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (!$candidates) {
-                sy_json(['success' => true, 'message' => 'No eligible (non-graduated) students found at that year level.', 'results' => []]);
-            }
-
-            $db->beginTransaction();
-            try {
-                $claimedCount = 0;
-                $ids = [];
-                foreach ($candidates as $candidate) {
-                    $studentUserId = (int) $candidate['user_id'];
-                    $ok = gjc_set_enrollment_status(
-                        $db, $studentUserId, $activeYearId, 'graduated', 'manual', $adminId,
-                        $candidate['yr_lvl'] !== null ? (string) $candidate['yr_lvl'] : null,
-                        false
-                    );
-                    if ($ok) {
-                        $claimedCount++;
-                        $ids[] = $studentUserId;
-                    }
-                }
-
-                logAudit(
-                    $db, $adminId, $adminRole, 'ENROLLMENT_STATUS_SET', 'student_enrollments',
-                    ['yr_lvl' => $yrLvl, 'status' => null],
-                    ['yr_lvl' => $yrLvl, 'school_year_id' => $activeYearId, 'status' => 'graduated', 'source' => 'manual', 'student_user_ids' => $ids],
-                    null,
-                    ['target_id' => $yrLvl]
-                );
-
-                logAudit(
-                    $db, $adminId, $adminRole, 'STUDENT_GRADUATED', 'student_info',
-                    ['yr_lvl' => $yrLvl, 'graduated_at' => null],
-                    ['yr_lvl' => $yrLvl, 'graduated_count' => $claimedCount, 'student_user_ids' => $ids],
-                    null,
-                    ['target_id' => $yrLvl]
-                );
-
-                $db->commit();
-                gjc_audit_commit($db);
-            } catch (Throwable $e) {
-                if ($db->inTransaction()) {
-                    $db->rollBack();
-                }
-                gjc_audit_rollback($db, $e->getMessage());
-                throw $e;
-            }
-
-            $results = array_map(static fn(array $c): array => [
-                'student_user_id' => (int) $c['user_id'],
-                'name'            => trim((string) $c['name']),
-                'studentID'       => (string) $c['studentID'],
-                'balance'         => (float) $c['balance'],
-                'has_balance'     => (float) $c['balance'] > 0,
-            ], $candidates);
-
-            sy_json([
-                'success'         => true,
-                'message'         => "Marked {$claimedCount} student(s) at year level {$yrLvl} as graduated.",
-                'graduated_count' => $claimedCount,
-                'results'         => $results,
-            ]);
-        }
-
-        // ── One-time mapping of legacy NULL school_year_id rows ──────────
-        case 'backfill_legacy': {
-            if (gjc_sub_role() !== 'super_admin') {
-                sy_json(['success' => false, 'message' => 'Only a super admin can run the legacy backfill.']);
-            }
-
-            $years = $db->query(
-                "SELECT id, school_year_name, start_date, end_date
-                   FROM school_years
-                  WHERE start_date IS NOT NULL AND end_date IS NOT NULL
-                  ORDER BY start_date ASC"
-            )->fetchAll(PDO::FETCH_ASSOC);
-
-            if (!$years) {
-                sy_json(['success' => false, 'message' => 'No school years have both a start and end date set — nothing to map against.']);
-            }
-
-            $totalUpdated = 0;
-            foreach ($years as $year) {
-                $stmt = $db->prepare(
-                    "UPDATE transactions
-                        SET school_year_id = ?
-                      WHERE school_year_id IS NULL
-                        AND created_at >= ?
-                        AND created_at < DATE_ADD(?, INTERVAL 1 DAY)"
-                );
-                $stmt->execute([$year['id'], $year['start_date'], $year['end_date']]);
-                $totalUpdated += $stmt->rowCount();
-            }
-
-            logAudit(
-                $db, $adminId, $adminRole, 'SY_TXN_BACKFILL', 'transactions',
-                null,
-                ['years_mapped' => count($years), 'rows_updated' => $totalUpdated],
-                null,
-                ['target_id' => null]
-            );
-
-            sy_json(['success' => true, 'message' => "Backfilled {$totalUpdated} legacy transaction(s) across " . count($years) . ' school year(s).']);
         }
 
         default:

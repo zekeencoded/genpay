@@ -66,7 +66,7 @@ $currentPage = 'allowance';
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=9">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_topup.css?v=8">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_send.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_send.css?v=8">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=9">
 </head>
 
@@ -171,7 +171,7 @@ $currentPage = 'allowance';
                         <div class="sg-success-ref" id="sgSuccessRef">--</div>
                         <div class="sg-btn-row">
                             <button type="button" class="sp-btn-cancel" onclick="location.href='<?= PARENT_URL ?>/dashboard.php'">Done</button>
-                            <button type="button" class="sp-btn-pay" onclick="location.reload()">Send Another</button>
+                            <button type="button" class="sp-btn-pay sg-btn-send-another" onclick="location.reload()">Send Another</button>
                         </div>
                     </div>
                 </div>

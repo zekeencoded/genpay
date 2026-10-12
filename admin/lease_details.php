@@ -183,7 +183,7 @@ if ($lease) {
             </div>
             <div class="admin-user">
                 <span><?= lease_e($currentUser['name']) ?></span>
-                <div class="avatar"><i class="fa-solid fa-user-tie"></i></div>
+                <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
             </div>
         </header>
 

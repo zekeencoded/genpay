@@ -18,6 +18,7 @@ gjc_ensure_parent_wallet_schema($db);
  * that never existed — the page can't be used to probe other families.
  */
 $parentUserId = gjc_user_id();
+$currentUser = gjc_current_user($db);
 $parentId = gjc_parent_id_for_user($db, $parentUserId);
 $parentWallet = gjc_parent_wallet($db, $parentId);
 $parentWalletId = (int) $parentWallet['id'];
@@ -148,11 +149,20 @@ if ($record) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=20">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=22">
 </head>
 
-<body class="gp-theme">
+<body class="gp-theme transaction-detail-page">
     <div class="uv-wrap">
+        <div class="uv-topbar">
+            <a class="uv-back" href="<?= PARENT_URL ?>/activity.php">
+                <i class="fa-solid fa-arrow-left"></i> Back to Activity Trail
+            </a>
+            <?php
+            $parentAvatarStyle = 'margin-left:auto;width:40px;height:40px;flex-shrink:0;border-radius:var(--gp-radius);background:var(--gp-green-850);color:var(--gp-gold);border:1px solid var(--gp-gold);font-weight:800;display:grid;place-items:center;';
+            require __DIR__ . '/../includes/partials/avatar_parent.php';
+            ?>
+        </div>
         <?php if (!$record): ?>
         <div class="uv-notfound">
             <div class="uv-nf-ic"><i class="fa-regular fa-circle-question"></i></div>
@@ -161,12 +171,6 @@ if ($record) {
             <a href="<?= PARENT_URL ?>/activity.php" class="gp-btn gp-btn--forest">Go to Activity Trail</a>
         </div>
         <?php else: ?>
-        <div class="uv-topbar">
-            <a class="uv-back" href="<?= PARENT_URL ?>/activity.php">
-                <i class="fa-solid fa-arrow-left"></i> Back to Activity Trail
-            </a>
-        </div>
-
         <section class="uv-hero">
             <div class="uv-avatar"><i class="fa-solid <?= $e($record['icon']) ?>"></i></div>
             <div class="uv-hero-main">
@@ -247,6 +251,7 @@ if ($record) {
         </section>
 
         <?php
+        require __DIR__ . '/../includes/partials/detail_download.php';
         $uvItems = $items;
         $uvItemsTotal = $record['amount'];
         $uvItemsNote = 'What was bought in this order.';

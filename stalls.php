@@ -66,7 +66,6 @@ function statusLabel(string $status): string
 <div class="legend">
     <div class="legend-item"><div class="legend-dot legend-dot--vacant"></div> Vacant</div>
     <div class="legend-item"><div class="legend-dot legend-dot--occupied"></div> Occupied</div>
-    <div class="legend-item"><div class="legend-dot legend-dot--pending"></div> Pending Application</div>
 </div>
 
 <!-- STALL GRID -->

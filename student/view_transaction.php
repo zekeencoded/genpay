@@ -162,10 +162,10 @@ if ($record) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=20">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=22">
 </head>
 
-<body class="gp-theme">
+<body class="gp-theme transaction-detail-page">
     <div class="uv-wrap">
         <?php if (!$record): ?>
         <!-- Generic not-available state, same wording as the admin views: a
@@ -266,6 +266,7 @@ if ($record) {
         </section>
 
         <?php
+        require __DIR__ . '/../includes/partials/detail_download.php';
         $uvItems = $items;
         $uvItemsTotal = $record['amount'];
         $uvItemsNote = 'What you bought in this order.';

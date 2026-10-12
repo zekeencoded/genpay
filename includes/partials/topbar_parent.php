@@ -5,16 +5,13 @@
 //   $topbarTitle    (string) - final <h1> HTML
 //   $topbarSubtitle (string) - final <p> HTML
 // Optional:
-//   $profilePhotoUrl (string) - profile photo URL; falls back to the initial avatar
 //   $topbarSubtitleMobile (bool) - keep the subtitle on a phone. It is hidden
 //       there by default: on every page but one it restates what the title and
 //       the page itself already say, and it cost two lines above the fold.
 //       Set it only where the subtitle is the sole on-screen home of something
 //       — controls.php names which student's wallet is being edited, and
 //       nothing else on that page does.
-$profilePhotoUrl = $profilePhotoUrl ?? '';
 $topbarSubtitleMobile = $topbarSubtitleMobile ?? false;
-$topbarInitial = strtoupper(substr((string) $currentUser['name'], 0, 1));
 $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>
 <!-- The title and subtitle are DIRECT children of the header, not wrapped in
@@ -29,14 +26,7 @@ $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES,
     <p><?= $topbarSubtitle ?></p>
     <div class="parent-user">
         <span class="parent-user-name"><?= $__topbar_e($currentUser['name']) ?></span>
-        <div class="parent-avatar" id="topbarAvatar" style="<?= $profilePhotoUrl ? 'overflow:hidden;' : '' ?>">
-            <?php if ($profilePhotoUrl): ?>
-                <img id="topbarAvatarImg" src="<?= $__topbar_e($profilePhotoUrl) ?>" alt=""
-                     style="width:100%;height:100%;object-fit:cover;display:block;">
-            <?php else: ?>
-                <span id="topbarAvatarInitial"><?= $__topbar_e($topbarInitial) ?></span>
-            <?php endif; ?>
-        </div>
+        <?php require __DIR__ . '/avatar_parent.php'; ?>
         <?php /* Phone only (hidden by CSS elsewhere): the sidebar's Logout link
                  is display:none under 768px and the bottom nav has no free
                  slot. Same modal as the sidebar (logout_modal.php). */ ?>

@@ -127,13 +127,13 @@ $currentPage = 'dashboard';
                         </div>
                     </div>
 
-                    <!-- My Purchases — the parent's own wallet only. Their
+                    <!-- My Transactions — the parent's own wallet only. Their
                          children's spending lives in Linked Students and on
                          activity.php; the two are deliberately never mixed
                          in this panel. -->
                     <div class="parent-card">
                         <div class="parent-card-head">
-                            <h5><i class="fa-solid fa-basket-shopping me-2" style="color:var(--gp-green-700)"></i>My Purchases</h5>
+                            <h5><i class="fa-solid fa-basket-shopping me-2" style="color:var(--gp-green-700)"></i>My Transactions</h5>
                             <a class="pd-viewall" href="<?= PARENT_URL ?>/activity.php?student=me">View all</a>
                         </div>
                         <?php if (empty($myTxns)): ?>
@@ -255,6 +255,7 @@ $currentPage = 'dashboard';
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
 <script>
 const ALERTS_API  = '<?= PARENT_URL ?>/api/alerts.php';
 const CONTROLS_API = '<?= PARENT_URL ?>/api/controls.php';
@@ -269,23 +270,59 @@ document.getElementById('linkForm').addEventListener('submit', async function(e)
     e.preventDefault();
     const sid = document.getElementById('linkSchoolId').value.trim();
     const msg = document.getElementById('linkMsg');
+    const btn = this.querySelector('[type="submit"]');
+    if (btn.disabled) return;
     if (!sid) { msg.innerHTML = '<span style="color:var(--gp-danger)">Please enter a school ID.</span>'; return; }
-    msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Linking...';
+    btn.disabled = true;
+    msg.textContent = '';
+    let linked = false;
     try {
+        gpBusy(btn, 'Checking student...');
+        msg.textContent = 'Checking student...';
+        const lookupRes = await fetch(LINK_API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'lookup_student', school_id: sid})
+        });
+        const student = await lookupRes.json();
+        if (!student.success) {
+            msg.innerHTML = '<span style="color:var(--gp-danger)">' + gpEsc(student.error || 'Student lookup failed.') + '</span>';
+            return;
+        }
+        msg.textContent = '';
+        const confirmed = await gpConfirm({
+            title: 'Link this student?',
+            body: 'Please check the name and school ID before linking this student to your account.',
+            detail: [['Student Name', student.student_name], ['Student School ID', student.school_id]],
+            note: 'You will be able to view their wallet and transactions, send allowances, and manage spending controls.',
+            confirmLabel: 'Link Student'
+        });
+        if (!confirmed) {
+            document.getElementById('linkSchoolId').focus();
+            return;
+        }
+        btn.textContent = 'Linking...';
+        msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Linking...';
         const res = await fetch(LINK_API, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action: 'link_student', school_id: sid})
+            body: JSON.stringify({action: 'link_student', school_id: student.school_id})
         });
         const data = await res.json();
         if (data.success) {
-            msg.innerHTML = '<span style="color:var(--gp-success)"><i class="fa-solid fa-check me-1"></i>' + data.message + '</span>';
+            linked = true;
+            msg.innerHTML = '<span style="color:var(--gp-success)"><i class="fa-solid fa-check me-1"></i>' + gpEsc(data.message) + '</span>';
             setTimeout(() => location.reload(), 1000);
         } else {
-            msg.innerHTML = '<span style="color:var(--gp-danger)">' + (data.error || 'Failed.') + '</span>';
+            msg.innerHTML = '<span style="color:var(--gp-danger)">' + gpEsc(data.error || 'Failed.') + '</span>';
         }
     } catch(err) {
         msg.innerHTML = '<span style="color:var(--gp-danger)">Request failed.</span>';
+    } finally {
+        if (!linked) {
+            gpBusyDone(btn);
+            btn.disabled = false;
+        }
     }
 });
 

@@ -507,7 +507,7 @@ $currentPage = "audit_log";
                 </div>
                 <div class="admin-user">
                     <span><?= audit_e($currentUser['name'] ?? 'Admin') ?></span>
-                    <div class="avatar"><i class="fa-solid fa-user-tie"></i></div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 

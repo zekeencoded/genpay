@@ -39,23 +39,20 @@ if (gjc_table_exists($db, 'student_info')) {
     }
 }
 
-// Live wallet controls (parent freeze / daily limit) instead of hardcoded text.
+// Live wallet freeze status instead of hardcoded text.
 $isFrozen = false;
-$dailyLimit = 0.0;
 if ($wallet['id'] > 0 && $wallet['source'] === 'student_wallets') {
-    $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
+    $wcStmt = $db->prepare("SELECT is_frozen FROM student_wallets WHERE id = ?");
     $wcStmt->execute([$wallet['id']]);
     if ($wc = $wcStmt->fetch(PDO::FETCH_ASSOC)) {
         $isFrozen = (int) $wc['is_frozen'] === 1;
-        $dailyLimit = (float) $wc['daily_spend_limit'];
     }
 }
 $accountStatus = $isFrozen ? 'Frozen' : ucfirst((string) ($rawUser['status'] ?? 'Active'));
 $transactionsEnabled = $wallet['id'] > 0 && !$isFrozen;
 
 // ── Hero figures ──────────────────────────────────────────────────────────
-// "Spent today" counts exactly what student/api/checkout.php counts against
-// the daily limit, so the bar here and the limit at the counter agree.
+// Today's spending includes completed payments and outgoing peer transfers.
 $spentMonth = 0.0;
 $purchasesMonth = 0;
 $spentToday = 0.0;
@@ -77,8 +74,6 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
         $spentToday = (float) $fig['spent_today'];
     }
 }
-$leftToday = max(0.0, $dailyLimit - $spentToday);
-$limitUsedPct = $dailyLimit > 0 ? min(100, (int) round($spentToday / $dailyLimit * 100)) : 0;
 
 // ── Linked guardians ──────────────────────────────────────────────────────
 $guardians = [];
@@ -220,15 +215,10 @@ $currentPage = 'profile';
                                 <span class="ph-stat-k">Spending today</span>
                                 <span class="ph-stat-v">Paused</span>
                                 <span class="ph-stat-n">Your wallet is frozen by your guardian</span>
-                            <?php elseif ($dailyLimit > 0): ?>
-                                <span class="ph-stat-k">Left to spend today</span>
-                                <span class="ph-stat-v"><?= gjc_gc_amount($leftToday) ?> <small>GC</small></span>
-                                <span class="ph-bar <?= $limitUsedPct >= 100 ? 'is-full' : '' ?>" role="progressbar" aria-label="Daily limit used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $limitUsedPct ?>"><span style="width: <?= $limitUsedPct ?>%"></span></span>
-                                <span class="ph-stat-n">&#8776; <?= gjc_money($leftToday) ?> &middot; <?= gjc_gc_amount($spentToday) ?> of your <?= gjc_gc_amount($dailyLimit) ?> GC daily limit used</span>
                             <?php else: ?>
                                 <span class="ph-stat-k">Spent today</span>
                                 <span class="ph-stat-v"><?= gjc_gc_amount($spentToday) ?> <small>GC</small></span>
-                                <span class="ph-stat-n">&#8776; <?= gjc_money($spentToday) ?> &middot; No daily limit set</span>
+                                <span class="ph-stat-n">&#8776; <?= gjc_money($spentToday) ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -301,7 +291,7 @@ $currentPage = 'profile';
                     <div class="ph-card-head">
                         <div>
                             <h3>Linked guardian<?= count($guardians) > 1 ? 's' : '' ?></h3>
-                            <p>Can send allowance, set limits and freeze your wallet</p>
+                            <p>Can send allowance and freeze your wallet</p>
                         </div>
                     </div>
                     <?php if ($guardians): ?>
@@ -337,7 +327,7 @@ $currentPage = 'profile';
                     <div class="ph-card-head">
                         <div>
                             <h3>Account status</h3>
-                            <p>Access, limits and school credits</p>
+                            <p>Access and school credits</p>
                         </div>
                     </div>
 
@@ -348,10 +338,6 @@ $currentPage = 'profile';
                     <div class="ph-kv">
                         <span>Payments &amp; transfers</span>
                         <div><span class="ph-pill has-dot <?= $transactionsEnabled ? 'is-ok' : 'is-warn' ?>"><?= $transactionsEnabled ? 'Enabled' : ($isFrozen ? 'Paused' : 'Wallet pending') ?></span></div>
-                    </div>
-                    <div class="ph-kv">
-                        <span>Daily spending limit</span>
-                        <div><?= $dailyLimit > 0 ? gjc_gc_amount($dailyLimit) . ' GC / day <span class="gc-inline-peso">&asymp; ' . gjc_money($dailyLimit) . '</span>' : '<span class="is-empty">No limit</span>' ?></div>
                     </div>
                     <div class="ph-kv">
                         <span>Fee waiver credit</span>
@@ -419,7 +405,7 @@ $currentPage = 'profile';
                             <span class="ph-ic"><i class="fa-solid fa-circle-question"></i></span>
                             <span class="ph-grow">
                                 <span class="ph-t">Help &amp; FAQs</span>
-                                <span class="ph-s">GenCoin, top-ups, limits and passwords</span>
+                                <span class="ph-s">GenCoin, top-ups and passwords</span>
                             </span>
                             <i class="fa-solid fa-chevron-right ph-chev"></i>
                         </button>
@@ -465,8 +451,8 @@ $currentPage = 'profile';
                         <p>Go to <strong>Send GenCoin</strong>, enter their Student ID to look them up, then the amount. Transfers are instant and cannot be undone, so double-check the recipient before confirming.</p>
                     </details>
                     <details class="ph-faq">
-                        <summary>Why is my wallet frozen or spending-limited?</summary>
-                        <p>A parent or guardian linked to your account can freeze your wallet or set a daily spending limit from the Parent Portal. Check <strong>Account status</strong> on your profile, or ask them directly if you think this is a mistake.</p>
+                        <summary>Why is my wallet frozen?</summary>
+                        <p>A parent or guardian linked to your account can freeze your wallet from the Parent Portal. Check <strong>Account status</strong> on your profile, or ask them directly if you think this is a mistake.</p>
                     </details>
                     <details class="ph-faq">
                         <summary>What is the Fee Waiver Credit?</summary>

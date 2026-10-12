@@ -1,0 +1,12 @@
+student_id_number,first_name,last_name,email,yr_lvl,status
+GJC2026-0001,Andrea,Santos,andrea.santos@example.com,1,enrolled
+GJC2026-0002,Miguel,Reyes,miguel.reyes@example.com,2,enrolled
+GJC2026-0003,Isabella,Dela Cruz,isabella.delacruz@example.com,3,enrolled
+GJC2026-0004,Gabriel,Mendoza,gabriel.mendoza@example.com,4,graduated
+GJC2026-0005,Sofia,Garcia,sofia.garcia@example.com,1,transferred
+GJC2026-0006,Daniel,Ramos,daniel.ramos@example.com,2,dropped
+GJC2026-0007,Camille,Navarro,camille.navarro@example.com,3,not_enrolled
+GJC2026-0008,Rafael,Villanueva,rafael.villanueva@example.com,4,enrolled
+GJC2026-0009,Bianca,Torres,bianca.torres@example.com,1,enrolled
+GJC2026-0010,Adrian,Castillo,adrian.castillo@example.com,2,enrolled
+SAMPLE-UNMATCHED-001,Alyssa,Fernandez,alyssa.fernandez@example.com,1,enrolled

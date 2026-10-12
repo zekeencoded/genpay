@@ -74,6 +74,8 @@ try {
         $isFrozen = (int) $fzStmt->fetchColumn() === 1;
     }
 
+    $isFrozen = $isFrozen || gjc_student_wallet_state($db, (int) $currentUser['id']) !== 'active';
+
     echo json_encode([
         'success' => true,
         'balance' => $balance,

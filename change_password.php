@@ -14,6 +14,7 @@ if (!isset($_SESSION['force_change'])) {
 }
 
 gjc_ensure_first_login_schema($db);
+gjc_require_role(['student', 'merchant', 'finance', 'parent']);
 
 $error = "";
 $success = "";
@@ -24,10 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new = $_POST['new_pass'] ?? '';
     $confirm = $_POST['confirm_pass'] ?? '';
 
-    if ($new !== $confirm) {
+    if (!gjc_csrf_verify()) {
+        $error = "Your session expired. Refresh the page and try again.";
+    } elseif ($new !== $confirm) {
         $error = "Passwords do not match.";
     } elseif (strlen($new) < 6) {
         $error = "Password must be at least 6 characters.";
+    } elseif (strlen($new) > 72) {
+        $error = "Password must be no more than 72 bytes.";
     } else {
         $userId = gjc_user_id();
         if (!$userId) {
@@ -36,15 +41,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $hash = password_hash($new, PASSWORD_BCRYPT);
-        $db->prepare(
+        $update = $db->prepare(
             "UPDATE users
                 SET password = ?,
                     force_password_change = 0,
                     is_first_login = 0,
                     password_changed = 1,
                     temp_password = NULL
-              WHERE userID = ?"
-        )->execute([$hash, $userId]);
+              WHERE userID = ? AND SHA2(password, 256) = ?"
+        );
+        $update->execute([$hash, $userId, $_SESSION['password_fingerprint']]);
+        if ($update->rowCount() !== 1) {
+            gjc_clear_remember_token($db);
+            session_unset();
+            session_destroy();
+            header('Location: ' . BASE_URL . '/login.php?reason=password_reset');
+            exit;
+        }
+        $_SESSION['password_fingerprint'] = hash('sha256', $hash);
 
         logAudit(
             $db,
@@ -98,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="title">Set Your New Password</div>
 
             <div class="desc">
-                This is your first login. For security reasons, you are required to change your default password before
+                For security reasons, you are required to change your temporary password before
                 accessing your account dashboard.
             </div>
 
@@ -111,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(gjc_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 
                 <div class="input-group-box">
                     <input type="password" name="new_pass" id="new_pass" required placeholder=" ">

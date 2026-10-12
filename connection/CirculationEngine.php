@@ -396,6 +396,9 @@ class CirculationEngine
                 throw new RuntimeException('Insufficient wallet balance.');
             }
             if ($payerRole === 'student') {
+                if (gjc_student_wallet_state($this->db, $payerUserId) !== 'active') {
+                    throw new RuntimeException('Your wallet is frozen by your enrollment status. You can still withdraw your balance at the Finance office.');
+                }
                 if ((int) $payer['is_frozen'] === 1) {
                     throw new RuntimeException('Your wallet is frozen by a parent or guardian.');
                 }
@@ -493,7 +496,7 @@ class CirculationEngine
             $settings = $this->lockSettings();
 
             $student = $this->db->prepare(
-                "SELECT balance FROM student_wallets WHERE id = ? FOR UPDATE",
+                "SELECT balance, user_id, is_frozen FROM student_wallets WHERE id = ? FOR UPDATE",
             );
             $student->execute([$studentWalletId]);
             $studentRow = $student->fetch();
@@ -506,6 +509,10 @@ class CirculationEngine
                         number_format($amount, 2) .
                         ".",
                 );
+            }
+
+            if ((int) $studentRow['is_frozen'] === 1 || gjc_student_wallet_state($this->db, (int) $studentRow['user_id']) !== 'active') {
+                throw new RuntimeException('This student wallet is frozen. Spending is unavailable; withdrawals at the Finance office remain available.');
             }
 
             $this->db

@@ -5,7 +5,6 @@ require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['student']);
 gjc_enforce_student_lock($db);
-gjc_ensure_school_year_schema($db);
 
 $currentUser = gjc_current_user($db);
 $wallet = gjc_student_wallet($db, $currentUser['id']);
@@ -16,40 +15,31 @@ $totalReceived = 0.0;
 $totalSpent = 0.0;
 $transactions = [];
 
-$schoolYears = $db->query("SELECT id, school_year_name FROM school_years ORDER BY school_year_name DESC")->fetchAll(PDO::FETCH_ASSOC);
-$selectedSchoolYearId = (int) ($_GET['school_year'] ?? 0);
-if ($selectedSchoolYearId > 0 && !in_array($selectedSchoolYearId, array_column($schoolYears, 'id'), true)) {
-    $selectedSchoolYearId = 0;
-}
-
 if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
-    $syFilter = $selectedSchoolYearId > 0 ? ' AND school_year_id = ?' : '';
-    $syParams = $selectedSchoolYearId > 0 ? [$wallet['id'], $selectedSchoolYearId] : [$wallet['id']];
-
     // Aggregates run over the whole ledger (not the capped fetch below),
     // so the totals stay correct even past 200 lifetime transactions.
     $spentStmt = $db->prepare(
         "SELECT COALESCE(SUM(amount), 0) FROM transactions
-          WHERE student_wallet_id = ? AND transaction_type IN ('payment', 'voucher_payment'){$syFilter}"
+          WHERE student_wallet_id = ? AND transaction_type IN ('payment', 'voucher_payment')"
     );
-    $spentStmt->execute($syParams);
+    $spentStmt->execute([$wallet['id']]);
     $totalSpent = (float) $spentStmt->fetchColumn();
 
     $receivedStmt = $db->prepare(
         "SELECT COALESCE(SUM(amount), 0) FROM transactions
-          WHERE student_wallet_id = ? AND transaction_type IN ('cash_in', 'topup', 'refund'){$syFilter}"
+          WHERE student_wallet_id = ? AND transaction_type IN ('cash_in', 'topup', 'refund')"
     );
-    $receivedStmt->execute($syParams);
+    $receivedStmt->execute([$wallet['id']]);
     $totalReceived = (float) $receivedStmt->fetchColumn();
 
     $stmt = $db->prepare(
         "SELECT id, reference_no, transaction_type, amount, status, notes, created_at
            FROM transactions
-          WHERE student_wallet_id = ?{$syFilter}
+          WHERE student_wallet_id = ?
           ORDER BY created_at DESC, id DESC
           LIMIT 200"
     );
-    $stmt->execute($syParams);
+    $stmt->execute([$wallet['id']]);
 
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $type = (string) ($row['transaction_type'] ?? '');
@@ -71,7 +61,7 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     }
 }
 
-if ($selectedSchoolYearId === 0 && gjc_table_exists($db, 'topup_requests')) {
+if (gjc_table_exists($db, 'topup_requests')) {
     $stmt = $db->prepare(
         "SELECT id, reference_no, amount, payment_method, status, created_at
            FROM topup_requests
@@ -177,20 +167,6 @@ $currentPage = 'history';
                         <span class="sd-count"><?= count($transactions) ?> Records</span>
                     </div>
 
-                    <?php if ($schoolYears): ?>
-                    <form method="GET" style="margin-bottom:14px">
-                        <select name="school_year" class="form-select form-select-sm" style="max-width:220px"
-                                onchange="this.form.submit()">
-                            <option value="0"<?= $selectedSchoolYearId === 0 ? ' selected' : '' ?>>All School Years</option>
-                            <?php foreach ($schoolYears as $sy): ?>
-                            <option value="<?= (int) $sy['id'] ?>"<?= $selectedSchoolYearId === (int) $sy['id'] ? ' selected' : '' ?>>
-                                <?= $e($sy['school_year_name']) ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
-                    <?php endif; ?>
-
                     <?php if (empty($transactions)): ?>
                     <div class="sd-empty">
                         <i class="fa-regular fa-folder-open"></i>
@@ -198,7 +174,7 @@ $currentPage = 'history';
                     </div>
                     <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table sd-table align-middle js-datatable" id="studentHistoryTable" data-page-length="10">
+                        <table class="table sd-table align-middle js-datatable" id="studentHistoryTable" data-page-length="10" data-searching="false">
                             <thead>
                                 <tr>
                                     <th data-card="title">Reference</th>

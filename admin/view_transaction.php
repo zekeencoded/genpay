@@ -88,10 +88,10 @@ if ($transaction) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=20">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/detail_view.css?v=22">
 </head>
 
-<body class="gp-theme">
+<body class="gp-theme transaction-detail-page">
     <div class="uv-wrap">
         <?php if (!$transaction): ?>
         <!-- Generic not-available state, consistent with view_user.php. -->
@@ -177,6 +177,8 @@ if ($transaction) {
                 </div>
             </div>
         </section>
+
+        <?php require __DIR__ . '/../includes/partials/detail_download.php'; ?>
 
         <?php if (!empty($meta)): ?>
         <details class="uv-raw">

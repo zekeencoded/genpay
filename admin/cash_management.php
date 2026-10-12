@@ -3,6 +3,7 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/CirculationEngine.php';
+require_once __DIR__ . '/../connection/cash_history.php';
 
 gjc_require_role(['finance']);
 gjc_ensure_operational_tables($db);
@@ -13,7 +14,7 @@ $currentUser = gjc_current_user($db);
 
 $pendingEncashments = (int) $db->query("SELECT COUNT(*) FROM encashment_requests WHERE status = 'pending'")->fetchColumn();
 $releasedToday = (float) $db->query("SELECT COALESCE(SUM(amount), 0) FROM encashment_requests WHERE status = 'released' AND DATE(released_at) = CURDATE()")->fetchColumn();
-$loadedToday = (float) $db->query("SELECT COALESCE(SUM(amount), 0) FROM topup_requests WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")->fetchColumn();
+$loadedToday = gjc_cash_in_loaded_today($db);
 
 // Sending GenCoin moves points OUT of the cashier vault, so an empty vault is
 // what makes a send fail. Read-only; the mint form on Economy is still the
@@ -27,13 +28,7 @@ try {
 
 gjc_backfill_student_ids($db);
 
-$topupHistory = $db->query(
-    "SELECT t.*, si.studentID
-       FROM topup_requests t
-       LEFT JOIN student_info si ON si.userID = t.user_id
-      ORDER BY t.created_at DESC
-      LIMIT 20"
-)->fetchAll(PDO::FETCH_ASSOC);
+$topupHistory = gjc_recent_cash_in_history($db);
 
 $pendingRequests = $db->query(
     "SELECT e.*, m.merchantID, m.stall_name
@@ -102,9 +97,7 @@ $currentPage = 'cash';
 
                 <div class="admin-user">
                     <span><?= htmlspecialchars($currentUser['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-tie"></i>
-                    </div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 
@@ -197,7 +190,7 @@ $currentPage = 'cash';
                 <div class="topup-panel-header">
                     <div>
                         <h3>Recent Top-up History</h3>
-                        <p>Latest completed, rejected, and processing wallet load records.</p>
+                        <p>Latest GenCoin top-ups to student and parent wallets.</p>
                     </div>
 
                     <button type="button" class="create-topup-btn" onclick="openSendGenCoin()">
@@ -211,11 +204,11 @@ $currentPage = 'cash';
                         <thead>
                             <tr>
                                 <th data-card="title">Reference</th>
-                                <th>Name</th>
-                                <th data-card="amount">Amount</th>
-                                <th data-card="hide">Method</th>
+                                <th>Recipient</th>
+                                <th data-card="amount">Credited</th>
+                                <th data-card="hide">Source</th>
                                 <th>Status</th>
-                                <th data-card="hide">Requested</th>
+                                <th data-card="hide">Sent at</th>
                             </tr>
                         </thead>
 
@@ -223,15 +216,15 @@ $currentPage = 'cash';
                             <?php foreach ($topupHistory as $history): ?>
                             <tr>
                                 <td><?php echo gjc_e($history["reference_no"]); ?></td>
-                                <td><?php echo gjc_e(gjc_user_label($db, (int) $history['user_id'])); ?></td>
+                                <td><?php echo gjc_e(gjc_user_label($db, (int) $history['recipient_user_id'])); ?><br><small class="text-muted"><?php echo gjc_e($history['recipient_role']); ?></small></td>
                                 <td class="amount-text"><?php echo gjc_money($history["amount"]); ?></td>
-                                <td><span class="method-pill"><?php echo gjc_e($history["payment_method"]); ?></span></td>
+                                <td><span class="method-pill"><?php echo gjc_e($history['top_up_source'] ? ucfirst($history['top_up_source']) : 'Cash top-up'); ?></span></td>
                                 <td>
                                     <span class="topup-status <?php echo strtolower($history["status"]); ?>">
                                         <?php echo gjc_e(ucfirst($history["status"])); ?>
                                     </span>
                                 </td>
-                                <td><?php echo gjc_e(gjc_datetime($history["created_at"])); ?></td>
+                                <td data-order="<?php echo gjc_e($history['created_at']); ?>"><?php echo gjc_e(gjc_datetime($history["created_at"])); ?></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -849,7 +842,13 @@ $currentPage = 'cash';
             document.getElementById('sgc-send-btn').disabled = !this.checked;
         });
 
-        document.getElementById('sendGenCoinModal').addEventListener('hidden.bs.modal', sgcReset);
+        document.getElementById('sendGenCoinModal').addEventListener('hidden.bs.modal', function () {
+            if (this.dataset.sent === 'true') {
+                window.location.reload();
+                return;
+            }
+            sgcReset();
+        });
     });
 
     async function sgcSend() {
@@ -874,6 +873,7 @@ $currentPage = 'cash';
             });
             const data = await res.json();
             if (data.success) {
+                document.getElementById('sendGenCoinModal').dataset.sent = 'true';
                 const actualCredited = data.credited_amount ?? credited;
                 const actualFee      = data.fee_amount      ?? fee;
                 const actualTotal    = data.total_collected ?? (actualCredited + actualFee);

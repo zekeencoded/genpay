@@ -13,7 +13,11 @@
 //       subtitle is the sole on-screen home of something.
 $topbarShowBell = $topbarShowBell ?? true;
 $topbarSubtitleMobile = $topbarSubtitleMobile ?? false;
-$topbarAvatarPhotoUrl = $topbarAvatarPhotoUrl ?? '';
+$topbarAvatarPhotoUrl = $topbarAvatarPhotoUrl ?? (
+    !empty($currentUser['raw']['profile_img'])
+        ? BASE_URL . '/' . ltrim((string) $currentUser['raw']['profile_img'], '/')
+        : ''
+);
 $topbarAvatarInitial = strtoupper(substr((string) $studentName, 0, 1));
 $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $__topbar_csrf = function_exists('gjc_csrf_token') ? gjc_csrf_token() : '';
@@ -54,14 +58,14 @@ $__topbar_schoolYear = (isset($db) && $db instanceof PDO && function_exists('gjc
             </div>
         </div>
         <?php endif; ?>
-        <div class="sd-avatar" id="topbarAvatar" style="<?= $topbarAvatarPhotoUrl ? 'overflow:hidden;' : '' ?>">
+        <a href="<?= $__topbar_e(STUDENT_URL . '/profile.php') ?>" class="sd-avatar" id="topbarAvatar" aria-label="View my profile" style="text-decoration:none;<?= $topbarAvatarPhotoUrl ? 'overflow:hidden;' : '' ?>">
             <?php if ($topbarAvatarPhotoUrl): ?>
                 <img id="topbarAvatarImg" src="<?= $__topbar_e($topbarAvatarPhotoUrl) ?>" alt=""
                      style="width:100%;height:100%;object-fit:cover;display:block;">
             <?php else: ?>
                 <?= $__topbar_e($topbarAvatarInitial) ?>
             <?php endif; ?>
-        </div>
+        </a>
     </div>
 </header>
 <?php if ($topbarShowBell): ?>

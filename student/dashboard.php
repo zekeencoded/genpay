@@ -79,6 +79,7 @@ if ($wallet['id'] > 0 && $wallet['source'] === 'student_wallets') {
     $fzStmt->execute([$wallet['id']]);
     $isFrozen = (int) $fzStmt->fetchColumn() === 1;
 }
+$isFrozen = $isFrozen || $walletState !== 'active';
 $accountStatus = $isFrozen ? 'Frozen' : 'Active';
 
 $hour = (int) date('H');
@@ -147,10 +148,10 @@ $currentPage = 'dashboard';
                 <div class="sd-enroll-notice">
                     <i class="fa-solid fa-graduation-cap"></i>
                     <div>
-                        <h3>Your wallet is closed</h3>
+                        <h3>Your wallet is frozen</h3>
                         <p>
-                            Your account is locked because you have graduated or transferred out. Your remaining
-                            balance below is safe &mdash; please visit the finance office to collect it as a cheque.
+                            Spending, transfers, and cash-in are paused because you have graduated or transferred out. Your remaining
+                            balance below is safe &mdash; you can still withdraw it at the Finance office.
                         </p>
                     </div>
                 </div>
@@ -165,7 +166,7 @@ $currentPage = 'dashboard';
                         <p>
                             Your balance below is intact and stays preserved &mdash; nothing has been taken from your
                             wallet. Paying at the canteen, sending GenCoin, and requesting a top-up are paused until
-                            your enrollment is recorded. Please contact the registrar to sort this out.
+                            your enrollment is recorded. You can still withdraw your remaining balance at the Finance office. Contact Finance to update your status.
                         </p>
                     </div>
                 </div>

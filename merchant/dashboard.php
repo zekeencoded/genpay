@@ -237,39 +237,6 @@ if (!$isMerchantStaff && $wallet['id'] > 0 && gjc_table_exists($db, 'transaction
     }
 }
 
-// ---- Lease & signed contract (owner only) ----------------------------------
-$lease        = null;
-$hasContract  = false;
-if ($canEncash && gjc_table_exists($db, 'stall_applications')) {
-    $leaseStmt = $db->prepare(
-        "SELECT sa.business_name, sa.rental_start_date, sa.deposit_amount, sa.advance_amount,
-                sa.payment_schedule_day, sa.contract_file, sa.awarded_at,
-                ml.stall_name, ml.monthly_rent, NULL AS next_due_date, ml.lease_start, ml.lease_end, ml.status AS lease_status, ml.id AS lease_id
-           FROM " . gjc_stall_application_source($db, 'sa') . "
-      LEFT JOIN merchant_leases ml
-             ON ml.merchant_user_id = sa.merchant_user_id AND ml.status = 'active'
-          WHERE sa.merchant_user_id = ? AND sa.status = 'awarded'
-          ORDER BY sa.awarded_at DESC, sa.id DESC
-          LIMIT 1"
-    );
-    $leaseStmt->execute([$ownerMerchId]);
-    $lease = $leaseStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-    if ($lease) {
-        $lease['next_due_date'] = null;
-        if ($lease['lease_id'] !== null) {
-            $lease['next_due_date'] = (new MerchantTenantDirectory($db))->derivedNextDueDate([
-                'id' => (int) $lease['lease_id'],
-                'monthly_rent' => $lease['monthly_rent'],
-                'lease_start' => $lease['lease_start'],
-                'lease_end' => $lease['lease_end'],
-                'status' => $lease['lease_status'],
-            ]);
-        }
-        unset($lease['lease_id'], $lease['lease_end'], $lease['lease_status']);
-    }
-    $hasContract = $lease && !empty($lease['contract_file']);
-}
-
 $currentPage = 'dashboard';
 ?>
 
@@ -412,78 +379,6 @@ $currentPage = 'dashboard';
                 <?php endif; ?>
 
             </section>
-
-            <?php if ($lease): ?>
-            <section class="row g-4 mb-4">
-                <div class="col-12">
-                    <div class="merchant-premium-panel">
-                        <div class="merchant-panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <h3>
-                                    <i class="fa-solid fa-file-signature" style="margin-right:6px"></i>
-                                    Lease &amp; Signed Contract
-                                </h3>
-                                <p>Your stall tenancy terms and the copy of the contract finance signed on award.</p>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <a href="<?= MERCHANT_URL ?>/rent.php" class="merchant-view-btn">
-                                    <i class="fa-solid fa-calendar-days me-1"></i> Rent schedule
-                                </a>
-                                <?php if ($hasContract): ?>
-                                <a href="<?= MERCHANT_URL ?>/contract.php" target="_blank" rel="noopener" class="merchant-view-btn">
-                                    <i class="fa-solid fa-eye me-1"></i> View
-                                </a>
-                                <a href="<?= MERCHANT_URL ?>/contract.php?dl=1" class="merchant-view-btn">
-                                    <i class="fa-solid fa-download me-1"></i> Download
-                                </a>
-                                <?php endif; ?>
-                            </div>
-                            <?php if (!$hasContract): ?>
-                            <span class="badge bg-secondary-subtle text-secondary-emphasis align-self-center">
-                                Contract not yet uploaded
-                            </span>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="row g-3 mt-1">
-                            <div class="col-6 col-md-3">
-                                <div class="merchant-metric-card h-100">
-                                    <span>Stall</span>
-                                    <h2 style="font-size:1.15rem"><?= gjc_e($lease['stall_name'] ?: $lease['business_name']) ?></h2>
-                                    <p>Leased unit</p>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="merchant-metric-card h-100">
-                                    <span>Monthly Rent</span>
-                                    <h2 style="font-size:1.15rem"><?= gjc_money((float)($lease['monthly_rent'] ?? 0)) ?></h2>
-                                    <p>Every <?= (int)$lease['payment_schedule_day'] ?>th of the month</p>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="merchant-metric-card h-100">
-                                    <span>Next Due</span>
-                                    <h2 style="font-size:1.15rem"><?= !empty($lease['monthly_rent']) ? gjc_money((float)$lease['monthly_rent']) : '—' ?></h2>
-                                    <p><?= $lease['next_due_date'] ? 'Due ' . date('M j, Y', strtotime($lease['next_due_date'])) : 'Upcoming rent date' ?></p>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="merchant-metric-card h-100">
-                                    <span>Rental Start</span>
-                                    <h2 style="font-size:1.15rem"><?= $lease['rental_start_date'] ? date('M j, Y', strtotime($lease['rental_start_date'])) : '—' ?></h2>
-                                    <p>Tenancy began</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="merchant-note mt-3">
-                            Collected on award: <strong><?= gjc_money((float)($lease['deposit_amount'] ?? 0)) ?></strong> deposit (2&nbsp;months)
-                            + <strong><?= gjc_money((float)($lease['advance_amount'] ?? 0)) ?></strong> advance (1&nbsp;month).
-                        </div>
-                    </div>
-                </div>
-            </section>
-            <?php endif; ?>
 
             <section class="row g-4 mb-4">
 

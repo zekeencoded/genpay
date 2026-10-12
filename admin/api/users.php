@@ -19,6 +19,7 @@ require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
 require_once __DIR__ . '/../../connection/app.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
+require_once __DIR__ . '/../../connection/student_password_reset.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['finance']);
@@ -79,6 +80,36 @@ function users_suspend_guard(array $user, int $adminId, string $verb = 'suspend'
 
 try {
     switch ($action) {
+
+        case 'reset_password': {
+            header('Cache-Control: no-store');
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
+                http_response_code(403);
+                users_json(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
+            }
+            $userId = (int) ($_POST['user_id'] ?? 0);
+            if (($_POST['confirm'] ?? '') !== 'RESET') {
+                users_json(['success' => false, 'message' => 'Type RESET to confirm.']);
+            }
+            gjc_ensure_first_login_schema($db);
+            $db->beginTransaction();
+            try {
+                $studentEmail = gjc_reset_student_password_with_email($db, $userId);
+            } catch (InvalidArgumentException $e) {
+                $db->rollBack();
+                users_json(['success' => false, 'message' => $e->getMessage()]);
+            }
+            $db->commit();
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'PASSWORD_CHANGE', 'users', null,
+                ['event' => 'admin_reset', 'userID' => $userId, 'force_password_change' => 1, 'email_sent' => true],
+                null, ['target_id' => $userId, 'reason' => 'Student requested password recovery.']
+            );
+            users_json([
+                'success' => true,
+                'message' => "Password reset. The temporary password was emailed to {$studentEmail}. The student must change it when they sign in.",
+            ]);
+        }
 
         case 'suspend': {
             $userId   = (int) ($_POST['user_id'] ?? 0);

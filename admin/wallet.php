@@ -142,9 +142,7 @@ $entries = $db->query($entrySql . " LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
 
                 <div class="admin-user">
                     <span><?= gjc_e($currentUser['name'] ?? 'Finance') ?></span>
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-tie"></i>
-                    </div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 

@@ -94,9 +94,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
 
                 <div class="admin-user">
                     <span><?= gjc_e($currentUser['name']) ?></span>
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-tie"></i>
-                    </div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 

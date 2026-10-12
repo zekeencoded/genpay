@@ -20,6 +20,13 @@
    ============================================================ */
 
 .uv-wrap { max-width: 940px; margin: 0 auto; padding: 30px 20px 56px; }
+.uv-download { margin-top: 18px; }
+.uv-download .gp-btn { min-height: 44px; gap: 8px; cursor: pointer; }
+.uv-download .gp-btn:disabled { opacity: .65; cursor: wait; }
+.uv-download-message { margin: 8px 0 0; font-size: 13px; color: var(--gp-muted); }
+@media (max-width: 560px) {
+    .uv-download .gp-btn { width: 100%; justify-content: center; }
+}
 
 .uv-topbar {
     display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
@@ -168,6 +175,18 @@
     .uv-hero-wallet { margin-left: 0; width: 100%; text-align: left; }
     .uv-name { font-size: 23px; }
     .uv-amount { font-size: 34px; }
+}
+
+/* Compact transaction icons on phones without changing other record views. */
+@media (max-width: 768px) {
+    .transaction-detail-page .uv-avatar {
+        flex: 0 0 56px; width: 56px; height: 56px;
+    }
+    .transaction-detail-page .uv-avatar i { font-size: 22px; }
+    .transaction-detail-page .uv-field { gap: 10px; }
+    .transaction-detail-page .uv-field-ic {
+        flex: 0 0 32px; width: 32px; height: 32px; font-size: 13px;
+    }
 }
 
 /* --- Itemised receipt (portal view_transaction.php pages) ---

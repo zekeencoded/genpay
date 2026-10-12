@@ -8,7 +8,6 @@ gjc_ensure_school_year_schema($db);
 gjc_ensure_enrollment_schema($db);
 
 $currentUser = gjc_current_user($db);
-$isSuperAdmin = gjc_sub_role() === 'super_admin';
 
 $schoolYears = $db->query(
     "SELECT id, school_year_name, start_date, end_date, is_active, created_at
@@ -26,23 +25,19 @@ foreach ($schoolYears as $year) {
     }
 }
 
-// Active-year standing. Enrollment is explicit now, so these are counts of
-// real student_enrollments rows — not "everyone who hasn't graduated".
+// Missing enrollment records count as not enrolled for the active year.
 $enrolledCount = 0;
 $notEnrolledCount = 0;
-$graduatedCount = 0;
 if ($activeYear) {
     $countStmt = $db->prepare(
-        "SELECT
-            SUM(status = 'enrolled')  AS enrolled,
-            SUM(status = 'graduated') AS graduated,
-            SUM(status IN ('not_enrolled','on_leave','dropped','transferred')) AS not_enrolled
-           FROM student_enrollments WHERE school_year_id = ?"
+        "SELECT SUM(se.status = 'enrolled') AS enrolled,
+                SUM(se.status IS NULL OR se.status <> 'enrolled') AS not_enrolled
+         FROM student_info si JOIN users u ON u.userID = si.userID AND u.roleID = 1
+         LEFT JOIN student_enrollments se ON se.student_user_id = si.userID AND se.school_year_id = ?"
     );
     $countStmt->execute([(int) $activeYear['id']]);
     $counts = $countStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-    $enrolledCount    = (int) ($counts['enrolled'] ?? 0);
-    $graduatedCount   = (int) ($counts['graduated'] ?? 0);
+    $enrolledCount = (int) ($counts['enrolled'] ?? 0);
     $notEnrolledCount = (int) ($counts['not_enrolled'] ?? 0);
 }
 
@@ -58,16 +53,6 @@ foreach ($db->query(
 )->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $stagedByYear[(int) $row['school_year_id']] = $row;
 }
-
-// Year levels for the bulk-graduate control, from both the per-year enrollment
-// rows and the legacy student_info column that is still in place.
-$yrLevels = $db->query(
-    "SELECT DISTINCT yr_lvl FROM (
-        SELECT yr_lvl FROM student_enrollments WHERE yr_lvl IS NOT NULL AND yr_lvl <> ''
-        UNION
-        SELECT yr_lvl FROM student_info WHERE yr_lvl IS NOT NULL AND yr_lvl <> ''
-     ) AS levels ORDER BY yr_lvl ASC"
-)->fetchAll(PDO::FETCH_COLUMN);
 
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $currentPage = 'school_years';
@@ -100,6 +85,7 @@ $currentPage = 'school_years';
         .sy-badge.active { background: var(--gp-success-bg, #ecfdf3); color: var(--gp-success, #16a34a); }
         .sy-badge.inactive { background: var(--gjc-soft-2); color: var(--gp-muted); }
         .sy-badge.staged { background: var(--gp-warning-bg); color: var(--gp-warning); }
+        [hidden] { display: none !important; }
         .sy-form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
         .sy-field { display: flex; flex-direction: column; gap: 4px; }
         .sy-field label { font-size: 12px; font-weight: 600; color: var(--gjc-slate); }
@@ -111,31 +97,15 @@ $currentPage = 'school_years';
         .sy-msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
         .sy-msg.ok { color: var(--gp-success, #16a34a); }
         .sy-msg.err { color: var(--gp-danger, #dc2626); }
-        .sy-result-list { margin-top: 12px; font-size: 13px; }
-        .sy-result-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--gjc-soft-2); }
         .sy-lookup-card { background: var(--gp-row-hover); border-radius: 12px; padding: 12px 16px; margin-top: 10px; font-size: 13px; display: none; }
-        .sy-lookup-card strong { font-size: 14px; }
-
-        /* ── Roster review ──────────────────────────────────────────────── */
-        .sy-buckets { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 4px 0 18px; }
-        .sy-bucket { background: var(--gp-row-hover); border: 1px solid var(--gp-line); border-radius: 14px; padding: 14px 16px; }
-        .sy-bucket span { display: block; font-size: 11px; font-weight: 700; color: var(--gp-muted); text-transform: uppercase; letter-spacing: .4px; }
-        .sy-bucket strong { display: block; font-size: 24px; font-weight: 800; color: #111; margin-top: 4px; }
-        .sy-bucket small { display: block; font-size: 12px; color: var(--gp-muted); margin-top: 2px; }
-        .sy-bucket.is-warn { background: var(--gp-warning-bg); border-color: var(--gp-warning); }
-        .sy-bucket.is-warn span, .sy-bucket.is-warn small { color: var(--gp-warning); }
-        .sy-details { margin-bottom: 16px; }
-        .sy-details > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gjc-slate); padding: 6px 0; }
-        .sy-details .sy-name-list { max-height: 260px; overflow-y: auto; margin-top: 8px; font-size: 13px; }
-        .sy-bulk-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; background: var(--gp-row-hover); border-radius: 12px; margin-bottom: 12px; }
-        .sy-bulk-bar label { font-size: 12px; font-weight: 600; color: var(--gjc-slate); margin: 0; }
-        .sy-bulk-bar select { border: 1.5px solid var(--gp-line); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
-        .sy-nr-table select { border: 1.5px solid var(--gp-line); border-radius: 8px; padding: 6px 10px; font-size: 13px; min-width: 150px; }
-        .sy-nr-table td.sy-bal { font-weight: 700; }
-        .sy-nr-table td.sy-bal.has-money { color: var(--gp-warning); }
         .sy-unmatched { font-size: 13px; color: var(--gp-warning); margin-top: 10px; word-break: break-word; }
-        .sy-overrides > summary { cursor: pointer; font-size: 16px; font-weight: 700; color: #111; padding: 4px 0; }
-        .sy-overrides .sy-panel { box-shadow: none; border: 1px solid var(--gp-line); margin-top: 16px; }
+        .sy-add-year > summary { cursor: pointer; font-size: 14px; font-weight: 700; }
+        .sy-add-year[open] > summary { margin-bottom: 12px; }
+        @media (max-width: 600px) {
+            .sy-panel { padding: 18px; }
+            .sy-field { width: 100%; }
+            .sy-field input, .sy-field select { min-width: 0; width: 100%; }
+        }
         .sy-note { font-size: 12px; color: var(--gp-muted); margin-top: 10px; }
     </style>
 </head>
@@ -148,11 +118,11 @@ $currentPage = 'school_years';
                 <button class="menu-btn" aria-label="Toggle navigation" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
                 <div>
                     <h1>School Years</h1>
-                    <p>Upload the registrar roster, review who is returning, then roll the year over.</p>
+                    <p>Manage enrollment and wallet access by school year.</p>
                 </div>
                 <div class="admin-user">
                     <span><?= $e($currentUser['name'] ?? 'Admin') ?></span>
-                    <div class="avatar"><i class="fa-solid fa-user-tie"></i></div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 
@@ -167,12 +137,8 @@ $currentPage = 'school_years';
                     <h2><?= $enrolledCount ?></h2>
                 </div>
                 <div class="sy-stat-card">
-                    <span>Not Enrolled</span>
+                    <span>Not Enrolled / Exited</span>
                     <h2><?= $notEnrolledCount ?></h2>
-                </div>
-                <div class="sy-stat-card">
-                    <span>Graduated</span>
-                    <h2><?= $graduatedCount ?></h2>
                 </div>
             </section>
 
@@ -186,8 +152,6 @@ $currentPage = 'school_years';
                         <thead>
                             <tr>
                                 <th>School Year</th>
-                                <th>Start</th>
-                                <th>End</th>
                                 <th>Status</th>
                                 <th>Roster</th>
                                 <th>Action</th>
@@ -195,13 +159,11 @@ $currentPage = 'school_years';
                         </thead>
                         <tbody id="syYearsBody">
                             <?php if (!$schoolYears): ?>
-                            <tr><td colspan="6" class="text-center py-3">No school years yet. Create one below.</td></tr>
+                            <tr><td colspan="4" class="text-center py-3">No school years yet. Add one below.</td></tr>
                             <?php else: foreach ($schoolYears as $year): ?>
                             <?php $staged = $stagedByYear[(int) $year['id']] ?? null; ?>
                             <tr>
                                 <td><strong><?= $e($year['school_year_name']) ?></strong></td>
-                                <td><?= $e($year['start_date'] ?: '—') ?></td>
-                                <td><?= $e($year['end_date'] ?: '—') ?></td>
                                 <td>
                                     <span class="sy-badge <?= $year['is_active'] ? 'active' : 'inactive' ?>">
                                         <?= $year['is_active'] ? 'Active' : 'Inactive' ?>
@@ -218,8 +180,8 @@ $currentPage = 'school_years';
                                 </td>
                                 <td>
                                     <?php if (!$year['is_active']): ?>
-                                    <button type="button" class="sy-btn ghost" onclick="syStartRollover(<?= (int) $year['id'] ?>, '<?= $e($year['school_year_name']) ?>')">
-                                        Roll Over Into This Year
+                                    <button type="button" class="sy-btn ghost" onclick="syStartRollover(<?= (int) $year['id'] ?>)">
+                                        Activate Year
                                     </button>
                                     <?php else: ?>
                                     <span style="font-size:12px;color:var(--gp-subtle)">Currently active</span>
@@ -233,35 +195,28 @@ $currentPage = 'school_years';
             </section>
 
             <!-- 3. Start a new school year -->
-            <section class="sy-panel">
-                <h3>Start a New School Year</h3>
-                <p class="sy-sub">Creates an inactive school year. Upload its roster next, then roll over into it.</p>
+            <details class="sy-panel sy-add-year">
+                <summary>Add School Year</summary>
+                <p class="sy-sub">Add the year, upload its roster, then activate it.</p>
 
                 <form id="syCreateForm" class="sy-form-row" onsubmit="return syCreateYear(event)">
                     <div class="sy-field">
-                        <label>School Year (YYYY-YYYY)</label>
-                        <input type="text" name="school_year_name" placeholder="2026-2027" pattern="\d{4}-\d{4}" required>
-                    </div>
-                    <div class="sy-field">
-                        <label>Start Date (optional)</label>
-                        <input type="date" name="start_date">
-                    </div>
-                    <div class="sy-field">
-                        <label>End Date (optional)</label>
-                        <input type="date" name="end_date">
+                        <label for="syYearName">School Year (YYYY-YYYY)</label>
+                        <input type="text" id="syYearName" name="school_year_name" placeholder="2026-2027" pattern="\d{4}-\d{4}" required>
                     </div>
                     <button type="submit" class="sy-btn primary">Create School Year</button>
                 </form>
                 <div id="syCreateMsg" class="sy-msg"></div>
-            </section>
+            </details>
 
             <!-- 4. Upload roster -->
             <section class="sy-panel">
                 <h3>Upload Roster</h3>
                 <p class="sy-sub">
-                    CSV from the registrar, with a <code>student_id_number</code> column plus optional
-                    <code>yr_lvl</code> and <code>status</code>. Students are matched on their school-issued ID only,
-                    never by name. Uploading again replaces whatever was staged for that year.
+                    Upload a CSV with <code>student_id_number</code>. Optional columns: <code>yr_lvl</code> and
+                    <code>status</code> (defaults to enrolled). Students missing from the roster become Not Enrolled.
+                    Enrolled wallets can transact; all other statuses freeze spending, transfers, and cash-in.
+                    Remaining balances can still be withdrawn at the Finance office.
                 </p>
 
                 <?php if (!$inactiveYears): ?>
@@ -269,7 +224,7 @@ $currentPage = 'school_years';
                 <?php else: ?>
                 <form id="syRosterForm" class="sy-form-row" onsubmit="return syUploadRoster(event)">
                     <div class="sy-field">
-                        <label>Target School Year</label>
+                        <label for="syRosterYear">School Year</label>
                         <select name="school_year_id" id="syRosterYear" required>
                             <?php foreach ($inactiveYears as $year): ?>
                             <option value="<?= (int) $year['id'] ?>"><?= $e($year['school_year_name']) ?></option>
@@ -277,7 +232,7 @@ $currentPage = 'school_years';
                         </select>
                     </div>
                     <div class="sy-field">
-                        <label>Roster CSV</label>
+                        <label for="syRosterFile">Roster CSV</label>
                         <input type="file" name="roster_csv" id="syRosterFile" accept=".csv,text/csv" required>
                     </div>
                     <button type="submit" class="sy-btn primary" id="syRosterBtn">Upload Roster</button>
@@ -287,146 +242,36 @@ $currentPage = 'school_years';
                 <?php endif; ?>
             </section>
 
-            <!-- 5. Review changes -->
             <section class="sy-panel">
-                <h3>Review Changes</h3>
-                <p class="sy-sub">
-                    The staged roster against this year's enrolled students. The not-returning list is the one that
-                    matters — those wallets get frozen, so decide what happened to each student before rolling over.
-                </p>
-
-                <?php if (!$inactiveYears): ?>
-                <p class="sy-sub">Nothing to review yet.</p>
+                <h3>Student Status</h3>
+                <p class="sy-sub">Update a student during the active school year. Enrolled allows wallet use; other statuses freeze it. Balances remain available for withdrawal through Finance.</p>
+                <?php if (!$activeYear): ?>
+                <p class="sy-sub">Activate a school year first.</p>
                 <?php else: ?>
-                <div class="sy-form-row">
+                <form class="sy-form-row" onsubmit="syLookupStudent(event); return false;">
                     <div class="sy-field">
-                        <label>School Year</label>
-                        <select id="syDiffYear">
-                            <?php foreach ($inactiveYears as $year): ?>
-                            <option value="<?= (int) $year['id'] ?>" <?= isset($stagedByYear[(int) $year['id']]) ? 'data-staged="1"' : '' ?>>
-                                <?= $e($year['school_year_name']) ?><?= isset($stagedByYear[(int) $year['id']]) ? ' — roster staged' : ' — no roster' ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label for="syStudentNumber">Student ID</label>
+                        <input type="text" id="syStudentNumber" placeholder="School-issued student ID" required oninput="syClearStudent()">
                     </div>
-                    <button type="button" class="sy-btn ghost" onclick="syLoadDiff()">Load Review</button>
-                </div>
-                <div id="syDiffMsg" class="sy-msg"></div>
-                <div id="syDiffBody" style="display:none;margin-top:14px;">
-                    <div class="sy-buckets" id="syDiffBuckets"></div>
-                    <div id="syDiffUnmatched" class="sy-unmatched"></div>
-
-                    <details class="sy-details" id="syReturningWrap">
-                        <summary>Returning students (<span id="syReturningCount">0</span>)</summary>
-                        <div class="sy-name-list" id="syReturningList"></div>
-                    </details>
-
-                    <details class="sy-details" id="syNewWrap">
-                        <summary>New students (<span id="syNewCount">0</span>)</summary>
-                        <div class="sy-name-list" id="syNewList"></div>
-                    </details>
-
-                    <h3 style="margin-top:18px;">Not Returning</h3>
-                    <p class="sy-sub">
-                        Enrolled this year but absent from the new roster. Record what happened to each one — balances
-                        stay in their wallets either way, nothing here moves money.
-                    </p>
-
-                    <div class="sy-bulk-bar">
-                        <label for="syBulkStatus">Set all to</label>
-                        <select id="syBulkStatus">
-                            <option value="">Choose a status…</option>
-                            <option value="graduated">Graduated</option>
-                            <option value="dropped">Dropped</option>
-                            <option value="transferred">Transferred</option>
-                            <option value="on_leave">On Leave</option>
+                    <button type="submit" class="sy-btn ghost">Find Student</button>
+                </form>
+                <div class="sy-lookup-card" id="syLookupCard"></div>
+                <div id="syStatusControls" class="sy-form-row" hidden style="margin-top:12px;">
+                    <div class="sy-field">
+                        <label for="syStudentStatus">Enrollment Status</label>
+                        <select id="syStudentStatus">
+                            <option value="enrolled">Enrolled</option>
                             <option value="not_enrolled">Not Enrolled</option>
+                            <option value="transferred">Transferred</option>
+                            <option value="dropped">Dropped</option>
+                            <option value="graduated">Graduated</option>
                         </select>
-                        <button type="button" class="sy-btn ghost" onclick="syApplyBulk()" title="Set every not-returning student to the status chosen on the left, in one step.">Apply to All</button>
-                        <button type="button" class="sy-btn ghost" onclick="syFillAll()" title="Pre-select that status in each row below without saving, so you can adjust individuals first.">Fill Dropdowns Only</button>
                     </div>
-
-                    <div class="table-responsive">
-                        <table class="table align-middle sy-nr-table">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Student ID</th>
-                                    <th>Year Level</th>
-                                    <th>Balance</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="syNotReturningBody"></tbody>
-                        </table>
-                    </div>
-
-                    <button type="button" class="sy-btn primary" onclick="syApplySelected()">Apply Selected Statuses</button>
-                    <div id="syApplyMsg" class="sy-msg"></div>
+                    <button type="button" id="sySaveStatus" class="sy-btn primary" onclick="sySaveStudentStatus()">Save Status</button>
                 </div>
+                <div id="syStatusMsg" class="sy-msg" role="status"></div>
                 <?php endif; ?>
             </section>
-
-            <!-- 7. Manual overrides -->
-            <details class="sy-overrides sy-panel">
-                <summary>Manual Overrides</summary>
-                <p class="sy-sub" style="margin-top:8px;">
-                    One-off corrections outside the roster flow. Every change here goes through the same write path and
-                    lands in the audit trail.
-                </p>
-
-                <div class="sy-panel">
-                    <h3>Mark a Student Graduated</h3>
-                    <p class="sy-sub">Freezes the student's wallet. If they have a balance, process a withdrawal/encashment first — this does not move money.</p>
-
-                    <div class="sy-form-row">
-                        <div class="sy-field">
-                            <label>Student User ID</label>
-                            <input type="number" id="syGradUserId" min="1" placeholder="e.g. 42">
-                        </div>
-                        <button type="button" class="sy-btn ghost" onclick="syLookupStudent()">Look Up</button>
-                        <button type="button" class="sy-btn primary" id="syGradBtn" disabled onclick="syMarkGraduate()">Mark Graduated</button>
-                        <?php if ($isSuperAdmin): ?>
-                        <button type="button" class="sy-btn ghost" id="syUngradBtn" disabled onclick="syUnmarkGraduate()">Un-graduate</button>
-                        <?php endif; ?>
-                    </div>
-                    <div class="sy-lookup-card" id="syLookupCard"></div>
-                    <div id="syGradMsg" class="sy-msg"></div>
-                    <?php if ($isSuperAdmin): ?>
-                    <p class="sy-note">Un-graduating clears the graduation date, enrolls the student for the active school year, and unfreezes their wallet. Super admin only.</p>
-                    <?php endif; ?>
-                </div>
-
-                <div class="sy-panel">
-                    <h3>Bulk Graduate by Year Level</h3>
-                    <p class="sy-sub">Marks every non-graduated student at the selected year level as graduated and freezes their wallets.</p>
-
-                    <div class="sy-form-row">
-                        <div class="sy-field">
-                            <label>Year Level</label>
-                            <select id="syBulkYrLvl">
-                                <option value="">Select year level</option>
-                                <?php foreach ($yrLevels as $yl): ?>
-                                <option value="<?= $e($yl) ?>"><?= $e($yl) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <button type="button" class="sy-btn primary" onclick="syBulkGraduate()">Graduate This Year Level</button>
-                    </div>
-                    <div id="syBulkMsg" class="sy-msg"></div>
-                    <div class="sy-result-list" id="syBulkResults"></div>
-                </div>
-            </details>
-
-            <!-- 8. Backfill -->
-            <?php if ($isSuperAdmin): ?>
-            <section class="sy-panel">
-                <h3>Backfill Legacy Transactions</h3>
-                <p class="sy-sub">One-time: maps existing transactions with no school year to a year, by comparing their date against each school year's start/end date. Super admin only.</p>
-                <button type="button" class="sy-btn ghost" onclick="syBackfill()">Run Backfill</button>
-                <div id="syBackfillMsg" class="sy-msg"></div>
-            </section>
-            <?php endif; ?>
 
         </main>
     </div>
@@ -436,7 +281,7 @@ $currentPage = 'school_years';
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="border-radius:16px;border:none;">
                 <div class="modal-header">
-                    <h5 class="modal-title">Confirm School Year Rollover</h5>
+                    <h5 class="modal-title">Activate School Year</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="syRolloverBody" style="font-size:14px;">
@@ -444,7 +289,7 @@ $currentPage = 'school_years';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="sy-btn ghost" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="sy-btn primary" id="syRolloverConfirmBtn" disabled onclick="syConfirmRollover()">Confirm Rollover</button>
+                    <button type="button" class="sy-btn primary" id="syRolloverConfirmBtn" disabled onclick="syConfirmRollover()">Activate Year</button>
                 </div>
             </div>
         </div>
@@ -490,8 +335,6 @@ $currentPage = 'school_years';
         const form = document.getElementById("syCreateForm");
         const data = await syPost("create_year", {
             school_year_name: form.school_year_name.value.trim(),
-            start_date: form.start_date.value,
-            end_date: form.end_date.value,
         });
         syShowMsg("syCreateMsg", data.message, data.success);
         if (data.success) {
@@ -545,183 +388,16 @@ $currentPage = 'school_years';
             }
             unmatchedEl.innerHTML = notes.join("<br>");
 
-            // Jump straight into the review for the year that was just staged.
-            const diffYear = document.getElementById("syDiffYear");
-            if (diffYear) {
-                diffYear.value = String(data.school_year_id);
-                syLoadDiff();
-            }
+            await syStartRollover(data.school_year_id);
         }
         return false;
-    }
-
-    // ── Review changes ───────────────────────────────────────────────────
-    let syDiff = null;
-
-    async function syLoadDiff() {
-        const yearId = document.getElementById("syDiffYear").value;
-        document.getElementById("syDiffBody").style.display = "none";
-        syShowMsg("syDiffMsg", "Loading review…", true);
-
-        const data = await syPost("preview_diff", { school_year_id: yearId });
-        if (!data.success) {
-            syShowMsg("syDiffMsg", data.message || "Could not load the review.", false);
-            return;
-        }
-
-        syDiff = data;
-        syShowMsg("syDiffMsg", `Roster for ${data.school_year_name}: ${data.roster_rows} row(s).`, true);
-        document.getElementById("syDiffBody").style.display = "";
-
-        document.getElementById("syDiffBuckets").innerHTML = `
-            <div class="sy-bucket">
-                <span>Returning</span><strong>${data.returning.count}</strong>
-                <small>Enrolled now and on the new roster</small>
-            </div>
-            <div class="sy-bucket">
-                <span>New</span><strong>${data.new_students.count}</strong>
-                <small>On the roster, no current enrollment</small>
-            </div>
-            <div class="sy-bucket is-warn">
-                <span>Not Returning</span><strong>${data.not_returning.count}</strong>
-                <small>${data.not_returning.with_balance} with a balance, ${syPeso(data.not_returning.balance_total)} total</small>
-            </div>
-        `;
-
-        const unmatchedEl = document.getElementById("syDiffUnmatched");
-        unmatchedEl.innerHTML = data.unmatched_count
-            ? `${data.unmatched_count} roster row(s) had no matching GenPay account and are excluded: ` +
-              (data.unmatched_numbers || []).map(syEsc).join(", ")
-            : "";
-
-        syRenderNameList("syReturningList", "syReturningCount", data.returning, data.row_cap);
-        syRenderNameList("syNewList", "syNewCount", data.new_students, data.row_cap);
-        syRenderNotReturning(data.not_returning, data.row_cap);
-    }
-
-    function syRenderNameList(listId, countId, bucket, cap) {
-        document.getElementById(countId).textContent = bucket.count;
-        const rows = bucket.rows || [];
-        let html = rows.map(r => `
-            <div class="sy-result-row">
-                <span>${syEsc(r.name || "Unnamed")} (${syEsc(r.studentID || "—")})</span>
-                <span>${syEsc(r.yr_lvl || "—")}</span>
-            </div>
-        `).join("");
-        if (bucket.count > rows.length) {
-            html += `<p class="sy-note">Showing the first ${cap} of ${bucket.count}.</p>`;
-        }
-        document.getElementById(listId).innerHTML = html || `<p class="sy-note">None.</p>`;
-    }
-
-    function syRenderNotReturning(bucket, cap) {
-        const body = document.getElementById("syNotReturningBody");
-        const rows = bucket.rows || [];
-        if (!rows.length) {
-            body.innerHTML = `<tr><td colspan="5" class="text-center py-3">Everyone currently enrolled is on the new roster.</td></tr>`;
-            return;
-        }
-
-        body.innerHTML = rows.map(r => `
-            <tr data-user-id="${r.student_user_id}">
-                <td><strong>${syEsc(r.name || "Unnamed")}</strong></td>
-                <td>${syEsc(r.studentID || "—")}</td>
-                <td>${syEsc(r.yr_lvl || "—")}</td>
-                <td class="sy-bal${r.balance > 0 ? " has-money" : ""}">${syPeso(r.balance)}</td>
-                <td>
-                    <select class="sy-nr-status">
-                        <option value="">Leave for now</option>
-                        <option value="graduated">Graduated</option>
-                        <option value="dropped">Dropped</option>
-                        <option value="transferred">Transferred</option>
-                        <option value="on_leave">On Leave</option>
-                        <option value="not_enrolled">Not Enrolled</option>
-                    </select>
-                </td>
-            </tr>
-        `).join("");
-
-        if (bucket.count > rows.length) {
-            body.insertAdjacentHTML("beforeend",
-                `<tr><td colspan="5"><p class="sy-note">Showing the first ${cap} of ${bucket.count}. Use "Apply to All" to cover the rest.</p></td></tr>`);
-        }
-    }
-
-    /** Client-side convenience: point every row dropdown at one status. */
-    function syFillAll() {
-        const status = document.getElementById("syBulkStatus").value;
-        if (!status) {
-            syShowMsg("syApplyMsg", "Choose a status first.", false);
-            return;
-        }
-        document.querySelectorAll("#syNotReturningBody .sy-nr-status").forEach(sel => { sel.value = status; });
-        syShowMsg("syApplyMsg", "Dropdowns filled. Review them, then apply.", true);
-    }
-
-    /** One status for every not-returning student, including any past the row cap. */
-    async function syApplyBulk() {
-        if (!syDiff) return;
-        const status = document.getElementById("syBulkStatus").value;
-        if (!status) {
-            syShowMsg("syApplyMsg", "Choose a status first.", false);
-            return;
-        }
-        const total = syDiff.not_returning.count;
-        if (!total) {
-            syShowMsg("syApplyMsg", "There is nobody in the not-returning list.", false);
-            return;
-        }
-        if (!await gpConfirm({
-                title: 'Set every not-returning student to "' + status + '"?',
-                body: 'This records an enrolment status. No money moves — balances stay in their wallets.',
-                detail: [['Students affected', total]],
-                confirmLabel: 'Set all ' + total,
-            })) return;
-
-        // apply_all lets the server recompute the bucket, so this covers every
-        // not-returning student including any past the display cap.
-        const data = await syPost("apply_statuses", {
-            school_year_id: syDiff.school_year_id,
-            bulk_status: status,
-            apply_all: "1",
-        });
-        syShowMsg("syApplyMsg", data.message, data.success);
-        if (data.success) syLoadDiff();
-    }
-
-    async function syApplySelected() {
-        if (!syDiff) return;
-        const statuses = [];
-        document.querySelectorAll("#syNotReturningBody tr[data-user-id]").forEach(tr => {
-            const status = tr.querySelector(".sy-nr-status").value;
-            if (status) {
-                statuses.push({ student_user_id: Number(tr.dataset.userId), status });
-            }
-        });
-        if (!statuses.length) {
-            syShowMsg("syApplyMsg", "No statuses selected.", false);
-            return;
-        }
-        if (!await gpConfirm({
-                title: 'Record these status changes?',
-                body: 'This records enrolment statuses. No money moves — balances stay in their wallets.',
-                detail: [['Changes to record', statuses.length]],
-                confirmLabel: 'Record changes',
-            })) return;
-
-        const data = await syPost("apply_statuses", {
-            school_year_id: syDiff.school_year_id,
-            statuses: JSON.stringify(statuses),
-        });
-        syShowMsg("syApplyMsg", data.message, data.success);
-        if (data.success) syLoadDiff();
     }
 
     // ── Rollover ─────────────────────────────────────────────────────────
     let syRolloverModal;
     let syPendingRollover = null;
 
-    async function syStartRollover(newYearId, newYearName) {
+    async function syStartRollover(newYearId) {
         syPendingRollover = null;
         document.getElementById("syRolloverConfirmBtn").disabled = true;
         document.getElementById("syRolloverBody").textContent = "Loading…";
@@ -736,7 +412,7 @@ $currentPage = 'school_years';
 
         if (!data.has_roster) {
             document.getElementById("syRolloverBody").innerHTML = `
-                <p><strong>No roster uploaded for ${syEsc(data.new_school_year_name)}.</strong></p>
+                <p><strong>No matching roster students for ${syEsc(data.new_school_year_name)}.</strong></p>
                 <p style="color:var(--gp-muted);font-size:13px;">
                     Rolling over without one would leave every student unenrolled and frozen. Upload the registrar
                     roster and review the changes first.
@@ -752,12 +428,12 @@ $currentPage = 'school_years';
             <ul style="padding-left:18px;margin:0 0 8px;">
                 <li><strong>${data.enrolled_count}</strong> student(s) enrolled for the new year
                     (${data.returning_count} returning, ${data.new_count} new).</li>
-                <li><strong>${data.not_returning_count}</strong> student(s) are not on the roster and will be frozen.</li>
+                <li><strong>${data.frozen_count}</strong> student wallet(s) will be frozen (${data.not_returning_count} missing from the roster).</li>
                 <li><strong>${data.frozen_with_balance}</strong> of those still hold a balance
-                    (${syPeso(data.frozen_balance_total)} in total), which stays in their wallets.</li>
+                    (${syPeso(data.frozen_balance_total)} in total), which stays available for withdrawal at Finance.</li>
                 ${data.unmatched_count ? `<li>${data.unmatched_count} roster row(s) have no GenPay account and are skipped.</li>` : ""}
             </ul>
-            <p style="color:var(--gp-muted);font-size:13px;">No money moves. Wallet balances stay exactly as they are — this only records the snapshot.</p>
+            <p style="color:var(--gp-muted);font-size:13px;">Wallet balances are kept. Students absent from the roster become Not Enrolled; withdrawals at the Finance office remain available.</p>
         `;
         document.getElementById("syRolloverConfirmBtn").disabled = false;
     }
@@ -780,115 +456,65 @@ $currentPage = 'school_years';
         }
         gpToast(data.message || 'The rollover did not complete.', false);
         btn.disabled = false;
-        btn.textContent = "Confirm Rollover";
+        btn.textContent = "Activate Year";
     }
 
-    // ── Manual overrides ─────────────────────────────────────────────────
     let syLookedUpStudent = null;
-
-    async function syLookupStudent() {
-        const userId = document.getElementById("syGradUserId").value;
-        const card = document.getElementById("syLookupCard");
-        const ungradBtn = document.getElementById("syUngradBtn");
-        document.getElementById("syGradBtn").disabled = true;
-        if (ungradBtn) ungradBtn.disabled = true;
+    let syLookupVersion = 0;
+    function syClearStudent() {
+        syLookupVersion++;
         syLookedUpStudent = null;
-        if (!userId) return;
-
-        const data = await syPost("student_lookup", { student_user_id: userId });
-        if (!data.success) {
-            card.style.display = "";
-            card.innerHTML = `<span style="color:var(--gp-danger,#dc2626)">${syEsc(data.message)}</span>`;
-            return;
-        }
-
-        syLookedUpStudent = data.student;
-        card.style.display = "";
-        card.innerHTML = `
-            <strong>${syEsc(data.student.name || "Unnamed")}</strong> (${syEsc(data.student.studentID || "no ID")})<br>
-            Balance: ${syPeso(data.student.balance)} &middot;
-            Wallet: ${syEsc(data.student.wallet_state)} &middot;
-            This year: ${syEsc(data.student.enrollment_status || "no enrollment record")}<br>
-            ${data.student.graduated_at ? "Graduated on " + syEsc(data.student.graduated_at) : "Not marked as graduated"}
-        `;
-        document.getElementById("syGradBtn").disabled = !!data.student.graduated_at;
-        if (ungradBtn) {
-            ungradBtn.disabled = !data.student.graduated_at && data.student.enrollment_status !== "graduated";
-        }
+        document.getElementById("syStatusControls").hidden = true;
+        document.getElementById("syLookupCard").style.display = "none";
+        syShowMsg("syStatusMsg", "", true);
     }
-
-    async function syMarkGraduate() {
-        if (!syLookedUpStudent) return;
-        if (!await gpConfirm({
-                title: 'Mark this student as graduated?',
-                body: 'Their wallet is frozen, so no further spending or transfers are possible.',
-                detail: [['Student', syLookedUpStudent.name || 'This student']],
-                note: 'Any remaining balance stays in the wallet. Use Un-graduate to reverse this.',
-                confirmLabel: 'Mark graduated',
-            })) return;
-
-        const data = await syPost("mark_graduate", { student_user_id: syLookedUpStudent.student_user_id });
-        syShowMsg("syGradMsg", data.message, data.success);
-        if (data.success) {
-            document.getElementById("syGradBtn").disabled = true;
-            syLookupStudent();
-        }
-    }
-
-    async function syUnmarkGraduate() {
-        if (!syLookedUpStudent) return;
-        if (!await gpConfirm({
-                title: 'Reverse this graduation?',
-                body: 'The wallet is unfrozen and the student is enrolled for the active school year.',
-                detail: [['Student', syLookedUpStudent.name || 'This student']],
-                confirmLabel: 'Reverse graduation',
-            })) return;
-
-        const data = await syPost("unmark_graduate", { student_user_id: syLookedUpStudent.student_user_id });
-        syShowMsg("syGradMsg", data.message, data.success);
-        if (data.success) {
-            syLookupStudent();
-        }
-    }
-
-    async function syBulkGraduate() {
-        const yrLvl = document.getElementById("syBulkYrLvl").value;
-        if (!yrLvl) {
-            syShowMsg("syBulkMsg", "Select a year level.", false);
-            return;
-        }
-        if (!await gpConfirm({
-                title: 'Graduate a whole year level?',
-                body: 'Every non-graduated student at this year level is marked graduated and their wallets frozen.',
-                detail: [['Year level', yrLvl]],
-                note: 'This affects many students at once. Balances are kept, but each wallet is frozen.',
-                confirmLabel: 'Graduate year ' + yrLvl,
-                danger: true,
-                typeToConfirm: 'GRADUATE',
-            })) return;
-
-        const data = await syPost("mark_graduate_bulk_year", { yr_lvl: yrLvl });
-        syShowMsg("syBulkMsg", data.message, data.success);
-
-        const resultsEl = document.getElementById("syBulkResults");
-        resultsEl.innerHTML = "";
-        (data.results || []).forEach(r => {
-            const row = document.createElement("div");
-            row.className = "sy-result-row";
-            row.innerHTML = `<span>${syEsc(r.name || "Unnamed")} (${syEsc(r.studentID || "—")})</span><span>${syPeso(r.balance)}${r.has_balance ? " ⚠" : ""}</span>`;
-            resultsEl.appendChild(row);
+    async function syLookupStudent(event) {
+        if (event) event.preventDefault();
+        syClearStudent();
+        const version = syLookupVersion;
+        const data = await syPost("student_lookup", {
+            student_id_number: document.getElementById("syStudentNumber").value.trim(),
         });
+        if (version !== syLookupVersion) return;
+        if (!data.success) {
+            syShowMsg("syStatusMsg", data.message, false);
+            return;
+        }
+        syLookedUpStudent = data.student;
+        const card = document.getElementById("syLookupCard");
+        card.style.display = "block";
+        const labels = {enrolled: "Enrolled", not_enrolled: "Not Enrolled", transferred: "Transferred", dropped: "Dropped", graduated: "Graduated"};
+        card.innerHTML = `<strong>${syEsc(data.student.name)}</strong> (${syEsc(data.student.studentID)})<br>
+            Balance: ${syPeso(data.student.balance)} &middot; Status: ${syEsc(labels[data.student.enrollment_status] || "Not Enrolled")} &middot;
+            Wallet: ${data.student.wallet_state === "active" && !data.student.is_frozen ? "Active" : "Frozen"}`;
+        document.getElementById("syStudentStatus").value = labels[data.student.enrollment_status] ? data.student.enrollment_status : "not_enrolled";
+        document.getElementById("syStatusControls").hidden = false;
     }
-
-    // ── Legacy backfill ──────────────────────────────────────────────────
-    async function syBackfill() {
+    async function sySaveStudentStatus() {
+        if (!syLookedUpStudent) return;
+        const student = syLookedUpStudent;
+        const select = document.getElementById("syStudentStatus");
+        const status = select.value;
         if (!await gpConfirm({
-                title: 'Run the legacy transaction backfill?',
-                body: 'This stamps historical transactions with the school year they belong to. It is designed to run once.',
-                confirmLabel: 'Run backfill',
-            })) return;
-        const data = await syPost("backfill_legacy", {});
-        syShowMsg("syBackfillMsg", data.message, data.success);
+            title: "Update student status?",
+            body: status === "enrolled" ? "Enrollment allows wallet use, subject to any parent or account restrictions." : "Spending, transfers, and cash-in will stop. The remaining balance can still be withdrawn through Finance.",
+            detail: [["Student", student.name], ["Status", select.options[select.selectedIndex].text]],
+            confirmLabel: "Save status",
+        })) return;
+        const btn = document.getElementById("sySaveStatus");
+        btn.disabled = true;
+        try {
+            const data = await syPost("set_student_status", {
+                student_user_id: student.student_user_id,
+                school_year_id: <?= (int) ($activeYear['id'] ?? 0) ?>,
+                status,
+            });
+            if (data.success) {
+                await syLookupStudent();
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            syShowMsg("syStatusMsg", data.message, data.success);
+        } finally { btn.disabled = false; }
     }
     </script>
 </body>

@@ -121,6 +121,8 @@ foreach ($dbUsers as $u) {
         // either one — it is what the pill's tooltip shows.
         "suspension_reason" => ($isSuspended || $isBanned) ? trim((string) ($u['suspension_reason'] ?? '')) : '',
         "can_suspend" => $canSuspend,
+        "can_reset_password" => (int) $u['roleID'] === 1
+            && in_array((string) ($u['sub_role'] ?? ''), ['', 'student'], true),
     ];
 }
 
@@ -168,9 +170,7 @@ $currentPage = 'users';
 
                 <div class="admin-user">
                     <span><?= htmlspecialchars(gjc_current_user($db)['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-tie"></i>
-                    </div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 
@@ -298,6 +298,15 @@ $currentPage = 'users';
                                             </button>
 
                                             <ul class="dropdown-menu premium-dropdown">
+                                                <?php if ($u['can_reset_password']): ?>
+                                                <li><button type="button" class="dropdown-item js-reset-password"
+                                                        data-user-id="<?= (int) $u['id'] ?>"
+                                                        data-user-name="<?= $esc($u['name']) ?>"
+                                                        data-student-id="<?= $esc($u['school_id']) ?>">
+                                                        <i class="fa-solid fa-key me-2"></i>Reset Password
+                                                    </button></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <?php endif; ?>
                                                 <?php if ($u['banned']): ?>
                                                 <!-- A ban outranks a suspension, so it is the only
                                                      lockout action a banned account offers: there is
@@ -357,6 +366,28 @@ $currentPage = 'users';
 
         </main>
 
+    </div>
+
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content custom-modal">
+                <div class="modal-header"><h5 class="modal-title" id="resetPasswordTitle">Reset Student Password</h5></div>
+                <div class="modal-body">
+                    <p>Reset the password for <strong id="resetPasswordName"></strong> (<span id="resetPasswordStudentId"></span>).</p>
+                    <form id="resetPasswordForm">
+                        <input type="hidden" name="action" value="reset_password">
+                        <input type="hidden" name="user_id" id="resetPasswordUserId">
+                        <input type="hidden" name="csrf_token" value="<?= $esc(gjc_csrf_token()) ?>">
+                        <p>Verify the student's school ID before continuing. The temporary password will be emailed to their registered email address. This ends their existing sessions, and they must choose a new password at login. Account restrictions remain in effect.</p>
+                        <label for="resetPasswordConfirm">Type <strong>RESET</strong> to confirm</label>
+                        <input class="form-control mt-2" type="text" name="confirm" id="resetPasswordConfirm" pattern="RESET" autocomplete="off" required>
+                        <button class="login-btn mt-3" type="submit" id="resetPasswordSubmit">Reset Password</button>
+                    </form>
+                    <div id="resetPasswordMsg" class="mt-3" role="status"></div>
+                    <button type="button" class="btn btn-outline-secondary mt-3" data-bs-dismiss="modal" id="resetPasswordClose">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Suspend Account Modal -->
@@ -480,7 +511,58 @@ $currentPage = 'users';
     // change and sort, so per-button listeners bound at load would go stale.
     const USERS_API = "<?= ADMIN_URL ?>/api/users.php";
 
+    const resetModal = document.getElementById('resetPasswordModal');
+    const resetForm = document.getElementById('resetPasswordForm');
+    const resetSubmit = document.getElementById('resetPasswordSubmit');
+    let resetPending = false;
+    resetModal.addEventListener('hide.bs.modal', function (e) {
+        if (resetPending) e.preventDefault();
+    });
+    resetModal.addEventListener('hidden.bs.modal', function () {
+        resetForm.reset();
+        document.getElementById('resetPasswordMsg').textContent = '';
+    });
+    resetForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (resetPending) return;
+        resetPending = true;
+        resetSubmit.disabled = true;
+        resetSubmit.textContent = 'Resetting...';
+        const msg = document.getElementById('resetPasswordMsg');
+        msg.className = 'mt-3';
+        msg.textContent = '';
+        try {
+            const resp = await fetch(USERS_API, {method: 'POST', body: new FormData(resetForm), cache: 'no-store'});
+            const data = await resp.json();
+            msg.textContent = data.message;
+            msg.className = 'mt-3 alert ' + (data.success ? 'alert-success' : 'alert-danger');
+            if (data.success) {
+                resetForm.classList.add('d-none');
+                document.getElementById('resetPasswordClose').textContent = 'Done';
+            }
+        } catch (err) {
+            msg.className = 'mt-3 alert alert-danger';
+            msg.textContent = 'Could not confirm the reset. Ask the student to check their email before trying again.';
+        } finally {
+            resetPending = false;
+            resetSubmit.disabled = false;
+            resetSubmit.textContent = 'Reset Password';
+        }
+    });
+
     document.getElementById("usersTable").addEventListener("click", function (e) {
+        const resetBtn = e.target.closest('.js-reset-password');
+        if (resetBtn) {
+            resetForm.reset();
+            resetForm.classList.remove('d-none');
+            document.getElementById('resetPasswordMsg').textContent = '';
+            document.getElementById('resetPasswordClose').textContent = 'Cancel';
+            document.getElementById('resetPasswordUserId').value = resetBtn.dataset.userId;
+            document.getElementById('resetPasswordName').textContent = resetBtn.dataset.userName;
+            document.getElementById('resetPasswordStudentId').textContent = resetBtn.dataset.studentId;
+            bootstrap.Modal.getOrCreateInstance(resetModal).show();
+            return;
+        }
         const suspendBtn = e.target.closest(".js-suspend");
         if (suspendBtn) {
             document.getElementById("suspendUserId").value = suspendBtn.dataset.userId;

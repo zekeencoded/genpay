@@ -144,6 +144,15 @@
   gap: 12px;
 }
 
+.transactions-page .transaction-gencoin {
+  display: block;
+  color: var(--gp-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
 .party-avatar {
   width: 42px;
   height: 42px;

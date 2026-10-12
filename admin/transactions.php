@@ -35,7 +35,7 @@ $currentPage = 'transactions';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/transactions.css?v=12">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/transactions.css?v=13">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -62,9 +62,7 @@ $currentPage = 'transactions';
 
                 <div class="admin-user">
                     <span><?= htmlspecialchars($currentUser['name'] ?? 'Finance', ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-tie"></i>
-                    </div>
+                    <?php require __DIR__ . '/../includes/partials/avatar_admin.php'; ?>
                 </div>
             </header>
 
@@ -84,7 +82,8 @@ $currentPage = 'transactions';
                         <i class="fa-solid fa-chart-line"></i>
                     </div>
                     <span>Today's Volume</span>
-                    <h2><?php echo gjc_money($stats['todays_volume']); ?></h2>
+                    <h2><?= gjc_gc_amount($stats['todays_volume']) ?> GC</h2>
+                    <div class="transaction-gencoin">&asymp; <?= gjc_money($stats['todays_volume']) ?></div>
                     <p>Successful transactions today</p>
                 </div>
 
@@ -174,6 +173,7 @@ $currentPage = 'transactions';
                             <?= $hasFilters ? 'Matching' : 'The' ?> most recent
                             <?= count($transactions) ?> wallet movement<?= count($transactions) === 1 ? '' : 's' ?>.
                             Use the filters above to narrow this down, or Export for the full range.
+                            <?= gjc_money(GJC_PESOS_PER_GC) ?> = 1 GC.
                         </p>
                     </div>
                 </div>
@@ -214,7 +214,10 @@ $currentPage = 'transactions';
                                     </span>
                                 </td>
 
-                                <td class="transaction-amount"><?php echo gjc_money($transaction['amount']); ?></td>
+                                <td class="transaction-amount" data-order="<?= (float) $transaction['amount'] ?>">
+                                    <?= gjc_gc_amount($transaction['amount']) ?> GC
+                                    <span class="transaction-gencoin">&asymp; <?= gjc_money($transaction['amount']) ?></span>
+                                </td>
 
                                 <td>
                                     <div class="party-cell">

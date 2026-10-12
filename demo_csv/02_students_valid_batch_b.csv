@@ -1,0 +1,8 @@
+#genpay-template:students:23bf5ca570c0ec0664249ba8e6fe97a7
+student_id_number,first_name,last_name,course_program,email,phone_number,middle_name,suffix,year_level,sex,date_of_birth,address_barangay,address_city,address_province,parent_name,parent_email,parent_contact
+GJC2026-8007,Camille Anne,Navarro,BSA,camille.anne.navarro.demo@example.com,09170001006,Reyes,,3,Female,2005-09-16,San Fernando Norte,Cabiao,Nueva Ecija,,,
+GJC2026-8008,Rafael Antonio,Villanueva,BSHM,rafael.antonio.villanueva.demo@example.com,09170001007,Mendoza,,4,Male,2004-12-05,San Fernando Sur,Cabiao,Nueva Ecija,,,
+GJC2026-8009,Bianca Marie,Torres,BSBA-MM,bianca.marie.torres.demo@example.com,09170001008,Castillo,,1,Female,2006-07-11,San Fernando Norte,Cabiao,Nueva Ecija,,,
+GJC2026-8010,Adrian Paolo,Castillo,BSIT,adrian.paolo.castillo.demo@example.com,09170001009,Fernandez,,2,Male,2005-03-30,San Fernando Sur,Cabiao,Nueva Ecija,,,
+GJC2026-8011,Alyssa Nicole,Fernandez,BSED-MATH,alyssa.nicole.fernandez.demo@example.com,09170001010,Dela Cruz,,3,Female,2006-10-08,San Fernando Norte,Cabiao,Nueva Ecija,,,
+GJC2026-8012,Matthew James,Aquino,BSA,matthew.james.aquino.demo@example.com,09170001011,Villanueva,,4,Male,2005-05-24,San Fernando Sur,Cabiao,Nueva Ecija,,,

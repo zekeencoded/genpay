@@ -1,0 +1,5 @@
+#genpay-template:students:23bf5ca570c0ec0664249ba8e6fe97a7
+student_number,given_name,last_name,course_program,email,phone_number,middle_name,suffix,year_level,sex,date_of_birth,address_barangay,address_city,address_province,parent_name,parent_email,parent_contact
+GJC2026-8001,Maria Angela,Reyes,BSIT,maria.angela.reyes.demo@example.com,09170001000,Santos,,1,Female,2006-04-18,San Fernando Norte,Cabiao,Nueva Ecija,,,
+GJC2026-8002,Jose Miguel,Santos,BSA,jose.miguel.santos.demo@example.com,09170001001,Cruz,,2,Male,2005-11-09,San Fernando Sur,Cabiao,Nueva Ecija,,,
+GJC2026-8003,Isabella,Dela Cruz,BSHM,isabella.delacruz.demo@example.com,09170001002,Garcia,,3,Female,2006-02-14,San Fernando Norte,Cabiao,Nueva Ecija,,,

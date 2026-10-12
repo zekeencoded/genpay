@@ -33,6 +33,7 @@ $action = strtolower(trim((string) ($body['action'] ?? '')));
 try {
     switch ($action) {
 
+        case 'lookup_student':
         case 'link_student': {
             $schoolId = strtoupper(trim((string) ($body['school_id'] ?? '')));
             if (!$schoolId) {
@@ -62,6 +63,15 @@ try {
             $chk->execute([$parentId, $studentUserId]);
             if ($chk->fetch()) {
                 throw new \RuntimeException($studentName . ' is already linked to your account.');
+            }
+
+            if ($action === 'lookup_student') {
+                echo json_encode([
+                    'success' => true,
+                    'student_name' => $studentName,
+                    'school_id' => $schoolId,
+                ]);
+                break;
             }
 
             $db->prepare(

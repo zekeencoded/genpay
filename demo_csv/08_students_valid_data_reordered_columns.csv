@@ -1,0 +1,5 @@
+#genpay-template:students:23bf5ca570c0ec0664249ba8e6fe97a7
+parent_contact,parent_email,parent_name,address_province,address_city,address_barangay,date_of_birth,sex,year_level,suffix,middle_name,phone_number,email,course_program,last_name,first_name,student_id_number
+,,,Nueva Ecija,Cabiao,San Fernando Sur,2005-03-30,Male,2,,Fernandez,09170001009,adrian.paolo.castillo.demo@example.com,BSIT,Castillo,Adrian Paolo,GJC2026-8010
+,,,Nueva Ecija,Cabiao,San Fernando Norte,2006-10-08,Female,3,,Dela Cruz,09170001010,alyssa.nicole.fernandez.demo@example.com,BSED-MATH,Fernandez,Alyssa Nicole,GJC2026-8011
+,,,Nueva Ecija,Cabiao,San Fernando Sur,2005-05-24,Male,4,,Villanueva,09170001011,matthew.james.aquino.demo@example.com,BSA,Aquino,Matthew James,GJC2026-8012

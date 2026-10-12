@@ -66,6 +66,9 @@ try {
                 throw new \InvalidArgumentException('Maximum top-up per request is ' . gjc_money_plain($maxTopup) . '.');
             }
 
+            $targetUserId = gjc_wallet_owner_user_id($db, 'student', $studentWalletId);
+            $blocked = $targetUserId > 0 ? gjc_funds_in_block_reason($db, $targetUserId) : null;
+            if ($blocked !== null) throw new RuntimeException($blocked);
             $engine = new CirculationEngine($db);
             $result = $engine->merchantSendToStudent(
                 $merchantWalletId,

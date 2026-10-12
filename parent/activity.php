@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
+require_once __DIR__ . '/../connection/parent_activity_filters.php';
 
 gjc_require_role(['parent']);
 gjc_ensure_parent_schema($db);
@@ -38,9 +39,7 @@ foreach ($linkedStudents as $s) {
 
 // Filters — the wallet selector is re-verified against the linked-wallet set
 // below, never trusted as-is (a parent could otherwise probe any wallet id).
-// 'me' is the parent's own wallet: now that parents shop from their own
-// balance, their purchases have to be readable on their own instead of only
-// ever being mixed in with the students' rows.
+// 'me' includes every transaction on the parent's wallet, including allowances.
 $walletFilter    = trim((string) ($_GET['student'] ?? '0'));
 $showOwnOnly     = ($walletFilter === 'me' && $parentWalletId > 0);
 $selectedStudent = $showOwnOnly ? 0 : (int) $walletFilter;
@@ -49,52 +48,29 @@ if ($selectedStudent > 0 && !in_array($selectedStudent, $walletIds, true)) {
 }
 // Normalised back so the <select> below can mark the right option.
 $walletFilter = $showOwnOnly ? 'me' : (string) $selectedStudent;
+$typeOptions = gjc_transaction_type_options() + ['p2p_transfer' => 'Transfer', 'student_withdraw' => 'Withdrawal'];
+unset($typeOptions['voucher_payment'], $typeOptions['voucher_create'], $typeOptions['voucher_expire'], $typeOptions['encashment']);
 $filterType = trim((string) ($_GET['type'] ?? ''));
-if (!array_key_exists($filterType, gjc_transaction_type_options())) {
+foreach (gjc_parent_activity_types() as $category => $ledgerTypes) {
+    if (in_array($filterType, $ledgerTypes, true)) {
+        $filterType = $category;
+        break;
+    }
+}
+if (!array_key_exists($filterType, $typeOptions)) {
     $filterType = '';
 }
-$dateFrom = trim((string) ($_GET['from'] ?? ''));
-$dateTo   = trim((string) ($_GET['to'] ?? ''));
+$dateFrom = gjc_parent_activity_date(trim((string) ($_GET['from'] ?? '')));
+$dateTo = gjc_parent_activity_date(trim((string) ($_GET['to'] ?? '')));
+if ($dateFrom !== '' && $dateTo !== '' && $dateFrom > $dateTo) {
+    [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+}
 
 $rows = [];
 if (($walletIds || $parentWalletId) && gjc_table_exists($db, 'transactions')) {
-    // Scope: the linked students' wallets, plus — unless one wallet is
-    // selected — the parent's own wallet purchases (Scan & Pay).
-    $scopeClauses = [];
-    $params = [];
-    if ($showOwnOnly) {
-        // Purchases only: an allowance row carries both wallet ids, and it
-        // belongs to the child it landed on, not to this filter.
-        $scopeClauses[] = "(t.parent_wallet_id = ? AND COALESCE(t.student_wallet_id, 0) = 0)";
-        $params[] = $parentWalletId;
-    } elseif ($selectedStudent > 0) {
-        $scopeClauses[] = "t.student_wallet_id = ?";
-        $params[] = $selectedStudent;
-    } else {
-        if ($walletIds) {
-            $ph = implode(',', array_fill(0, count($walletIds), '?'));
-            $scopeClauses[] = "t.student_wallet_id IN ({$ph})";
-            $params = array_merge($params, $walletIds);
-        }
-        if ($parentWalletId > 0) {
-            $scopeClauses[] = "t.parent_wallet_id = ?";
-            $params[] = $parentWalletId;
-        }
-    }
-
-    $where = "WHERE (" . implode(' OR ', $scopeClauses) . ")";
-    if ($filterType !== '') {
-        $where .= " AND t.transaction_type = ?";
-        $params[] = $filterType;
-    }
-    if ($dateFrom !== '') {
-        $where .= " AND t.created_at >= ?";
-        $params[] = $dateFrom . ' 00:00:00';
-    }
-    if ($dateTo !== '') {
-        $where .= " AND t.created_at <= ?";
-        $params[] = $dateTo . ' 23:59:59';
-    }
+    [$where, $params] = gjc_parent_activity_where(
+        $walletIds, $parentWalletId, $walletFilter, $filterType, $dateFrom, $dateTo
+    );
 
     // Receipt items come from the official relational records.
     $stmt = $db->prepare(
@@ -102,53 +78,32 @@ if (($walletIds || $parentWalletId) && gjc_table_exists($db, 'transactions')) {
                 t.parent_wallet_id, t.initiated_by, t.amount, t.notes, t.status, t.created_at
            FROM transactions t
            {$where}
-          ORDER BY t.created_at DESC
+          ORDER BY t.created_at DESC, t.id DESC
           LIMIT 300"
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-$merchantNameCache = [];
-$parentNameCache = [];
-
 foreach ($rows as &$r) {
     $type = (string) $r['transaction_type'];
     $meta = gjc_student_txn_meta($type);
-    $r['label'] = $meta['label'];
+    $r['label'] = $type === 'top_up' ? 'Top-up' : ($type === 'p2p_transfer' ? 'Transfer' : ($type === 'student_withdraw' ? 'Withdrawal' : $meta['label']));
     $r['incoming'] = $meta['incoming'];
     // Whose wallet the money moved on — the parent's own, or a linked child's.
-    // An allowance row carries BOTH wallet ids (see allowanceTransfer), so the
-    // student_wallet_id guard is what keeps it attributed to the child who
-    // received it rather than reading as one of the parent's own purchases.
-    // The "Sent By" counterparty below already names the parent on those rows.
+    // In the parent's wallet filter, allowances are outgoing. In the combined
+    // trail they are attributed to the student recipient and shown only once.
     $r['is_own'] = ((int) $r['parent_wallet_id'] > 0
         && (int) $r['parent_wallet_id'] === $parentWalletId
-        && (int) $r['student_wallet_id'] === 0);
+        && ($showOwnOnly || (int) $r['student_wallet_id'] === 0));
+    if ($r['is_own'] && $type === 'allowance') {
+        $r['incoming'] = false;
+    }
     // Anything not the parent's own now always has a student wallet, so an
     // unknown id means a student who has since been unlinked — not "no wallet".
     $r['student_name'] = $r['is_own']
         ? 'You (Parent)'
         : ($studentByWallet[(int) $r['student_wallet_id']] ?? 'Unlinked student');
-
-    $counterparty = '—';
-    if (in_array($type, ['payment', 'voucher_payment'], true) && (int) $r['merchant_wallet_id'] > 0) {
-        $mwId = (int) $r['merchant_wallet_id'];
-        if (!isset($merchantNameCache[$mwId])) {
-            $mStmt = $db->prepare("SELECT user_id FROM merchant_wallets WHERE id = ?");
-            $mStmt->execute([$mwId]);
-            $mUserId = (int) $mStmt->fetchColumn();
-            $merchantNameCache[$mwId] = $mUserId ? gjc_user_label($db, $mUserId) : '—';
-        }
-        $counterparty = $merchantNameCache[$mwId];
-    } elseif ($type === 'allowance' && (int) $r['initiated_by'] > 0) {
-        $puId = (int) $r['initiated_by'];
-        if (!isset($parentNameCache[$puId])) {
-            $parentNameCache[$puId] = gjc_user_label($db, $puId);
-        }
-        $counterparty = $parentNameCache[$puId];
-    }
-    $r['counterparty'] = $counterparty;
 
     $itemsSummary = '';
     if (in_array($type, ['payment', 'voucher_payment'], true)) {
@@ -196,7 +151,7 @@ $currentPage = 'activity';
 
         <?php
         $topbarTitle = 'Activity Trail';
-        $topbarSubtitle = 'Your own purchases and every wallet transaction across your linked students.';
+        $topbarSubtitle = 'Your wallet transactions and activity across your linked students.';
         require __DIR__ . '/../includes/partials/topbar_parent.php';
         ?>
 
@@ -209,7 +164,7 @@ $currentPage = 'activity';
                     No students linked yet. Link a student from your <a href="<?= PARENT_URL ?>/dashboard.php">Dashboard</a> first.
                 </div>
             </div>
-            <?php else: ?>
+            <?php endif; ?>
 
             <div class="parent-card">
                 <form method="GET" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
@@ -218,9 +173,10 @@ $currentPage = 'activity';
                         <select name="student" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                             <option value="0" <?= $walletFilter === '0' ? 'selected' : '' ?>>All Wallets</option>
                             <?php if ($parentWalletId > 0): ?>
-                            <option value="me" <?= $showOwnOnly ? 'selected' : '' ?>>My Purchases (Parent)</option>
+                            <option value="me" <?= $showOwnOnly ? 'selected' : '' ?>>My Transactions (Parent)</option>
                             <?php endif; ?>
                             <?php foreach ($linkedStudents as $s): ?>
+                            <?php if ((int) $s['wallet_id'] <= 0) continue; ?>
                             <option value="<?= (int) $s['wallet_id'] ?>" <?= $selectedStudent === (int) $s['wallet_id'] ? 'selected' : '' ?>>
                                 <?= $e(trim($s['first_name'] . ' ' . $s['last_name'])) ?>
                             </option>
@@ -230,7 +186,7 @@ $currentPage = 'activity';
                     <div style="min-width:160px;">
                         <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">Type</label>
                         <select name="type" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
-                            <?php foreach (gjc_transaction_type_options() as $val => $label): ?>
+                            <?php foreach ($typeOptions as $val => $label): ?>
                             <option value="<?= $e($val) ?>" <?= $filterType === $val ? 'selected' : '' ?>><?= $e($label) ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -244,6 +200,7 @@ $currentPage = 'activity';
                         <input type="date" name="to" value="<?= $e($dateTo) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
                     </div>
                     <button type="submit" class="parent-btn parent-btn--forest" style="height:42px;">Filter</button>
+                    <a href="<?= PARENT_URL ?>/activity.php" class="parent-btn" style="height:42px;">Reset</a>
                 </form>
             </div>
 
@@ -269,7 +226,6 @@ $currentPage = 'activity';
                                 <th data-card="title">Reference</th>
                                 <th>Wallet</th>
                                 <th data-card="hide">Type</th>
-                                <th data-card="hide">Counterparty</th>
                                 <th data-card="hide">Items</th>
                                 <th data-card="amount">Amount</th>
                                 <th>Status</th>
@@ -289,7 +245,6 @@ $currentPage = 'activity';
                                     <?php endif; ?>
                                 </td>
                                 <td><?= $e($r['label']) ?></td>
-                                <td><?= $e($r['counterparty']) ?></td>
                                 <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--gp-muted);" title="<?= $e($r['items_summary']) ?>">
                                     <?= $r['items_summary'] !== '' ? $e($r['items_summary']) : '—' ?>
                                 </td>
@@ -312,8 +267,6 @@ $currentPage = 'activity';
                 </div>
                 <?php endif; ?>
             </div>
-
-            <?php endif; ?>
 
         </div>
 
