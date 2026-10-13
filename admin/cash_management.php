@@ -31,18 +31,20 @@ gjc_backfill_student_ids($db);
 $topupHistory = gjc_recent_cash_in_history($db);
 
 $pendingRequests = $db->query(
-    "SELECT e.*, m.merchantID, m.stall_name
+    "SELECT e.*, mw.user_id AS user_id, m.merchantID, m.stall_name
        FROM encashment_requests e
-       LEFT JOIN merchant m ON m.userID = e.user_id
+       LEFT JOIN merchant_wallets mw ON mw.id = e.merchant_wallet_id
+       LEFT JOIN merchant m ON m.userID = mw.user_id
       WHERE e.status = 'pending'
       ORDER BY e.created_at ASC
       LIMIT 20"
 )->fetchAll(PDO::FETCH_ASSOC);
 
 $encashmentHistory = $db->query(
-    "SELECT e.*, m.stall_name
+    "SELECT e.*, mw.user_id AS user_id, m.stall_name
        FROM encashment_requests e
-       LEFT JOIN merchant m ON m.userID = e.user_id
+       LEFT JOIN merchant_wallets mw ON mw.id = e.merchant_wallet_id
+       LEFT JOIN merchant m ON m.userID = mw.user_id
       ORDER BY e.created_at DESC
       LIMIT 20"
 )->fetchAll(PDO::FETCH_ASSOC);

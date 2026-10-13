@@ -9,6 +9,7 @@ require_once __DIR__ . '/../connection/student_import_schema.php';
 gjc_require_role(['finance']);
 gjc_ensure_audit_table($db);
 gjc_ensure_fee_waiver_credits_schema($db);
+gjc_ensure_student_entry_year_schema($db);
 gjc_backfill_fee_waiver_credits($db);
 
 $currentUser = gjc_current_user($db);
@@ -597,7 +598,6 @@ function maintenance_provision_parent(PDO $db, array $parent, array &$cache): ar
             'phone'                 => (string) $parent['contact'],
             'email'                 => $email,
             'roleID'                => 7,
-            'sub_role'              => 'parent',
             'password'              => password_hash($tempPassword, PASSWORD_DEFAULT),
             'profile_img'           => '',
             'force_password_change' => 1,
@@ -677,7 +677,6 @@ function maintenance_insert_student_user(PDO $db, array $row): int
         'phone' => $row['phone_number'],
         'email' => $row['email'],
         'roleID' => 1,
-        'sub_role' => 'student',
         'school_id' => $studentId,
         'password' => password_hash($studentId, PASSWORD_DEFAULT),
         'profile_img' => '',
@@ -742,7 +741,6 @@ function maintenance_insert_merchant_user(PDO $db, array $data): int
         'phone' => $data['phone'],
         'email' => $data['email'],
         'roleID' => 2,
-        'sub_role' => 'merchant_admin',
         'password' => password_hash((string) $data['temp_password'], PASSWORD_BCRYPT),
         'profile_img' => '',
         'force_password_change' => 1,
@@ -995,8 +993,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             // holds a DB lock open and a bad address can't roll back the import.
             $guardianEmailQueue = [];
 
+            [$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns($db);
             $studentInfoInsert = $db->prepare(
-                "INSERT INTO student_info (userID, studentID, yr_lvl, courseID) VALUES (?, ?, ?, ?)"
+                "INSERT INTO student_info (userID, studentID, {$yrCols}, courseID) VALUES (?, ?, {$yrMarks}, ?)"
             );
             $historyFields = array_keys(gjc_student_import_history_columns());
             $registryInsert = $db->prepare(
@@ -1030,7 +1029,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         // status === 'ready' (error rows were rejected above)
                         $courseId = maintenance_course_id($db, (string) $row['course_program']);
                         $userId   = maintenance_insert_student_user($db, $row);
-                        $studentInfoInsert->execute([$userId, $studentId, $row['year_level'], $courseId]);
+                        $studentInfoInsert->execute(array_merge([$userId, $studentId], array_fill(0, $yrCount, $row['year_level']), [$courseId]));
                         gjc_student_wallet($db, $userId);
 
                         // Fee Waiver Credit: freshly-created student only, never touched again on

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['finance']);
 gjc_ensure_user_profile_schema($db);
+gjc_ensure_student_entry_year_schema($db);
 
 /**
  * CRUD "Read": view a single user record as the account's real profile. The
@@ -106,13 +107,18 @@ if ($user) {
 
     if ($roleGroup === 'student') {
         if (gjc_table_exists($db, 'student_info')) {
+            // Year level for the active school year, else the entry year level.
+            $hasEnrollments = gjc_table_exists($db, 'student_enrollments');
             $q = $db->prepare(
-                "SELECT si.studentID, si.yr_lvl, si.graduated_at, c.course_code, c.course_name
+                "SELECT si.studentID, "
+                . ($hasEnrollments ? "COALESCE(se.yr_lvl, si.entry_yr_lvl)" : "si.entry_yr_lvl") . " AS yr_lvl,
+                        si.graduated_at, c.course_code, c.course_name
                    FROM student_info si
-                   LEFT JOIN course c ON c.courseID = si.courseID
-                  WHERE si.userID = ? LIMIT 1"
+                   LEFT JOIN course c ON c.courseID = si.courseID "
+                . ($hasEnrollments ? "LEFT JOIN student_enrollments se ON se.student_user_id = si.userID AND se.school_year_id = ? " : "")
+                . "WHERE si.userID = ? LIMIT 1"
             );
-            $q->execute([$userId]);
+            $q->execute($hasEnrollments ? [gjc_active_school_year_id($db) ?? 0, $userId] : [$userId]);
             $student = $q->fetch(PDO::FETCH_ASSOC) ?: null;
         }
         if (gjc_table_exists($db, 'student_wallets')) {

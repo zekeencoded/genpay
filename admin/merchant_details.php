@@ -74,6 +74,9 @@ if ($summary) {
     $ownerStmt = $db->prepare("SELECT * FROM users WHERE userID = ? LIMIT 1");
     $ownerStmt->execute([$merchantUserId]);
     $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ($owner) {
+        $owner['sub_role'] = gjc_sub_role_for_role_id((int) $owner['roleID']);
+    }
     $owner = gjc_with_user_address($db, $owner, $merchantUserId);
     $owner = gjc_with_user_suspension($db, $owner, $merchantUserId);
 
@@ -116,7 +119,7 @@ if ($summary) {
     $staff = [];
     if (in_array('merchant_owner_id', gjc_table_columns($db, 'users'), true)) {
         $staffStmt = $db->prepare(
-            "SELECT userID, first_name, last_name, email, position, status, sub_role, created_at
+            "SELECT userID, first_name, last_name, email, position, status, " . gjc_sub_role_sql() . " AS sub_role, created_at
                FROM users WHERE merchant_owner_id = ? ORDER BY first_name ASC, userID ASC"
         );
         $staffStmt->execute([$merchantUserId]);

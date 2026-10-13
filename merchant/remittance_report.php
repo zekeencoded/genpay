@@ -25,7 +25,7 @@ $stmt = $db->prepare(
     "SELECT sr.*, u.first_name, u.last_name
        FROM sales_remittances sr
        LEFT JOIN users u ON u.userID = sr.staff_user_id
-      WHERE sr.reference_no = ? AND sr.merchant_user_id = ?
+      WHERE sr.reference_no = ? AND sr.merchant_wallet_id = (SELECT id FROM merchant_wallets WHERE user_id = ?)
       LIMIT 1"
 );
 $stmt->execute([$reference, $ownerMerchId]);

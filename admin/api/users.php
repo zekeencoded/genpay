@@ -49,7 +49,7 @@ function users_fetch(PDO $db, int $userId): ?array
         return null;
     }
     $stmt = $db->prepare(
-        "SELECT userID, first_name, last_name, email, roleID, sub_role, status
+        "SELECT userID, first_name, last_name, email, roleID, " . gjc_sub_role_sql() . " AS sub_role, status
            FROM users WHERE userID = ? LIMIT 1"
     );
     $stmt->execute([$userId]);

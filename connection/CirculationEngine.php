@@ -188,19 +188,8 @@ class CirculationEngine
                 merchantWalletId: $merchantFee > 0 ? $merchantWalletId : null,
                 notes: $feeNote,
                 topUpSource: $source,
-                baseAmount: $credited,
                 feeAmount: $fees["fee_total"],
-                creditedAmount: $credited,
-            );
-
-            $this->logFeeRevenue(
-                $ref,
-                $source,
-                $totalCollected,
-                $systemFee,
-                $merchantFee,
-                $merchantFee > 0 ? $merchantWalletId : null,
-                $initiatedBy,
+                merchantFee: $merchantFee,
             );
 
             $this->db->commit();
@@ -314,19 +303,8 @@ class CirculationEngine
                 merchantWalletId: $merchantFee > 0 ? $merchantWalletId : null,
                 notes: $feeNote,
                 topUpSource: $source,
-                baseAmount: $credited,
                 feeAmount: $fees["fee_total"],
-                creditedAmount: $credited,
-            );
-
-            $this->logFeeRevenue(
-                $ref,
-                $source,
-                $totalCollected,
-                $systemFee,
-                $merchantFee,
-                $merchantFee > 0 ? $merchantWalletId : null,
-                $initiatedBy,
+                merchantFee: $merchantFee,
             );
 
             $this->db->commit();
@@ -644,19 +622,8 @@ class CirculationEngine
                 merchantWalletId: $merchantWalletId,
                 notes: $feeNote,
                 topUpSource: "merchant",
-                baseAmount: $credited,
                 feeAmount: $fees["fee_total"],
-                creditedAmount: $credited,
-            );
-
-            $this->logFeeRevenue(
-                $ref,
-                "merchant",
-                $totalDebit,
-                $systemFee,
-                $merchantFee,
-                $merchantWalletId,
-                $initiatedBy,
+                merchantFee: $merchantFee,
             );
 
             $this->db->commit();
@@ -761,19 +728,8 @@ class CirculationEngine
                 merchantWalletId: $merchantWalletId,
                 notes: $feeNote,
                 topUpSource: "merchant",
-                baseAmount: $credited,
                 feeAmount: $fees["fee_total"],
-                creditedAmount: $credited,
-            );
-
-            $this->logFeeRevenue(
-                $ref,
-                "merchant",
-                $totalDebit,
-                $systemFee,
-                $merchantFee,
-                $merchantWalletId,
-                $initiatedBy,
+                merchantFee: $merchantFee,
             );
 
             $this->db->commit();
@@ -962,16 +918,21 @@ class CirculationEngine
             $oldCap = $settings["total_circulation_cap"];
             $newCap = $oldCap + $increaseBy;
 
+            // Who/when of the last mint is the newest super-admin row in
+            // cap_increase_log; the system_settings copy is only written until
+            // the 3NF contract drops it.
+            $legacyLastCap = in_array("last_cap_increased_by", gjc_table_columns($this->db, "system_settings"), true);
             $this->db
                 ->prepare(
                     "UPDATE system_settings
                     SET total_circulation_cap   = ?,
-                        cashier_vault_points    = cashier_vault_points + ?,
+                        cashier_vault_points    = cashier_vault_points + ?" .
+                    ($legacyLastCap ? ",
                         last_cap_increased_by   = ?,
-                        last_cap_increased_at   = NOW()
+                        last_cap_increased_at   = NOW()" : "") . "
                   WHERE id = 1",
                 )
-                ->execute([$newCap, $increaseBy, $superAdminId]);
+                ->execute(array_merge([$newCap, $increaseBy], $legacyLastCap ? [$superAdminId] : []));
 
             $legacyAmountAdded = gjc_cap_log_has_legacy_amount_added($this->db);
             $this->db
@@ -1227,9 +1188,7 @@ class CirculationEngine
         string $notes = null,
         // Fee-related optional fields (populated only for cashInWithFee calls)
         string $topUpSource = null,
-        float $baseAmount = null,
         float $feeAmount = null,
-        float $creditedAmount = null,
         int $parentWalletId = null,
         // Audit-only extras. Nothing here touches the ledger or the money maths:
         //   reason  the operator's justification, for actions that demand one
@@ -1237,6 +1196,9 @@ class CirculationEngine
         //   new     extra fields to merge into new_value
         array $audit = [],
         ?int &$transactionId = null,
+        // The merchant's cut of feeAmount (0 on the finance route). The school
+        // fee is feeAmount - merchantFee; nothing else stores the split.
+        ?float $merchantFee = null,
     ): string {
         $total = (float) $this->db
             ->query(
@@ -1287,22 +1249,21 @@ class CirculationEngine
         // Persist fee fields if the migration has already added the columns
         if ($topUpSource !== null) {
             try {
+                $hasMerchantFee = in_array("merchant_fee", gjc_table_columns($this->db, "transactions"), true);
                 $this->db
                     ->prepare(
                         "UPDATE transactions
                         SET top_up_source   = ?,
-                            base_amount     = ?,
-                            fee_amount      = ?,
-                            credited_amount = ?
+                            fee_amount      = ?" .
+                        ($hasMerchantFee ? ", merchant_fee = ?" : "") . "
                       WHERE id = ?",
                     )
-                    ->execute([
+                    ->execute(array_merge([
                         $topUpSource,
-                        $baseAmount,
                         $feeAmount,
-                        $creditedAmount,
+                    ], $hasMerchantFee ? [$merchantFee ?? 0.0] : [], [
                         $transactionId,
-                    ]);
+                    ]));
             } catch (\Throwable $ignored) {
                 // Migration hasn't run yet — non-fatal, notes column already has the info
             }
@@ -1343,37 +1304,6 @@ class CirculationEngine
         );
 
         return $ref;
-    }
-
-    private function logFeeRevenue(
-        string $ref,
-        string $source,
-        float $cashAmount,
-        float $systemFee,
-        float $merchantFee,
-        ?int $merchantWalletId,
-        int $processedBy,
-    ): void {
-        try {
-            $this->db
-                ->prepare(
-                    "INSERT INTO fee_revenue_log
-                    (transaction_ref, top_up_source, cash_amount,
-                     system_fee, merchant_fee, merchant_wallet_id, processed_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
-                )
-                ->execute([
-                    $ref,
-                    $source,
-                    $cashAmount,
-                    $systemFee,
-                    $merchantFee,
-                    $merchantWalletId,
-                    $processedBy,
-                ]);
-        } catch (\Throwable $ignored) {
-            // Table hasn't been created yet — will self-heal on next page load
-        }
     }
 
     private function assertPositive(float $amount): void

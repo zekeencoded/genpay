@@ -109,7 +109,7 @@ $files = [
         ['Reference', 'Amount', 'Method', 'Status', 'Requested', 'Released', 'Rejected'],
         backup_fetch($db, 'encashment_requests',
             "SELECT reference_no, amount, method, status, created_at, released_at, rejected_at
-               FROM encashment_requests WHERE user_id = ? ORDER BY created_at ASC",
+               FROM encashment_requests WHERE merchant_wallet_id = (SELECT id FROM merchant_wallets WHERE user_id = ?) ORDER BY created_at ASC",
             [$ownerMerchId]),
     ],
     'leases.csv' => [

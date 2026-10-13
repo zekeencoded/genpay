@@ -89,8 +89,8 @@ try {
             $hashedPw = password_hash($password, PASSWORD_BCRYPT);
             $stmt = $db->prepare(
                 "INSERT INTO users
-                    (last_name, first_name, middle_name, suffix, email, contact_number, roleID, sub_role, position, merchant_owner_id, password, profile_img)
-                 VALUES (?, ?, ?, ?, ?, ?, 6, 'merchant_staff', ?, ?, ?, '')"
+                    (last_name, first_name, middle_name, suffix, email, contact_number, roleID, position, merchant_owner_id, password, profile_img)
+                 VALUES (?, ?, ?, ?, ?, ?, 6, ?, ?, ?, '')"
             );
             $stmt->execute([
                 $lastName,

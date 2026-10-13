@@ -39,6 +39,7 @@ if ($staffId !== null) {
     $stmt->execute([$staffId, $merchantUserId]);
     $staff = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     if ($staff) {
+        $staff['sub_role'] = gjc_sub_role_for_role_id((int) $staff['roleID']);
         $staff = gjc_with_user_address($db, $staff, (int) $staffId);
     }
 }
@@ -105,7 +106,7 @@ if ($staff) {
     $remitStmt = $db->prepare(
         "SELECT reference_no, amount, txn_count, period_start, period_end, created_at
            FROM sales_remittances
-          WHERE staff_user_id = ? AND merchant_user_id = ?
+          WHERE staff_user_id = ? AND merchant_wallet_id = (SELECT id FROM merchant_wallets WHERE user_id = ?)
           ORDER BY created_at DESC"
     );
     $remitStmt->execute([$staffId, $merchantUserId]);

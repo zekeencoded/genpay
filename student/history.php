@@ -65,7 +65,7 @@ if (gjc_table_exists($db, 'topup_requests')) {
     $stmt = $db->prepare(
         "SELECT id, reference_no, amount, payment_method, status, created_at
            FROM topup_requests
-          WHERE user_id = ? AND status <> 'approved'
+          WHERE student_wallet_id = (SELECT id FROM student_wallets WHERE user_id = ?) AND status <> 'approved'
           ORDER BY created_at DESC, id DESC
           LIMIT 100"
     );

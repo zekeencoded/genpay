@@ -51,7 +51,7 @@ function sy_fetch_student(PDO $db, int $studentUserId): ?array
         "SELECT u.userID AS student_user_id,
                 TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) AS name,
                 si.studentID, si.graduated_at,
-                COALESCE(se.yr_lvl, si.yr_lvl) AS yr_lvl,
+                COALESCE(se.yr_lvl, si.entry_yr_lvl) AS yr_lvl,
                 se.status AS enrollment_status,
                 sw.id AS wallet_id, sw.balance, sw.is_frozen
            FROM users u
@@ -286,7 +286,7 @@ function sy_student_rows(PDO $db, array $userIds, array $rosterYrLvl = []): arra
             "SELECT u.userID AS student_user_id,
                     TRIM(CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,''))) AS name,
                     si.studentID,
-                    COALESCE(se.yr_lvl, si.yr_lvl) AS yr_lvl,
+                    COALESCE(se.yr_lvl, si.entry_yr_lvl) AS yr_lvl,
                     COALESCE(sw.balance, 0) AS balance
                FROM users u
                LEFT JOIN student_info si ON si.userID = u.userID

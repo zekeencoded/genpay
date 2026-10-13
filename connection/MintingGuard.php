@@ -189,9 +189,11 @@ class MintingGuard
     
     private function assertSuperAdmin(int $userId): void
     {
-        $stmt = $this->db->prepare("SELECT sub_role FROM users WHERE userID = ?");
+        // roleID is the single source of truth; sub_role is derived from it.
+        $stmt = $this->db->prepare("SELECT roleID FROM users WHERE userID = ?");
         $stmt->execute([$userId]);
-        $subRole = $stmt->fetchColumn();
+        $roleId = $stmt->fetchColumn();
+        $subRole = $roleId === false ? false : gjc_sub_role_for_role_id((int) $roleId);
         if ($subRole !== 'super_admin') {
             $this->logMintAttempt($userId, 'denied',
                 'Minting attempted without the super-admin sub-role.',

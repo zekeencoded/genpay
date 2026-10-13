@@ -8,11 +8,10 @@ function gjc_reset_student_password(PDO $db, int $userId): string
     if (!$db->inTransaction()) {
         throw new LogicException('Password resets require a transaction.');
     }
-    $read = $db->prepare('SELECT roleID, sub_role FROM users WHERE userID = ? FOR UPDATE');
+    $read = $db->prepare('SELECT roleID FROM users WHERE userID = ? FOR UPDATE');
     $read->execute([$userId]);
     $user = $read->fetch(PDO::FETCH_ASSOC);
-    if (!$user || (int) $user['roleID'] !== 1
-        || !in_array((string) ($user['sub_role'] ?? ''), ['', 'student'], true)) {
+    if (!$user || (int) $user['roleID'] !== 1) {
         throw new InvalidArgumentException('Only student accounts can have their password reset here.');
     }
 

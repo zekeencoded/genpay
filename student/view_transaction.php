@@ -17,7 +17,7 @@ gjc_enforce_student_lock($db);
  *
  * ?source= mirrors student/history.php's two feeds:
  *   ledger        -> transactions   (by student_wallet_id)
- *   topup_request -> topup_requests (by user_id, the not-yet-approved ones)
+ *   topup_request -> topup_requests (by student_wallet_id, the not-yet-approved ones)
  */
 $currentUser = gjc_current_user($db);
 $wallet = gjc_student_wallet($db, (int) $currentUser['id']);
@@ -87,9 +87,13 @@ if ($recordId !== null && $source === 'ledger' && $walletId > 0 && gjc_table_exi
 
 if ($recordId !== null && $source === 'topup_request' && gjc_table_exists($db, 'topup_requests')) {
     $stmt = $db->prepare(
-        "SELECT * FROM topup_requests WHERE id = ? AND user_id = ? LIMIT 1"
+        // Fee and credited amount live on the ledger row the request became.
+        "SELECT r.*, t.fee_amount AS fee_amount, t.amount AS credited_amount
+           FROM topup_requests r
+           LEFT JOIN transactions t ON t.reference_no = r.reference_no
+          WHERE r.id = ? AND r.student_wallet_id = ? LIMIT 1"
     );
-    $stmt->execute([$recordId, (int) $currentUser['id']]);
+    $stmt->execute([$recordId, $walletId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
     if ($row) {

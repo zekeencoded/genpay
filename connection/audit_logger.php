@@ -503,16 +503,12 @@ function gjc_audit_role_unknown(string $role): string
 function gjc_audit_role_from_user(PDO $pdo, int $userId): string
 {
     try {
-        $stmt = $pdo->prepare("SELECT roleID, sub_role FROM users WHERE userID = ? LIMIT 1");
+        // roleID is the single source of truth for the role (users.sub_role is derived).
+        $stmt = $pdo->prepare("SELECT roleID FROM users WHERE userID = ? LIMIT 1");
         $stmt->execute([$userId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$user) {
             return gjc_audit_role((string) ($_SESSION['role'] ?? 'student'));
-        }
-
-        $subRole = (string) ($user['sub_role'] ?? '');
-        if ($subRole !== '') {
-            return gjc_audit_role($subRole);
         }
 
         return match ((int) ($user['roleID'] ?? 0)) {

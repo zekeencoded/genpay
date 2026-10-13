@@ -35,7 +35,7 @@ $query = "
         u.last_name,
         u.email,
         u.roleID,
-        u.sub_role,
+        " . gjc_sub_role_sql('u.roleID') . " AS sub_role,
         u.status,
         r.role_name as role,
         si.studentID as student_id

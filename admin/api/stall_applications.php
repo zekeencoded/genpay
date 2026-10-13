@@ -268,9 +268,9 @@ try {
                 $db->prepare(
                     "INSERT INTO users
                          (last_name, first_name, email, contact_number,
-                          roleID, sub_role, password, profile_img,
+                          roleID, password, profile_img,
                           force_password_change, is_first_login, password_changed, temp_password)
-                     VALUES (?, ?, ?, ?, 2, 'merchant_admin', ?, '', 1, 1, 0, ?)"
+                     VALUES (?, ?, ?, ?, 2, ?, '', 1, 1, 0, ?)"
                 )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw, null]);
                 $newUserId = (int) $db->lastInsertId();
 

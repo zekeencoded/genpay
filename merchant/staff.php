@@ -21,7 +21,7 @@ $staffList = [];
 gjc_ensure_staff_position_schema($db);
 
 $stmt = $db->prepare(
-    "SELECT userID, first_name, middle_name, last_name, suffix, position, email, contact_number, sub_role, created_at, status, profile_img
+    "SELECT userID, first_name, middle_name, last_name, suffix, position, email, contact_number, created_at, status, profile_img
        FROM users
       WHERE merchant_owner_id = ? AND roleID = 6 AND staff_removed_at IS NULL
       ORDER BY created_at DESC",
@@ -41,7 +41,7 @@ try {
                 COALESCE(SUM(txn_count), 0) AS total_txns,
                 MAX(created_at) AS last_at
            FROM sales_remittances
-          WHERE merchant_user_id = ?
+          WHERE merchant_wallet_id = (SELECT id FROM merchant_wallets WHERE user_id = ?)
           GROUP BY staff_user_id",
     );
     $act->execute([$merchantUserId]);

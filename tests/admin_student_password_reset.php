@@ -13,7 +13,7 @@ function reset_expect(bool $condition, string $message): void
 
 try {
     $db->beginTransaction();
-    $before = $db->query("SELECT * FROM users WHERE roleID = 1 AND (sub_role IS NULL OR sub_role IN ('', 'student')) LIMIT 1 FOR UPDATE")->fetch();
+    $before = $db->query("SELECT * FROM users WHERE roleID = 1 LIMIT 1 FOR UPDATE")->fetch();
     reset_expect((bool) $before, 'A student fixture is required.');
     $id = (int) $before['userID'];
     gjc_establish_login_session($before);

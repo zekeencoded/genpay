@@ -69,16 +69,16 @@ try {
     import_expect($address['address_barangay'] === $valid['address_barangay'] && $address['address_city'] === 'Cabiao', 'Normalized address must retain import values.');
 
     // Execute the same enrollment/history statements as the page's import action.
-    $start = strpos($pageSource, '$studentInfoInsert = $db->prepare(');
+    $start = strpos($pageSource, '[$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns(');
     $end = strpos($pageSource, '$linkInsert =', $start);
     eval(substr($pageSource, $start, $end - $start));
     $row = $valid; $userId = $id; $studentId = $valid['student_id_number'];
     $courseId = (int) $db->query('SELECT courseID FROM course LIMIT 1')->fetchColumn();
     preg_match('/\$studentInfoInsert->execute\([^;]+;/', $pageSource, $enrollment);
     eval($enrollment[0]);
-    $read = $db->prepare('SELECT yr_lvl FROM student_info WHERE userID = ?');
+    $read = $db->prepare('SELECT entry_yr_lvl FROM student_info WHERE userID = ?');
     $read->execute([$id]);
-    import_expect($read->fetchColumn() === '2', 'Actual enrollment must save selected year.');
+    import_expect($read->fetchColumn() === '2', 'Actual enrollment must save selected entry year.');
     $batchId = date('YmdHis'); $parentUserId = null; $parentStatus = 'none';
     $registryStatus = 'imported'; $message = 'Regression test'; $currentUser = ['id' => $id];
     $start = strpos($pageSource, '$historyValues = array_map(');

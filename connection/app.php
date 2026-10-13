@@ -2933,7 +2933,7 @@ function gjc_ensure_staff_position_schema(PDO $db): void
 
     $columns = gjc_table_columns($db, "users");
     if (!in_array("position", $columns, true)) {
-        $db->exec("ALTER TABLE users ADD COLUMN position VARCHAR(60) NULL DEFAULT NULL AFTER sub_role");
+        $db->exec("ALTER TABLE users ADD COLUMN position VARCHAR(60) NULL DEFAULT NULL AFTER roleID");
     }
     // "Remove" on merchant/staff.php is a soft delete: the audit trail keeps a
     // foreign key to users.userID, so a staff login that ever signed in cannot
@@ -3220,6 +3220,39 @@ function gjc_ensure_remember_token_schema(PDO $db): void
     );
 }
 
+/**
+ * The granular role for a users.roleID. roleID is the single source of truth;
+ * there is no stored sub_role (dropped by gjc_ensure_role_contract_schema).
+ */
+function gjc_sub_role_for_role_id(int $roleId): string
+{
+    return gjc_sub_role_map()[$roleId] ?? 'student';
+}
+
+/** roleID => sub_role. The one place this mapping is defined. */
+function gjc_sub_role_map(): array
+{
+    return [
+        1 => 'student',
+        2 => 'merchant_admin',
+        3 => 'super_admin',
+        4 => 'super_admin',
+        5 => 'merchant_admin',
+        6 => 'merchant_staff',
+        7 => 'parent',
+    ];
+}
+
+/** SQL expression deriving sub_role from a roleID column, for SELECT lists. */
+function gjc_sub_role_sql(string $roleIdColumn = 'roleID'): string
+{
+    $cases = '';
+    foreach (gjc_sub_role_map() as $id => $name) {
+        $cases .= " WHEN {$id} THEN '{$name}'";
+    }
+    return "(CASE {$roleIdColumn}{$cases} ELSE 'student' END)";
+}
+
 /** Populate the login session vars for a users row (shared by password login and remember-me). */
 function gjc_establish_login_session(array $user): void
 {
@@ -3231,22 +3264,8 @@ function gjc_establish_login_session(array $user): void
     $_SESSION['roleID'] = $roleId;
     $_SESSION['password_fingerprint'] = hash('sha256', (string) ($user['password'] ?? ''));
 
-    // Soft remap to sub_role (no DB changes to roleID); DB sub_role wins.
-    $subRole = match ($roleId) {
-        1 => 'student',
-        2 => 'merchant_admin',
-        3 => 'super_admin',
-        4 => 'super_admin',
-        5 => 'merchant_admin',
-        6 => 'merchant_staff',
-        7 => 'parent',
-        default => 'student',
-    };
-    if (!empty($user['sub_role'])) {
-        $subRole = (string) $user['sub_role'];
-    }
-
-    $_SESSION['sub_role'] = $subRole;
+    // roleID is the single source of truth; sub_role is derived (3NF).
+    $_SESSION['sub_role'] = gjc_sub_role_for_role_id($roleId);
     $_SESSION['merchant_owner_id'] = (int) ($user['merchant_owner_id'] ?? 0);
     $_SESSION['role'] = [1 => 'student', 2 => 'merchant', 3 => 'finance', 4 => 'finance', 5 => 'merchant', 6 => 'merchant', 7 => 'parent'][$roleId] ?? 'user';
 }
@@ -4221,8 +4240,7 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS topup_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NULL,
-            student_wallet_id INT UNSIGNED NULL,
+            student_wallet_id INT UNSIGNED NOT NULL,
             amount DECIMAL(15,2) NOT NULL,
             payment_method VARCHAR(80) NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
@@ -4232,7 +4250,7 @@ function gjc_ensure_operational_tables(PDO $db): void
             rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_topup_user (user_id),
+            INDEX idx_topup_wallet (student_wallet_id),
             INDEX idx_topup_status (status)
         ) ENGINE=InnoDB",
     );
@@ -4240,8 +4258,7 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS encashment_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NULL,
-            merchant_wallet_id INT UNSIGNED NULL,
+            merchant_wallet_id INT UNSIGNED NOT NULL,
             amount DECIMAL(15,2) NOT NULL,
             method VARCHAR(80) NOT NULL DEFAULT 'Cashier Release',
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
@@ -4251,13 +4268,12 @@ function gjc_ensure_operational_tables(PDO $db): void
             rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_encash_user (user_id),
+            INDEX idx_encash_wallet (merchant_wallet_id),
             INDEX idx_encash_status (status)
         ) ENGINE=InnoDB",
     );
 
     $topupAdds = [
-        "user_id" => "INT NULL",
         "student_wallet_id" => "INT UNSIGNED NULL",
         "payment_method" => "VARCHAR(80) NOT NULL DEFAULT 'Cash at Cashier'",
         "reference_no" => "VARCHAR(40) NULL",
@@ -4278,7 +4294,6 @@ function gjc_ensure_operational_tables(PDO $db): void
     }
 
     $encashAdds = [
-        "user_id" => "INT NULL",
         "merchant_wallet_id" => "INT UNSIGNED NULL",
         "method" => "VARCHAR(80) NOT NULL DEFAULT 'Cashier Release'",
         "reference_no" => "VARCHAR(40) NULL",
@@ -4308,8 +4323,7 @@ function gjc_ensure_operational_tables(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS withdrawal_requests (
             id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NULL,
-            student_wallet_id INT UNSIGNED NULL,
+            student_wallet_id INT UNSIGNED NOT NULL,
             amount DECIMAL(15,2) NOT NULL,
             method VARCHAR(80) NOT NULL DEFAULT 'Cashier Release',
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
@@ -4319,13 +4333,12 @@ function gjc_ensure_operational_tables(PDO $db): void
             rejected_by INT NULL,
             rejected_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_withdraw_user (user_id),
+            INDEX idx_withdraw_wallet (student_wallet_id),
             INDEX idx_withdraw_status (status)
         ) ENGINE=InnoDB",
     );
 
     $withdrawAdds = [
-        "user_id" => "INT NULL",
         "student_wallet_id" => "INT UNSIGNED NULL",
         "method" => "VARCHAR(80) NOT NULL DEFAULT 'Cashier Release'",
         "reference_no" => "VARCHAR(40) NULL",
@@ -4354,44 +4367,26 @@ function gjc_ensure_operational_tables(PDO $db): void
 
 function gjc_ensure_fee_schema(PDO $db): void
 {
-    // Fee columns on transactions
+    // Fee columns on transactions. 3NF: this is the only place top-up fees are
+    // stored (base/credited always equalled amount and were dropped; the old
+    // topup_requests copies and fee_revenue_log were dropped too).
     foreach ([
         'top_up_source  VARCHAR(20) NULL',
-        'base_amount    DECIMAL(15,2) NULL',
         'fee_amount     DECIMAL(15,2) NULL',
-        'credited_amount DECIMAL(15,2) NULL',
+        // 3NF: the merchant's share of fee_amount; school fee = fee_amount - merchant_fee.
+        'merchant_fee    DECIMAL(15,2) NULL AFTER fee_amount',
     ] as $col) {
         try { $db->exec("ALTER TABLE transactions ADD COLUMN $col"); }
         catch (\PDOException $e) { /* already exists */ }
     }
-
-    // Fee columns on topup_requests
-    foreach ([
-        'top_up_source   VARCHAR(20) NULL',
-        'fee_amount      DECIMAL(15,2) NULL',
-        'credited_amount DECIMAL(15,2) NULL',
-    ] as $col) {
-        try { $db->exec("ALTER TABLE topup_requests ADD COLUMN $col"); }
-        catch (\PDOException $e) { /* already exists */ }
+    // Backfill the split from fee_revenue_log (the only other place it was kept).
+    if (gjc_table_exists($db, 'fee_revenue_log')) {
+        $db->exec(
+            "UPDATE transactions t JOIN fee_revenue_log f ON f.transaction_ref = t.reference_no
+                SET t.merchant_fee = f.merchant_fee
+              WHERE t.merchant_fee IS NULL AND t.fee_amount IS NOT NULL"
+        );
     }
-
-    // Fee revenue ledger
-    $db->exec(
-        "CREATE TABLE IF NOT EXISTS fee_revenue_log (
-            id                 INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            transaction_ref    VARCHAR(40)  NOT NULL,
-            top_up_source      VARCHAR(20)  NOT NULL,
-            cash_amount        DECIMAL(15,2) NOT NULL,
-            system_fee         DECIMAL(15,2) NOT NULL,
-            merchant_fee       DECIMAL(15,2) NOT NULL DEFAULT 0,
-            merchant_wallet_id INT UNSIGNED NULL,
-            processed_by       INT UNSIGNED NOT NULL,
-            created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_fee_ref    (transaction_ref),
-            INDEX idx_fee_source (top_up_source),
-            INDEX idx_fee_date   (created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
-    );
 }
 
 function gjc_generate_student_id(PDO $db): string
@@ -4411,6 +4406,554 @@ function gjc_generate_student_id(PDO $db): string
     return sprintf('GJC%s-%04d', $year, $max + 1);
 }
 
+/**
+ * 3NF EXPAND/MIGRATE for year level. The year level a student holds in a given
+ * school year lives on student_enrollments (it depends on student + year).
+ * student_info only keeps entry_yr_lvl: the year level the student entered at,
+ * written once at registration/import and never updated (exactly how
+ * student_info.yr_lvl has always behaved). Display = active-year enrollment
+ * yr_lvl, falling back to entry_yr_lvl.
+ *
+ * Legacy student_info.yr_lvl (where still present) is dual-written but never
+ * read; the CLI contract (gjc_ensure_student_entry_year_contract_schema) drops it.
+ * DDL: never call from inside a transaction.
+ */
+function gjc_ensure_student_entry_year_schema(PDO $db): void
+{
+    static $ensured = false;
+    if ($ensured || $db->inTransaction() || !gjc_table_exists($db, 'student_info')) {
+        return;
+    }
+    $ensured = true;
+
+    $cols = gjc_table_columns($db, 'student_info');
+    if (!in_array('entry_yr_lvl', $cols, true)) {
+        $after = in_array('yr_lvl', $cols, true) ? ' AFTER yr_lvl' : '';
+        $db->exec("ALTER TABLE student_info ADD COLUMN entry_yr_lvl VARCHAR(11) NULL{$after}");
+        gjc_table_columns($db, 'student_info', true);
+        $cols = gjc_table_columns($db, 'student_info');
+    }
+    if (in_array('yr_lvl', $cols, true)) {
+        $db->exec("UPDATE student_info SET entry_yr_lvl = yr_lvl WHERE entry_yr_lvl IS NULL");
+    }
+}
+
+/**
+ * Columns + placeholders for writing a student's entry year level, covering
+ * both the EXPAND shape (legacy yr_lvl still present, dual-written) and the
+ * CONTRACTED shape (entry_yr_lvl only). Returns [columnSql, placeholderSql, count].
+ */
+function gjc_student_entry_year_write_columns(PDO $db): array
+{
+    $cols = gjc_table_columns($db, 'student_info');
+    $names = array_values(array_intersect(['yr_lvl', 'entry_yr_lvl'], $cols));
+    if (!$names) {
+        throw new RuntimeException('student_info has no year level column.');
+    }
+    return [implode(', ', $names), implode(', ', array_fill(0, count($names), '?')), count($names)];
+}
+
+/**
+ * Refuses a column CONTRACT while any key, index, trigger, view, routine,
+ * event, generated column, CHECK constraint or expression index still names
+ * $table.$column. Shared by the 3NF contracts below.
+ */
+function gjc_assert_column_droppable(PDO $db, string $table, string $column, bool $checkKeys = true): void
+{
+    if ($checkKeys) {
+        gjc_assert_column_unkeyed($db, $table, $column);
+    }
+    gjc_assert_column_unreferenced($db, $column);
+}
+
+function gjc_assert_column_unkeyed(PDO $db, string $table, string $column): void
+{
+    $keys = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND ((TABLE_NAME = ? AND COLUMN_NAME = ?)
+          OR (REFERENCED_TABLE_NAME = ? AND REFERENCED_COLUMN_NAME = ?))");
+    $keys->execute([$table, $column, $table, $column]);
+    $indexes = $db->prepare("SELECT COUNT(*) FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+    $indexes->execute([$table, $column]);
+    if ((int) $keys->fetchColumn() !== 0 || (int) $indexes->fetchColumn() !== 0) {
+        throw new RuntimeException("A key or index depends on {$table}.{$column}.");
+    }
+}
+
+/** Refuses while any trigger, view, routine, event, generated column, CHECK or expression index names $column. */
+function gjc_assert_column_unreferenced(PDO $db, string $column): void
+{
+    $objects = array_merge(
+        $db->query("SELECT TRIGGER_NAME AS name, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT TABLE_NAME AS name, VIEW_DEFINITION AS body FROM information_schema.VIEWS
+            WHERE TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT ROUTINE_NAME AS name, ROUTINE_DEFINITION AS body FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT EVENT_NAME AS name, EVENT_DEFINITION AS body FROM information_schema.EVENTS
+            WHERE EVENT_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) AS name, GENERATION_EXPRESSION AS body
+            FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                AND GENERATION_EXPRESSION <> ''")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT cc.CONSTRAINT_NAME AS name, cc.CHECK_CLAUSE AS body
+            FROM information_schema.CHECK_CONSTRAINTS cc JOIN information_schema.TABLE_CONSTRAINTS tc
+              ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE tc.TABLE_SCHEMA = DATABASE()")->fetchAll(PDO::FETCH_ASSOC),
+        $db->query("SELECT CONCAT(TABLE_NAME, '.', INDEX_NAME) AS name, EXPRESSION AS body
+            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+                AND EXPRESSION IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC)
+    );
+    foreach ($objects as $object) {
+        if ($object['body'] === null || preg_match('/\b' . preg_quote($column, '/') . '\b/i', $object['body'])) {
+            throw new RuntimeException("Cannot contract {$column}: {$object['name']} may depend on it.");
+        }
+    }
+}
+
+/**
+ * 3NF CONTRACT for year level: drops student_info.yr_lvl once every row's
+ * entry_yr_lvl carries the same value, and makes entry_yr_lvl NOT NULL.
+ * CLI only, outside any transaction. Without $apply it only returns the plan.
+ * $apply requires $archivePath: a JSON export (written by
+ * database/migrations/3nf_contract.php) that must match the current rows.
+ */
+function gjc_ensure_student_entry_year_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Year level CONTRACT requires CLI and no transaction.');
+    }
+    if (!gjc_table_exists($db, 'student_info')) {
+        throw new RuntimeException('student_info is missing.');
+    }
+    gjc_ensure_student_entry_year_schema($db);
+    $cols = gjc_table_columns($db, 'student_info', true);
+    if (!in_array('yr_lvl', $cols, true)) {
+        return [];
+    }
+    if (!in_array('entry_yr_lvl', $cols, true)) {
+        throw new RuntimeException('entry_yr_lvl is missing; run the EXPAND first.');
+    }
+    $mismatch = (int) $db->query("SELECT COUNT(*) FROM student_info
+        WHERE entry_yr_lvl IS NULL OR NOT (entry_yr_lvl <=> yr_lvl)")->fetchColumn();
+    if ($mismatch !== 0) {
+        throw new RuntimeException("{$mismatch} student_info row(s) have entry_yr_lvl differing from yr_lvl.");
+    }
+    gjc_assert_column_droppable($db, 'student_info', 'yr_lvl');
+
+    $plan = ['student_info' => 'ALTER TABLE student_info MODIFY entry_yr_lvl VARCHAR(11) NOT NULL, DROP COLUMN yr_lvl'];
+    if (!$apply) {
+        return $plan;
+    }
+    $rows = $db->query('SELECT userID, yr_lvl FROM student_info ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC);
+    gjc_assert_contract_archive($archivePath, 'student_info.yr_lvl', $rows);
+    $db->exec($plan['student_info']);
+    gjc_table_columns($db, 'student_info', true);
+    return $plan;
+}
+
+/**
+ * 3NF CONTRACT for roles: drops users.sub_role once every stored value equals
+ * what gjc_sub_role_for_role_id() derives from roleID. Same CLI/archive rules
+ * as gjc_ensure_student_entry_year_contract_schema().
+ */
+function gjc_ensure_role_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Role CONTRACT requires CLI and no transaction.');
+    }
+    if (!in_array('sub_role', gjc_table_columns($db, 'users', true), true)) {
+        return [];
+    }
+    $rows = $db->query('SELECT userID, roleID, sub_role FROM users ORDER BY userID')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $stored = (string) ($row['sub_role'] ?? '');
+        if ($stored !== '' && $stored !== gjc_sub_role_for_role_id((int) $row['roleID'])) {
+            throw new RuntimeException("users.userID {$row['userID']}: sub_role '{$stored}' does not match roleID {$row['roleID']}.");
+        }
+    }
+    gjc_assert_column_droppable($db, 'users', 'sub_role');
+
+    $plan = ['users' => 'ALTER TABLE users DROP COLUMN sub_role'];
+    if (!$apply) {
+        return $plan;
+    }
+    gjc_assert_contract_archive($archivePath, 'users.sub_role', $rows);
+    $db->exec($plan['users']);
+    gjc_table_columns($db, 'users', true);
+    return $plan;
+}
+
+/**
+ * 3NF step 3: request/remittance tables whose user column is implied by the
+ * wallet they point at. table => [user copy column, wallet column, wallet table].
+ */
+function gjc_wallet_owner_copies(): array
+{
+    return [
+        'topup_requests'      => ['user_id', 'student_wallet_id', 'student_wallets'],
+        'withdrawal_requests' => ['user_id', 'student_wallet_id', 'student_wallets'],
+        'encashment_requests' => ['user_id', 'merchant_wallet_id', 'merchant_wallets'],
+        'sales_remittances'   => ['merchant_user_id', 'merchant_wallet_id', 'merchant_wallets'],
+    ];
+}
+
+/**
+ * 3NF CONTRACT for one gjc_wallet_owner_copies() table. Refuses unless every
+ * row has a wallet that exists and the copy is either NULL (written after the
+ * code stopped writing it) or the same user as the wallet owner. Then
+ * drops the copy's foreign keys and indexes, makes the wallet column NOT NULL
+ * (each row keeps exactly one owner), guarantees a RESTRICT foreign key on the
+ * wallet column, and drops the copy. CLI only, outside any transaction;
+ * without $apply it only returns the plan; $apply needs a matching export.
+ */
+function gjc_ensure_wallet_owner_contract_schema(PDO $db, string $table, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Wallet owner CONTRACT requires CLI and no transaction.');
+    }
+    $copies = gjc_wallet_owner_copies();
+    if (!isset($copies[$table])) {
+        throw new InvalidArgumentException('Not a wallet owner contract table: ' . $table);
+    }
+    [$copy, $walletCol, $walletTable] = $copies[$table];
+    if (!gjc_table_exists($db, $table) || !gjc_table_exists($db, $walletTable)) {
+        throw new RuntimeException('Contract source table is missing: ' . $table);
+    }
+    $cols = gjc_table_columns($db, $table, true);
+    if (!in_array($copy, $cols, true)) {
+        return [];
+    }
+    if (!in_array($walletCol, $cols, true)) {
+        throw new RuntimeException("{$table}.{$walletCol} is missing.");
+    }
+
+    $conflicts = (int) $db->query("SELECT COUNT(*) FROM `{$table}` r
+        LEFT JOIN `{$walletTable}` w ON w.id = r.`{$walletCol}`
+        WHERE w.id IS NULL OR (r.`{$copy}` IS NOT NULL AND r.`{$copy}` <> w.user_id)")->fetchColumn();
+    if ($conflicts !== 0) {
+        throw new RuntimeException("{$conflicts} {$table} row(s) have a missing wallet or a {$copy} that differs from the wallet owner.");
+    }
+    gjc_assert_column_unreferenced($db, $copy);
+
+    // Foreign keys and indexes that use the copy column.
+    $fkStmt = $db->prepare("SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL");
+    $fkStmt->execute([$table, $copy]);
+    $copyFks = $fkStmt->fetchAll(PDO::FETCH_COLUMN);
+    $inbound = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND REFERENCED_COLUMN_NAME = ?");
+    $inbound->execute([$table, $copy]);
+    if ((int) $inbound->fetchColumn() !== 0) {
+        throw new RuntimeException("Another table references {$table}.{$copy}.");
+    }
+    $idxStmt = $db->prepare("SELECT INDEX_NAME, COUNT(*) AS width,
+            SUM(COLUMN_NAME = ?) AS uses_copy
+        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+        GROUP BY INDEX_NAME HAVING uses_copy > 0");
+    $idxStmt->execute([$copy, $table]);
+    $copyIndexes = [];
+    foreach ($idxStmt->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+        if ((int) $idx['width'] !== 1 || $idx['INDEX_NAME'] === 'PRIMARY') {
+            throw new RuntimeException("Composite or primary index {$table}.{$idx['INDEX_NAME']} uses {$copy}.");
+        }
+        $copyIndexes[] = $idx['INDEX_NAME'];
+    }
+
+    // The wallet column must keep a RESTRICT foreign key once the copy is gone.
+    $walletFk = $db->prepare("SELECT k.CONSTRAINT_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE
+        FROM information_schema.KEY_COLUMN_USAGE k
+        JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+            AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
+        WHERE k.TABLE_SCHEMA = DATABASE() AND k.TABLE_NAME = ? AND k.COLUMN_NAME = ?");
+    $walletFk->execute([$table, $walletCol]);
+    $walletFks = $walletFk->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($walletFks as $fk) {
+        if ($fk['REFERENCED_TABLE_NAME'] !== $walletTable || $fk['REFERENCED_COLUMN_NAME'] !== 'id' || $fk['DELETE_RULE'] !== 'RESTRICT') {
+            throw new RuntimeException("Unexpected foreign key {$fk['CONSTRAINT_NAME']} on {$table}.{$walletCol}.");
+        }
+    }
+
+    $typeStmt = $db->prepare("SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+    $typeStmt->execute([$table, $walletCol]);
+    $walletMeta = $typeStmt->fetch(PDO::FETCH_ASSOC);
+    if ($walletMeta['COLUMN_TYPE'] !== 'int unsigned' || $walletMeta['COLUMN_DEFAULT'] !== null || $walletMeta['COLUMN_COMMENT'] !== '') {
+        throw new RuntimeException("Cannot preserve the definition of {$table}.{$walletCol}.");
+    }
+
+    $steps = [];
+    if ($copyFks) {
+        $steps[] = "ALTER TABLE `{$table}` " . implode(', ', array_map(static fn($n) => "DROP FOREIGN KEY `{$n}`", $copyFks));
+    }
+    $final = array_map(static fn($n) => "DROP INDEX `{$n}`", $copyIndexes);
+    if ($walletMeta['IS_NULLABLE'] === 'YES') {
+        $final[] = "MODIFY COLUMN `{$walletCol}` INT UNSIGNED NOT NULL";
+    }
+    $final[] = "DROP COLUMN `{$copy}`";
+    if (!$walletFks) {
+        $name = 'fk_core_' . $table . '_' . $walletCol;
+        $final[] = "ADD CONSTRAINT `{$name}` FOREIGN KEY (`{$walletCol}`) REFERENCES `{$walletTable}` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT";
+    }
+    $steps[] = "ALTER TABLE `{$table}` " . implode(', ', $final);
+    if (!$apply) {
+        return $steps;
+    }
+
+    $rows = $db->query("SELECT id, `{$copy}`, `{$walletCol}` FROM `{$table}` ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    gjc_assert_contract_archive($archivePath, "{$table}.{$copy}", $rows);
+    foreach ($steps as $sql) {
+        $db->exec($sql);
+    }
+    gjc_table_columns($db, $table, true);
+    return $steps;
+}
+
+/**
+ * 3NF step 4: columns whose every value is derivable from another row/column.
+ * table => [columns, SQL counting rows where a present value disagrees with its source].
+ */
+function gjc_derived_fee_columns(): array
+{
+    return [
+        // CirculationEngine always wrote amount into both (fees are added on top).
+        'transactions' => [
+            ['base_amount', 'credited_amount'],
+            "SELECT COUNT(*) FROM transactions
+              WHERE (base_amount IS NOT NULL AND base_amount <> amount)
+                 OR (credited_amount IS NOT NULL AND credited_amount <> amount)",
+        ],
+        // Legacy request queue: the fee facts belong to the ledger row it became.
+        'topup_requests' => [
+            ['fee_amount', 'credited_amount', 'top_up_source'],
+            "SELECT COUNT(*) FROM topup_requests r
+               LEFT JOIN transactions t ON t.reference_no = r.reference_no
+              WHERE (r.fee_amount IS NOT NULL OR r.credited_amount IS NOT NULL OR r.top_up_source IS NOT NULL)
+                AND (t.id IS NULL
+                  OR NOT (r.fee_amount <=> t.fee_amount)
+                  OR (r.credited_amount IS NOT NULL AND r.credited_amount <> t.amount)
+                  OR NOT (r.top_up_source <=> t.top_up_source))",
+        ],
+    ];
+}
+
+/**
+ * 3NF step 5: stored totals derivable from other rows. Same shape as
+ * gjc_derived_fee_columns(): table => [columns, SQL counting disagreeing rows].
+ */
+function gjc_derived_total_columns(): array
+{
+    return [
+        // Never maintained by any code; voucher_payment_log is the source.
+        'vouchers' => [
+            ['use_count', 'last_used_at'],
+            "SELECT COUNT(*) FROM vouchers v
+              WHERE v.use_count <> (SELECT COUNT(*) FROM voucher_payment_log l WHERE l.voucher_id = v.id)
+                 OR NOT (v.last_used_at <=> (SELECT MAX(l.created_at) FROM voucher_payment_log l WHERE l.voucher_id = v.id))",
+        ],
+        // A receipt is its maintenance_fees rows; collected fees are never voided.
+        'maintenance_fee_collections' => [
+            ['entry_count', 'total_amount'],
+            "SELECT COUNT(*) FROM maintenance_fee_collections c
+              WHERE (c.entry_count IS NOT NULL
+                     AND c.entry_count <> (SELECT COUNT(*) FROM maintenance_fees f WHERE f.collection_id = c.id))
+                 OR (c.total_amount IS NOT NULL
+                     AND c.total_amount <> (SELECT COALESCE(SUM(f.fee_amount), 0) FROM maintenance_fees f WHERE f.collection_id = c.id))",
+        ],
+        // The newest super-admin mint in cap_increase_log (source NULL / super_admin_mint).
+        // The stored time came from a separate NOW(), so allow a few seconds.
+        'system_settings' => [
+            ['last_cap_increased_by', 'last_cap_increased_at'],
+            "SELECT COUNT(*) FROM system_settings s
+               LEFT JOIN (SELECT super_admin_id, created_at FROM cap_increase_log
+                           WHERE source IS NULL OR source = 'super_admin_mint'
+                           ORDER BY created_at DESC, id DESC LIMIT 1) m ON 1 = 1
+              WHERE NOT (s.last_cap_increased_by <=> m.super_admin_id)
+                 OR (s.last_cap_increased_at IS NULL) <> (m.created_at IS NULL)
+                 OR ABS(TIMESTAMPDIFF(SECOND, s.last_cap_increased_at, m.created_at)) > 5",
+        ],
+    ];
+}
+
+/** Every derived-column contract table (steps 4 and 5). */
+function gjc_derived_columns(): array
+{
+    return gjc_derived_fee_columns() + gjc_derived_total_columns();
+}
+
+/**
+ * 3NF CONTRACT: transaction_items.subtotal becomes a STORED generated column,
+ * ROUND(quantity * unit_price, 2), so MySQL computes it and it cannot drift.
+ * Readers are unchanged; gjc_store_transaction_items() stops supplying it.
+ */
+function gjc_ensure_transaction_items_subtotal_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Subtotal CONTRACT requires CLI and no transaction.');
+    }
+    if (!gjc_table_exists($db, 'transaction_items') || gjc_transaction_items_subtotal_is_generated($db)) {
+        return [];
+    }
+    $meta = $db->query("SELECT COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaction_items' AND COLUMN_NAME = 'subtotal'")
+        ->fetch(PDO::FETCH_ASSOC);
+    if (!$meta || $meta['COLUMN_TYPE'] !== 'decimal(10,2)') {
+        throw new RuntimeException('Unexpected transaction_items.subtotal definition.');
+    }
+    $conflicts = (int) $db->query("SELECT COUNT(*) FROM transaction_items
+        WHERE NOT (subtotal <=> ROUND(quantity * unit_price, 2))")->fetchColumn();
+    if ($conflicts !== 0) {
+        throw new RuntimeException("{$conflicts} transaction_items row(s) have a subtotal other than quantity x unit_price.");
+    }
+    gjc_assert_column_unkeyed($db, 'transaction_items', 'subtotal');
+    gjc_assert_column_unreferenced($db, 'subtotal');
+    $plan = ['ALTER TABLE `transaction_items` MODIFY COLUMN `subtotal` DECIMAL(10,2)
+        GENERATED ALWAYS AS (ROUND(`quantity` * `unit_price`, 2)) STORED NOT NULL'];
+    if (!$apply) {
+        return $plan;
+    }
+    $rows = $db->query('SELECT id, subtotal FROM transaction_items ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    gjc_assert_contract_archive($archivePath, 'transaction_items:subtotal', $rows);
+    $db->exec($plan[0]);
+    // MySQL recomputed every row; prove nothing moved.
+    $after = $db->query('SELECT id, subtotal FROM transaction_items ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    if ($after !== $rows) {
+        throw new RuntimeException('Generated subtotals differ from the stored ones; restore from the export.');
+    }
+    return $plan;
+}
+
+/** 3NF CONTRACT for one gjc_derived_columns() table. Same CLI/plan/archive rules as the other contracts. */
+function gjc_ensure_derived_columns_contract_schema(PDO $db, string $table, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Derived column CONTRACT requires CLI and no transaction.');
+    }
+    $config = gjc_derived_columns();
+    if (!isset($config[$table])) {
+        throw new InvalidArgumentException('Not a derived column table: ' . $table);
+    }
+    [$columns, $conflictSql] = $config[$table];
+    $present = array_values(array_intersect($columns, gjc_table_columns($db, $table, true)));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== count($columns)) {
+        throw new RuntimeException("{$table} is partially contracted; restore it from the export first.");
+    }
+    if ($table === 'transactions') {
+        $unsplit = (int) $db->query("SELECT COUNT(*) FROM transactions
+            WHERE fee_amount IS NOT NULL AND merchant_fee IS NULL")->fetchColumn();
+        if ($unsplit !== 0) {
+            throw new RuntimeException("{$unsplit} fee transaction(s) have no merchant_fee split yet.");
+        }
+    }
+    $conflicts = (int) $db->query($conflictSql)->fetchColumn();
+    if ($conflicts !== 0) {
+        throw new RuntimeException("{$conflicts} {$table} row(s) disagree with the value they duplicate.");
+    }
+    foreach ($columns as $column) {
+        gjc_assert_column_unkeyed($db, $table, $column);
+        gjc_assert_column_unreferenced($db, $column);
+    }
+    $plan = ["ALTER TABLE `{$table}` " . implode(', ', array_map(static fn($c) => "DROP COLUMN `{$c}`", $columns))];
+    if (!$apply) {
+        return $plan;
+    }
+    $cols = implode(', ', array_map(static fn($c) => "`{$c}`", $columns));
+    $rows = $db->query("SELECT id, {$cols} FROM `{$table}` ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    gjc_assert_contract_archive($archivePath, "{$table}:" . implode(',', $columns), $rows);
+    $db->exec($plan[0]);
+    gjc_table_columns($db, $table, true);
+    return $plan;
+}
+
+/**
+ * 3NF step 4: whole tables that hold nothing the rest of the schema lacks.
+ * table => SQL counting rows that would lose information if the table went.
+ */
+function gjc_obsolete_fee_tables(): array
+{
+    return [
+        // Every column is the ledger row's (source, amount + fee, both fees,
+        // merchant wallet, initiator, time); the split now lives on transactions.
+        'fee_revenue_log' => "SELECT COUNT(*) FROM fee_revenue_log f
+            LEFT JOIN transactions t ON t.reference_no = f.transaction_ref
+            WHERE t.id IS NULL
+               OR NOT (f.top_up_source <=> t.top_up_source)
+               OR t.fee_amount IS NULL OR t.merchant_fee IS NULL
+               OR f.system_fee + f.merchant_fee <> t.fee_amount
+               OR f.merchant_fee <> t.merchant_fee
+               OR f.cash_amount <> t.amount + t.fee_amount
+               OR NOT (f.merchant_wallet_id <=> t.merchant_wallet_id)
+               OR f.processed_by <> t.initiated_by
+               OR f.created_at <> t.created_at",
+        // Never written by any code; dropping is only safe while they stay empty.
+        'parent_topup_requests' => "SELECT COUNT(*) FROM parent_topup_requests",
+        'school_revenue_ledger' => "SELECT COUNT(*) FROM school_revenue_ledger",
+    ];
+}
+
+/** 3NF CONTRACT: DROP TABLE for one gjc_obsolete_fee_tables() table, after its rows and definition are exported. */
+function gjc_ensure_obsolete_fee_table_contract_schema(PDO $db, string $table, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Obsolete table CONTRACT requires CLI and no transaction.');
+    }
+    $config = gjc_obsolete_fee_tables();
+    if (!isset($config[$table])) {
+        throw new InvalidArgumentException('Not an obsolete fee table: ' . $table);
+    }
+    if (!gjc_table_exists($db, $table)) {
+        return [];
+    }
+    $losing = (int) $db->query($config[$table])->fetchColumn();
+    if ($losing !== 0) {
+        throw new RuntimeException("{$losing} {$table} row(s) hold data found nowhere else.");
+    }
+    $inbound = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND TABLE_NAME <> ?");
+    $inbound->execute([$table, $table]);
+    if ((int) $inbound->fetchColumn() !== 0) {
+        throw new RuntimeException("Another table has a foreign key to {$table}.");
+    }
+    gjc_assert_column_unreferenced($db, $table);
+    if ($table === 'fee_revenue_log') {
+        $unsplit = (int) $db->query("SELECT COUNT(*) FROM transactions
+            WHERE fee_amount IS NOT NULL AND merchant_fee IS NULL")->fetchColumn();
+        if ($unsplit !== 0) {
+            throw new RuntimeException("{$unsplit} fee transaction(s) have no merchant_fee split yet.");
+        }
+    }
+    $plan = ["DROP TABLE `{$table}`"];
+    if (!$apply) {
+        return $plan;
+    }
+    gjc_assert_contract_archive($archivePath, "table:{$table}", gjc_table_export($db, $table));
+    $db->exec($plan[0]);
+    return $plan;
+}
+
+/** Definition + every row of a table, for a contract's private export. */
+function gjc_table_export(PDO $db, string $table): array
+{
+    return [
+        'schema' => $db->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_NUM)[1],
+        'rows'   => $db->query("SELECT * FROM `{$table}` ORDER BY 1")->fetchAll(PDO::FETCH_ASSOC),
+    ];
+}
+
+/** A contract may only drop data that a matching private export already holds. */
+function gjc_assert_contract_archive(?string $archivePath, string $column, array $rows): void
+{
+    if (!$archivePath || !is_file($archivePath)) {
+        throw new RuntimeException("A private export of {$column} is required before it is dropped.");
+    }
+    $archive = json_decode(file_get_contents($archivePath), true, 512, JSON_THROW_ON_ERROR);
+    if (($archive[$column] ?? null) !== $rows) {
+        throw new RuntimeException("The private export of {$column} differs from the current rows.");
+    }
+}
+
 function gjc_ensure_student_info_record(PDO $db, int $userId, string $studentId): void
 {
     $existing = $db->prepare("SELECT stud_infoID FROM student_info WHERE userID = ? LIMIT 1");
@@ -4427,8 +4970,9 @@ function gjc_ensure_student_info_record(PDO $db, int $userId, string $studentId)
         $courseId = (int) $db->lastInsertId();
     }
 
-    $db->prepare("INSERT INTO student_info (userID, studentID, yr_lvl, courseID) VALUES (?, ?, '1', ?)")
-       ->execute([$userId, $studentId, $courseId]);
+    [$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns($db);
+    $db->prepare("INSERT INTO student_info (userID, studentID, {$yrCols}, courseID) VALUES (?, ?, {$yrMarks}, ?)")
+       ->execute(array_merge([$userId, $studentId], array_fill(0, $yrCount, '1'), [$courseId]));
 }
 
 function gjc_backfill_student_ids(PDO $db): void
@@ -4436,6 +4980,7 @@ function gjc_backfill_student_ids(PDO $db): void
     if (!gjc_table_exists($db, 'student_info') || !gjc_table_exists($db, 'users')) {
         return;
     }
+    gjc_ensure_student_entry_year_schema($db);
     $stmt = $db->query(
         "SELECT u.userID
            FROM users u
@@ -5219,22 +5764,22 @@ function gjc_ensure_core_integrity_schema(PDO $db): void
             'reference_no' => ['transactions', 'reference_no', 'RESTRICT'],
         ],
         'topup_requests' => [
-            'user_id' => ['users', 'userID', 'RESTRICT'],
             'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
             'approved_by' => ['users', 'userID', 'RESTRICT'],
             'rejected_by' => ['users', 'userID', 'RESTRICT'],
         ],
         'withdrawal_requests' => [
-            'user_id' => ['users', 'userID', 'RESTRICT'],
             'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
             'released_by' => ['users', 'userID', 'RESTRICT'],
             'rejected_by' => ['users', 'userID', 'RESTRICT'],
         ],
         'encashment_requests' => [
-            'user_id' => ['users', 'userID', 'RESTRICT'],
             'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
             'released_by' => ['users', 'userID', 'RESTRICT'],
             'rejected_by' => ['users', 'userID', 'RESTRICT'],
+        ],
+        'sales_remittances' => [
+            'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
         ],
         'vouchers' => [
             'issued_by' => ['users', 'userID', 'RESTRICT'],
@@ -5628,7 +6173,7 @@ function gjc_ensure_order_items_schema(PDO $db): void
         item_name VARCHAR(150) NOT NULL,
         quantity INT UNSIGNED NOT NULL DEFAULT 1,
         unit_price DECIMAL(10,2) NOT NULL,
-        subtotal DECIMAL(10,2) NOT NULL,
+        subtotal DECIMAL(10,2) GENERATED ALWAYS AS (ROUND(quantity * unit_price, 2)) STORED NOT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id), KEY idx_txn_items_transaction (transaction_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
@@ -5792,10 +6337,28 @@ function gjc_store_transaction_items(PDO $db, int $transactionId, array $lines):
         }
         return;
     }
+    // subtotal is derived (quantity x unit_price). Once it is a generated column
+    // MySQL computes it; until then it is still written here.
+    $writeSubtotal = !gjc_transaction_items_subtotal_is_generated($db);
+    $insert = $db->prepare($writeSubtotal
+        ? 'INSERT INTO transaction_items (transaction_id, line_no, item_name, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO transaction_items (transaction_id, line_no, item_name, quantity, unit_price) VALUES (?, ?, ?, ?, ?)');
     foreach ($lines as $i => $line) {
-        $db->prepare('INSERT INTO transaction_items (transaction_id, line_no, item_name, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([$transactionId, $i + 1, $line['name'], $line['qty'], $line['price'], round($line['qty'] * $line['price'], 2)]);
+        $insert->execute(array_merge(
+            [$transactionId, $i + 1, $line['name'], $line['qty'], $line['price']],
+            $writeSubtotal ? [round($line['qty'] * $line['price'], 2)] : []
+        ));
     }
+}
+
+/**
+ * True once transaction_items.subtotal is a generated column (3NF contract).
+ * SHOW COLUMNS, not information_schema, so a TEMPORARY test table is honoured.
+ */
+function gjc_transaction_items_subtotal_is_generated(PDO $db): bool
+{
+    $col = $db->query("SHOW COLUMNS FROM transaction_items LIKE 'subtotal'")->fetch(PDO::FETCH_ASSOC);
+    return $col !== false && stripos((string) ($col['Extra'] ?? $col['EXTRA'] ?? ''), 'GENERATED') !== false;
 }
 
 /** Explicit, atomic historical backfill; refuses to replace conflicting facts. */
@@ -6812,7 +7375,9 @@ function gjc_fetch_admin_transactions(
 
     if (gjc_table_exists($db, "topup_requests")) {
         $stmt = $db->query(
-            "SELECT id, reference_no, user_id, student_wallet_id, amount, payment_method, status,
+            "SELECT id, reference_no,
+                    (SELECT sw.user_id FROM student_wallets sw WHERE sw.id = topup_requests.student_wallet_id) AS user_id,
+                    student_wallet_id, amount, payment_method, status,
                     approved_by, approved_at, rejected_by, rejected_at, created_at
                FROM topup_requests
               WHERE status <> 'approved' OR reference_no IS NULL OR reference_no = ''
@@ -6843,7 +7408,9 @@ function gjc_fetch_admin_transactions(
 
     if (gjc_table_exists($db, "encashment_requests")) {
         $stmt = $db->query(
-            "SELECT id, reference_no, user_id, merchant_wallet_id, amount, method, status,
+            "SELECT id, reference_no,
+                    (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = encashment_requests.merchant_wallet_id) AS user_id,
+                    merchant_wallet_id, amount, method, status,
                     released_by, released_at, rejected_by, rejected_at, created_at
                FROM encashment_requests
               WHERE status <> 'released' OR reference_no IS NULL OR reference_no = ''
@@ -7563,8 +8130,6 @@ function gjc_ensure_historical_vouchers_schema(PDO $db): void
   `expires_at` datetime NOT NULL,
   `expired_at` datetime DEFAULT NULL,
   `cancelled_at` datetime DEFAULT NULL,
-  `last_used_at` datetime DEFAULT NULL,
-  `use_count` smallint unsigned NOT NULL DEFAULT '0',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -8133,8 +8698,6 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             receipt_no      VARCHAR(40) NOT NULL,
             student_user_id INT UNSIGNED NOT NULL,
-            entry_count     INT UNSIGNED NOT NULL,
-            total_amount    DECIMAL(12,2) NOT NULL,
             collected_by    INT UNSIGNED NOT NULL,
             collected_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_mfc_receipt (receipt_no),
@@ -8155,12 +8718,17 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
           WHERE status = 'collected' AND collection_id IS NULL AND collected_at IS NOT NULL
           GROUP BY student_user_id, collected_at, collected_by"
     )->fetchAll(PDO::FETCH_ASSOC);
+    $writeTotals = gjc_mfc_has_stored_totals($db);
     foreach ($legacy as $g) {
         $db->prepare(
             "INSERT INTO maintenance_fee_collections
-                (receipt_no, student_user_id, entry_count, total_amount, collected_by, collected_at)
-             VALUES (?, ?, ?, ?, ?, ?)"
-        )->execute([gjc_reference('MFR'), (int) $g['student_user_id'], (int) $g['n'], (float) $g['total'], (int) ($g['collected_by'] ?? 0), $g['collected_at']]);
+                (receipt_no, student_user_id" . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by, collected_at)
+             VALUES (?, ?, " . ($writeTotals ? "?, ?, " : "") . "?, ?)"
+        )->execute(array_merge(
+            [gjc_reference('MFR'), (int) $g['student_user_id']],
+            $writeTotals ? [(int) $g['n'], (float) $g['total']] : [],
+            [(int) ($g['collected_by'] ?? 0), $g['collected_at']]
+        ));
         $db->prepare(
             "UPDATE maintenance_fees SET collection_id = ?
               WHERE student_user_id = ? AND status = 'collected' AND collection_id IS NULL
@@ -8190,7 +8758,6 @@ function gjc_ensure_sales_remittances_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS sales_remittances (
             id                  INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             merchant_wallet_id  INT UNSIGNED NOT NULL,
-            merchant_user_id    INT UNSIGNED NOT NULL,
             staff_user_id       INT UNSIGNED NOT NULL,
             reference_no        VARCHAR(40) NULL UNIQUE,
             amount              DECIMAL(15,2) NOT NULL,
@@ -8199,10 +8766,26 @@ function gjc_ensure_sales_remittances_schema(PDO $db): void
             period_end          DATETIME NOT NULL,
             created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_remit_wallet (merchant_wallet_id),
-            INDEX idx_remit_wallet_period (merchant_wallet_id, period_end),
-            INDEX idx_remit_owner (merchant_user_id)
+            INDEX idx_remit_wallet_period (merchant_wallet_id, period_end)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
+
+    // 3NF: merchant_user_id is implied by merchant_wallet_id and is no longer
+    // written. Until the CLI contract drops it, it must accept NULL.
+    if (!$db->inTransaction()) {
+        $nullable = $db->query("SELECT IS_NULLABLE FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales_remittances'
+              AND COLUMN_NAME = 'merchant_user_id'")->fetchColumn();
+        if ($nullable === 'NO') {
+            $db->exec("ALTER TABLE sales_remittances MODIFY COLUMN merchant_user_id INT UNSIGNED NULL");
+        }
+    }
+}
+
+/** True while maintenance_fee_collections still stores entry_count/total_amount (before the 3NF contract). */
+function gjc_mfc_has_stored_totals(PDO $db): bool
+{
+    return in_array('entry_count', gjc_table_columns($db, 'maintenance_fee_collections'), true);
 }
 
 /**
@@ -8230,11 +8813,18 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
     }
 
     $receiptNo = gjc_reference('MFR');
+    // A receipt's count/total are its maintenance_fees rows (collection_id); the
+    // stored copies are only written until the 3NF contract drops them.
+    $writeTotals = gjc_mfc_has_stored_totals($db);
     $db->prepare(
         "INSERT INTO maintenance_fee_collections
-            (receipt_no, student_user_id, entry_count, total_amount, collected_by)
-         VALUES (?, ?, ?, ?, ?)"
-    )->execute([$receiptNo, $studentUserId, (int) $sum['n'], (float) $sum['total'], $collectedBy]);
+            (receipt_no, student_user_id" . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by)
+         VALUES (?, ?, " . ($writeTotals ? "?, ?, " : "") . "?)"
+    )->execute(array_merge(
+        [$receiptNo, $studentUserId],
+        $writeTotals ? [(int) $sum['n'], (float) $sum['total']] : [],
+        [$collectedBy]
+    ));
     $collectionId = (int) $db->lastInsertId();
 
     $db->prepare(
@@ -8804,7 +9394,7 @@ function gjc_active_school_year_name(PDO $db): ?string
  * enrollment system API later, through the same single write path.
  *
  * yr_lvl lives here rather than on student_info because year level is per-year
- * data. student_info.yr_lvl is deliberately left in place and untouched.
+ * data. student_info only keeps entry_yr_lvl (see gjc_ensure_student_entry_year_schema).
  *
  * Same DDL rules as gjc_ensure_school_year_schema(): CREATE/ALTER implicitly
  * commit, so this must never run from inside an open transaction or any money
@@ -8819,6 +9409,7 @@ function gjc_ensure_enrollment_schema(PDO $db): void
     $ensured = true;
 
     gjc_ensure_school_year_schema($db);
+    gjc_ensure_student_entry_year_schema($db);
 
     $db->exec(
         "CREATE TABLE IF NOT EXISTS student_enrollments (

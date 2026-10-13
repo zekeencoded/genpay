@@ -31,10 +31,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $reference = gjc_reference('ENC');
         $stmt = $db->prepare(
             "INSERT INTO encashment_requests
-                (user_id, merchant_wallet_id, amount, method, status, reference_no)
-             VALUES (?, ?, ?, 'Cashier Release', 'pending', ?)"
+                (merchant_wallet_id, amount, method, status, reference_no)
+             VALUES (?, ?, 'Cashier Release', 'pending', ?)"
         );
-        $stmt->execute([$ownerMerchId, $wallet['id'], $amount, $reference]);
+        $stmt->execute([$wallet['id'], $amount, $reference]);
         $notice = "Encashment request {$reference} was submitted for finance review.";
     }
 }
@@ -42,7 +42,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $stmt = $db->prepare(
     "SELECT reference_no, amount, status, released_by, created_at
        FROM encashment_requests
-      WHERE user_id = ?
+      WHERE merchant_wallet_id = (SELECT id FROM merchant_wallets WHERE user_id = ?)
       ORDER BY created_at DESC
       LIMIT 8"
 );

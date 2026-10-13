@@ -436,11 +436,10 @@ try {
 
         $db->prepare(
             "INSERT INTO sales_remittances
-                (merchant_wallet_id, merchant_user_id, staff_user_id, reference_no, amount, txn_count, period_start, period_end)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                (merchant_wallet_id, staff_user_id, reference_no, amount, txn_count, period_start, period_end)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         )->execute([
             $merchantWallet['id'],
-            $ownerMerchId,
             $merchantUserId,
             $reference,
             $unremitted['amount'],
