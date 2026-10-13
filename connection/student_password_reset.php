@@ -18,7 +18,7 @@ function gjc_reset_student_password(PDO $db, int $userId): string
     $temporaryPassword = 'GP-' . bin2hex(random_bytes(8));
     $db->prepare(
         'UPDATE users SET password = ?, force_password_change = 1,
-            is_first_login = 1, password_changed = 0, temp_password = NULL
+            is_first_login = 1, password_changed = 0
          WHERE userID = ?'
     )->execute([password_hash($temporaryPassword, PASSWORD_BCRYPT), $userId]);
     if (gjc_table_exists($db, 'auth_remember_tokens')) {

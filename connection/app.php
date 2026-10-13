@@ -2269,7 +2269,6 @@ function gjc_stall_application_projection_metadata(): array
     40 => 'down_payment_recorded_by',
     41 => 'down_payment_recorded_at',
     42 => 'merchant_user_id',
-    43 => 'temp_password_plain',
     44 => 'preferred_stall_id',
     45 => 'contract_file',
     46 => 'contract_uploaded_at',
@@ -2440,7 +2439,6 @@ function gjc_stall_application_projection_metadata(): array
     23 => 'meetup_notes',
     24 => 'down_payment_reference',
     25 => 'down_payment_notes',
-    26 => 'temp_password_plain',
     27 => 'preferred_stall_id',
     28 => 'contract_file',
     29 => 'cancel_reason',
@@ -2623,7 +2621,6 @@ function gjc_stall_application_defaults(): array
   'down_payment_recorded_by' => NULL,
   'down_payment_recorded_at' => NULL,
   'merchant_user_id' => NULL,
-  'temp_password_plain' => NULL,
   'preferred_stall_id' => NULL,
   'contract_file' => NULL,
   'contract_uploaded_at' => NULL,
@@ -2967,7 +2964,6 @@ function gjc_ensure_first_login_schema(PDO $db): void
     $adds = [
         "is_first_login" => "TINYINT(1) NOT NULL DEFAULT 0",
         "password_changed" => "TINYINT(1) NOT NULL DEFAULT 1",
-        "temp_password" => "VARCHAR(100) NULL",
     ];
 
     foreach ($adds as $column => $definition) {
@@ -4893,15 +4889,43 @@ function gjc_obsolete_fee_tables(): array
     ];
 }
 
-/** 3NF CONTRACT: DROP TABLE for one gjc_obsolete_fee_tables() table, after its rows and definition are exported. */
+/**
+ * Onboarding leftovers. merchant_accounts repeats stall_application_decisions
+ * (who the awarded application's merchant is, who awarded it, when); the others
+ * belong to a pipeline no feature uses and are only dropped while empty.
+ * Children are listed before the tables they reference.
+ */
+function gjc_obsolete_onboarding_tables(): array
+{
+    return [
+        'merchant_accounts' => "SELECT COUNT(*) FROM merchant_accounts a
+            LEFT JOIN stall_application_decisions d ON d.application_id = a.application_id
+            WHERE d.application_id IS NULL
+               OR NOT (a.user_id <=> d.merchant_user_id)
+               OR NOT (a.created_by <=> d.awarded_by)
+               OR ABS(TIMESTAMPDIFF(SECOND, a.created_at, d.awarded_at)) > 5
+               OR a.temp_password_plain IS NOT NULL",
+        'merchant_application_product_types' => "SELECT COUNT(*) FROM merchant_application_product_types",
+        'merchant_applications' => "SELECT COUNT(*) FROM merchant_applications",
+        'payment_verifications' => "SELECT COUNT(*) FROM payment_verifications",
+    ];
+}
+
+/** Every table a contract may drop outright (steps 4 and onboarding). */
+function gjc_obsolete_tables(): array
+{
+    return gjc_obsolete_fee_tables() + gjc_obsolete_onboarding_tables();
+}
+
+/** 3NF CONTRACT: DROP TABLE for one gjc_obsolete_tables() table, after its rows and definition are exported. */
 function gjc_ensure_obsolete_fee_table_contract_schema(PDO $db, string $table, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
         throw new RuntimeException('Obsolete table CONTRACT requires CLI and no transaction.');
     }
-    $config = gjc_obsolete_fee_tables();
+    $config = gjc_obsolete_tables();
     if (!isset($config[$table])) {
-        throw new InvalidArgumentException('Not an obsolete fee table: ' . $table);
+        throw new InvalidArgumentException('Not an obsolete table: ' . $table);
     }
     if (!gjc_table_exists($db, $table)) {
         return [];
@@ -4910,11 +4934,15 @@ function gjc_ensure_obsolete_fee_table_contract_schema(PDO $db, string $table, b
     if ($losing !== 0) {
         throw new RuntimeException("{$losing} {$table} row(s) hold data found nowhere else.");
     }
-    $inbound = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+    // A foreign key from another table blocks the drop, unless that table is
+    // itself obsolete (it is listed, and therefore dropped, first).
+    $inbound = $db->prepare("SELECT DISTINCT TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE
         WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND TABLE_NAME <> ?");
     $inbound->execute([$table, $table]);
-    if ((int) $inbound->fetchColumn() !== 0) {
-        throw new RuntimeException("Another table has a foreign key to {$table}.");
+    foreach ($inbound->fetchAll(PDO::FETCH_COLUMN) as $referencing) {
+        if (!isset($config[$referencing])) {
+            throw new RuntimeException("{$referencing} has a foreign key to {$table}.");
+        }
     }
     gjc_assert_column_unreferenced($db, $table);
     if ($table === 'fee_revenue_log') {
@@ -5084,6 +5112,26 @@ function gjc_quickfix_contracts(): array
             "SELECT COUNT(*) FROM merchant_leases l
               WHERE (l.stall_id IS NOT NULL AND l.stall_number <> l.stall_id)
                  OR (l.stall_id IS NULL AND NOT EXISTS (SELECT 1 FROM stalls s WHERE s.stall_id = l.stall_number))"],
+        // Plaintext temporary passwords are emailed (or shown once), never stored;
+        // these columns only ever held NULL.
+        'users:temp_password' => ['users', ['temp_password'],
+            "SELECT COUNT(*) FROM users WHERE temp_password IS NOT NULL"],
+        'stall_applications:temp_password_plain' => ['stall_applications', ['temp_password_plain'],
+            "SELECT COUNT(*) FROM stall_applications WHERE temp_password_plain IS NOT NULL"],
+        // Stale copies of values that live in code: the GenCoin rate is GJC_PESOS_PER_GC
+        // and top-up fees are CirculationEngine::FEE_*_RATE. Nothing reads either column.
+        'system_settings:token_rate,service_fee' => ['system_settings', ['token_rate', 'service_fee'],
+            "SELECT COUNT(*) FROM system_settings WHERE token_rate <> ROUND(1 / " . (int) GJC_PESOS_PER_GC . ", 4)"],
+        // A receipt covers one student's fees, so its student is theirs (via the ledger).
+        'maintenance_fee_collections:student_user_id' => ['maintenance_fee_collections', ['student_user_id'],
+            "SELECT COUNT(*) FROM (
+                SELECT c.id FROM maintenance_fee_collections c
+                  LEFT JOIN maintenance_fees f ON f.collection_id = c.id
+                  LEFT JOIN transactions t ON t.reference_no = f.reference_no
+                  LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
+                 GROUP BY c.id, c.student_user_id
+                HAVING COUNT(f.id) = 0 OR COUNT(sw.id) <> COUNT(f.id)
+                    OR COUNT(DISTINCT sw.user_id) <> 1 OR MIN(sw.user_id) <> c.student_user_id) x"],
         // A. Occupancy is merchant.stall_id; stalls keeps only its reservation state.
         'stalls:merchant_id' => ['stalls', ['merchant_id'],
             "SELECT
@@ -5180,11 +5228,25 @@ function gjc_ensure_quickfix_contract_schema(PDO $db, string $key, bool $apply =
     return $steps;
 }
 
-/** Every row of a quick-fix table (all columns change or are dropped there), for the export. */
+/**
+ * The rows a quick-fix contract exports before it changes a table. Whole rows,
+ * except for tables that hold credentials or personal data, where only the key
+ * and the dropped columns are exported.
+ */
 function gjc_quickfix_export(PDO $db, string $table): array
 {
-    $key = $table === 'stalls' ? 'stall_id' : 'id';
-    return $db->query("SELECT * FROM `{$table}` ORDER BY `{$key}`")->fetchAll(PDO::FETCH_ASSOC);
+    $key = ['stalls' => 'stall_id', 'users' => 'userID'][$table] ?? 'id';
+    $select = '*';
+    if (in_array($table, ['users', 'stall_applications'], true)) {
+        $columns = [];
+        foreach (gjc_quickfix_contracts() as [$t, $cols]) {
+            if ($t === $table) {
+                $columns = array_merge($columns, $cols);
+            }
+        }
+        $select = "`{$key}`, " . implode(', ', array_map(static fn($c) => "`{$c}`", array_intersect($columns, gjc_table_columns($db, $table, true))));
+    }
+    return $db->query("SELECT {$select} FROM `{$table}` ORDER BY `{$key}`")->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /** The maintenance_fees columns that copy the fee's ledger row or its receipt (3NF). */
@@ -6090,10 +6152,6 @@ function gjc_ensure_core_integrity_schema(PDO $db): void
         'parent_student_links' => [
             'parent_id' => ['parents', 'id', 'CASCADE'],
             'student_user_id' => ['users', 'userID', 'CASCADE'],
-        ],
-        'merchant_accounts' => [
-            'user_id' => ['users', 'userID', 'RESTRICT'],
-            'created_by' => ['users', 'userID', 'RESTRICT'],
         ],
         'cart_orders' => [
             'student_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
@@ -9060,15 +9118,14 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
 
     // One row per "Mark collected" action on one student — the receipt finance
     // can point to. maintenance_fees.collection_id links each settled fee to it.
+    // The receipt's student is the student of its fees (3NF), not a stored copy.
     $db->exec(
         "CREATE TABLE IF NOT EXISTS maintenance_fee_collections (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             receipt_no      VARCHAR(40) NOT NULL,
-            student_user_id INT UNSIGNED NOT NULL,
             collected_by    INT UNSIGNED NOT NULL,
             collected_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_mfc_receipt (receipt_no),
-            INDEX idx_mfc_student (student_user_id),
             INDEX idx_mfc_collected_at (collected_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
@@ -9088,13 +9145,14 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
           GROUP BY student_user_id, collected_at, collected_by"
     )->fetchAll(PDO::FETCH_ASSOC);
     $writeTotals = gjc_mfc_has_stored_totals($db);
+    $writeStudent = gjc_mfc_has_stored_student($db);
     foreach ($legacy as $g) {
         $db->prepare(
             "INSERT INTO maintenance_fee_collections
-                (receipt_no, student_user_id" . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by, collected_at)
-             VALUES (?, ?, " . ($writeTotals ? "?, ?, " : "") . "?, ?)"
+                (receipt_no" . ($writeStudent ? ", student_user_id" : "") . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by, collected_at)
+             VALUES (?, " . ($writeStudent ? "?, " : "") . ($writeTotals ? "?, ?, " : "") . "?, ?)"
         )->execute(array_merge(
-            [gjc_reference('MFR'), (int) $g['student_user_id']],
+            [gjc_reference('MFR')], $writeStudent ? [(int) $g['student_user_id']] : [],
             $writeTotals ? [(int) $g['n'], (float) $g['total']] : [],
             [(int) ($g['collected_by'] ?? 0), $g['collected_at']]
         ));
@@ -9180,6 +9238,12 @@ function gjc_maintenance_fees_has_legacy_copies(PDO $db): bool
     return in_array('student_user_id', gjc_table_columns($db, 'maintenance_fees'), true);
 }
 
+/** True while maintenance_fee_collections still stores the student its fees already imply (before the 3NF contract). */
+function gjc_mfc_has_stored_student(PDO $db): bool
+{
+    return in_array('student_user_id', gjc_table_columns($db, 'maintenance_fee_collections'), true);
+}
+
 /** True while maintenance_fee_collections still stores entry_count/total_amount (before the 3NF contract). */
 function gjc_mfc_has_stored_totals(PDO $db): bool
 {
@@ -9218,12 +9282,14 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
     // A receipt's count/total are its maintenance_fees rows (collection_id); the
     // stored copies are only written until the 3NF contract drops them.
     $writeTotals = gjc_mfc_has_stored_totals($db);
+    // The receipt's student is the student of its fees; the copy is written only until the contract.
+    $writeStudent = gjc_mfc_has_stored_student($db);
     $db->prepare(
         "INSERT INTO maintenance_fee_collections
-            (receipt_no, student_user_id" . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by)
-         VALUES (?, ?, " . ($writeTotals ? "?, ?, " : "") . "?)"
+            (receipt_no" . ($writeStudent ? ", student_user_id" : "") . ($writeTotals ? ", entry_count, total_amount" : "") . ", collected_by)
+         VALUES (?, " . ($writeStudent ? "?, " : "") . ($writeTotals ? "?, ?, " : "") . "?)"
     )->execute(array_merge(
-        [$receiptNo, $studentUserId],
+        [$receiptNo], $writeStudent ? [$studentUserId] : [],
         $writeTotals ? [(int) $sum['n'], (float) $sum['total']] : [],
         [$collectedBy]
     ));

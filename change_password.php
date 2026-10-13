@@ -46,8 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SET password = ?,
                     force_password_change = 0,
                     is_first_login = 0,
-                    password_changed = 1,
-                    temp_password = NULL
+                    password_changed = 1
               WHERE userID = ? AND SHA2(password, 256) = ?"
         );
         $update->execute([$hash, $userId, $_SESSION['password_fingerprint']]);

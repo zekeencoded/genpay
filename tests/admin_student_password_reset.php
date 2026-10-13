@@ -27,7 +27,7 @@ try {
     $read->execute([$id]);
     $after = $read->fetch();
     reset_expect(password_verify($temporary, $after['password']), 'Temporary password must authenticate against the saved hash.');
-    reset_expect($after['password'] !== $before['password'] && $after['temp_password'] === null, 'Replace the password without storing plaintext.');
+    reset_expect($after['password'] !== $before['password'] && ($after['temp_password'] ?? null) === null, 'Replace the password without storing plaintext.');
     reset_expect((int) $after['force_password_change'] === 1 && (int) $after['is_first_login'] === 1 && (int) $after['password_changed'] === 0, 'Reset must force a password change.');
     reset_expect($after['status'] === $before['status'], 'Reset must preserve account restrictions.');
     reset_expect(!gjc_password_session_valid($after), 'Existing session must be rejected.');

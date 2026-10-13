@@ -27,6 +27,16 @@
  *   maintenance_fees     drops the copies of its ledger row and receipt (student, type,
  *                        amount, school year, time, collected at/by); reference_no becomes
  *                        UNIQUE with RESTRICT foreign keys and a status/collection CHECK.
+ *   maintenance_fee_collections.student_user_id
+ *                        a receipt's student is the student of its fees.
+ *   system_settings.token_rate/service_fee
+ *                        stale copies of code constants (GJC_PESOS_PER_GC, CirculationEngine fees).
+ *   users.temp_password, stall_applications.temp_password_plain
+ *                        plaintext temporary-password columns that only ever held NULL.
+ *   merchant_accounts, merchant_applications, merchant_application_product_types,
+ *   payment_verifications
+ *                        onboarding leftovers (gjc_obsolete_onboarding_tables()): the first
+ *                        repeats stall_application_decisions, the others are empty and unused.
  *
  *   php database/migrations/3nf_contract.php            apply
  *   php database/migrations/3nf_contract.php --dry-run  verify + show the plan, change nothing
@@ -94,7 +104,7 @@ $contracts['transaction_items:subtotal'] = [
     'rows' => static fn(PDO $db): array => $db->query('SELECT id, subtotal FROM transaction_items ORDER BY id')
         ->fetchAll(PDO::FETCH_ASSOC),
 ];
-foreach (array_keys(gjc_obsolete_fee_tables()) as $table) {
+foreach (array_keys(gjc_obsolete_tables()) as $table) {
     $contracts["table:{$table}"] = [
         'run'  => static fn(PDO $db, bool $apply, ?string $archive = null): array =>
             gjc_ensure_obsolete_fee_table_contract_schema($db, $table, $apply, $archive),

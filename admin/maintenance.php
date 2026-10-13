@@ -603,7 +603,6 @@ function maintenance_provision_parent(PDO $db, array $parent, array &$cache): ar
             'force_password_change' => 1,
             'is_first_login'        => 1,
             'password_changed'      => 0,
-            'temp_password'         => null,
         ];
 
         $insert = [];
@@ -683,7 +682,6 @@ function maintenance_insert_student_user(PDO $db, array $row): int
         'force_password_change' => 1,
         'is_first_login' => 1,
         'password_changed' => 0,
-        'temp_password' => null,
     ];
     $details = gjc_collect_profile_details($row, $columns);
     if ($details['error'] !== null) {
@@ -746,7 +744,6 @@ function maintenance_insert_merchant_user(PDO $db, array $data): int
         'force_password_change' => 1,
         'is_first_login' => 1,
         'password_changed' => 0,
-        'temp_password' => null,
     ];
 
     $insert = [];
@@ -873,7 +870,7 @@ function maintenance_insert_approved_application(PDO $db, array $data, int $user
         'contact_number'=>$data['phone'],'email'=>$data['email'],'preferred_stall_id'=>$stallId,'stall_id'=>$stallId,
         'profile_picture'=>'','business_permit'=>'','sanitary_permit'=>'','gjc_requirements'=>'','clearance'=>'',
         'terms_accepted'=>1,'status'=>'awarded','current_step'=>5,'reviewed_by'=>$adminId,
-        'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$userId,'temp_password_plain'=>null,
+        'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$userId,
     ]);
 }
 

@@ -273,9 +273,9 @@ try {
                     "INSERT INTO users
                          (last_name, first_name, email, contact_number,
                           roleID, password, profile_img,
-                          force_password_change, is_first_login, password_changed, temp_password)
-                     VALUES (?, ?, ?, ?, 2, ?, '', 1, 1, 0, ?)"
-                )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw, null]);
+                          force_password_change, is_first_login, password_changed)
+                     VALUES (?, ?, ?, ?, 2, ?, '', 1, 1, 0)"
+                )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw]);
                 $newUserId = (int) $db->lastInsertId();
 
                 $db->prepare(
@@ -339,19 +339,7 @@ try {
                     $newLeaseId = (int) $db->lastInsertId();
                 }
 
-                if(!gjc_stall_application_update($db,$appId,['stall_id'=>$stallId,'status'=>'awarded','awarded_by'=>$adminId,'awarded_at'=>GJC_APPLICATION_DB_NOW,'reviewed_by'=>$adminId,'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$newUserId,'temp_password_plain'=>null],['status'=>'pending_verification']))throw new RuntimeException('APPLICATION_CHANGED');
-
-                if (gjc_table_exists($db, 'merchant_accounts')) {
-                    $db->prepare(
-                        "INSERT INTO merchant_accounts
-                             (application_id, user_id, temp_password_plain, created_by)
-                         VALUES (?, ?, ?, ?)
-                         ON DUPLICATE KEY UPDATE
-                             user_id = VALUES(user_id),
-                             temp_password_plain = VALUES(temp_password_plain),
-                             created_by = VALUES(created_by)"
-                    )->execute([$appId, $newUserId, null, $adminId]);
-                }
+                if(!gjc_stall_application_update($db,$appId,['stall_id'=>$stallId,'status'=>'awarded','awarded_by'=>$adminId,'awarded_at'=>GJC_APPLICATION_DB_NOW,'reviewed_by'=>$adminId,'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$newUserId],['status'=>'pending_verification']))throw new RuntimeException('APPLICATION_CHANGED');
 
                 $db->commit();
             } catch (Throwable $e) {
