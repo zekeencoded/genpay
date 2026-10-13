@@ -94,7 +94,7 @@ if ($staff) {
     $tenureLabel = $tenureDays === null ? '—'
         : ($tenureDays === 0 ? 'Joined today' : number_format($tenureDays) . ' day' . ($tenureDays === 1 ? '' : 's'));
 
-    $mustChangePw = !empty($staff['force_password_change']) || !empty($staff['is_first_login']);
+    $mustChangePw = !empty($staff['force_password_change']);
     $address = gjc_format_address($staff);
     $sex = trim((string) ($staff['sex'] ?? ''));
     $dob = $staff['date_of_birth'] ?? null;

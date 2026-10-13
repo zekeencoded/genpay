@@ -44,9 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $update = $db->prepare(
             "UPDATE users
                 SET password = ?,
-                    force_password_change = 0,
-                    is_first_login = 0,
-                    password_changed = 1
+                    force_password_change = 0
               WHERE userID = ? AND SHA2(password, 256) = ?"
         );
         $update->execute([$hash, $userId, $_SESSION['password_fingerprint']]);
@@ -65,8 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gjc_current_role(),
             'PASSWORD_CHANGE',
             'users',
-            ['force_password_change' => 1, 'is_first_login' => 1, 'password_changed' => 0],
-            ['force_password_change' => 0, 'is_first_login' => 0, 'password_changed' => 1],
+            ['force_password_change' => 1],
+            ['force_password_change' => 0],
             null,
             ['target_id' => $userId]
         );

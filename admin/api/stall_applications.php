@@ -273,8 +273,8 @@ try {
                     "INSERT INTO users
                          (last_name, first_name, email, contact_number,
                           roleID, password, profile_img,
-                          force_password_change, is_first_login, password_changed)
-                     VALUES (?, ?, ?, ?, 2, ?, '', 1, 1, 0)"
+                          force_password_change)
+                     VALUES (?, ?, ?, ?, 2, ?, '', 1)"
                 )->execute([$lastName, $firstName, $app['email'], $app['contact_number'], $hashedPw]);
                 $newUserId = (int) $db->lastInsertId();
 

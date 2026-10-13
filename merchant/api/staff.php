@@ -253,7 +253,6 @@ try {
             if (in_array('force_password_change', $cols, true)) {
                 $sets[] = 'force_password_change = 1';
             }
-            $sets[] = 'password_changed = 0';
 
             $db->prepare(
                 "UPDATE users SET " . implode(', ', $sets) . " WHERE userID = ? AND merchant_owner_id = ?"

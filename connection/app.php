@@ -2962,8 +2962,6 @@ function gjc_ensure_first_login_schema(PDO $db): void
 
     $columns = gjc_table_columns($db, "users");
     $adds = [
-        "is_first_login" => "TINYINT(1) NOT NULL DEFAULT 0",
-        "password_changed" => "TINYINT(1) NOT NULL DEFAULT 1",
     ];
 
     foreach ($adds as $column => $definition) {
@@ -3339,11 +3337,7 @@ function gjc_attempt_remember_login(PDO $db): void
     $userStmt->execute([(int) $token['user_id']]);
     $user = $userStmt->fetch(PDO::FETCH_ASSOC);
 
-    $mustChange = $user && (
-        !empty($user['force_password_change'])
-        || !empty($user['is_first_login'])
-        || (isset($user['password_changed']) && (int) $user['password_changed'] === 0)
-    );
+    $mustChange = $user && !empty($user['force_password_change']);
     if (!$user || (!empty($user['status']) && $user['status'] === 'Inactive') || $mustChange) {
         gjc_clear_remember_token($db);
         return;
@@ -5112,6 +5106,17 @@ function gjc_quickfix_contracts(): array
             "SELECT COUNT(*) FROM merchant_leases l
               WHERE (l.stall_id IS NOT NULL AND l.stall_number <> l.stall_id)
                  OR (l.stall_id IS NULL AND NOT EXISTS (SELECT 1 FROM stalls s WHERE s.stall_id = l.stall_number))"],
+        // One fact, one flag: every reader ORed these with force_password_change.
+        'users:is_first_login,password_changed' => ['users', ['is_first_login', 'password_changed'],
+            "SELECT COUNT(*) FROM users WHERE force_password_change = 0 AND (is_first_login = 1 OR password_changed = 0)"],
+        // When and by whom a credit was claimed is its claim transaction's (claim_reference).
+        'fee_waiver_credits:claimed_at,claimed_by_user_id' => ['fee_waiver_credits', ['claimed_at', 'claimed_by_user_id'],
+            "SELECT COUNT(*) FROM fee_waiver_credits f
+               LEFT JOIN transactions t ON t.reference_no = f.claim_reference
+              WHERE (f.claimed_at IS NOT NULL OR f.claimed_by_user_id IS NOT NULL)
+                AND (f.status <> 'claimed' OR t.id IS NULL
+                  OR (f.claimed_by_user_id IS NOT NULL AND f.claimed_by_user_id <> t.initiated_by)
+                  OR (f.claimed_at IS NOT NULL AND ABS(TIMESTAMPDIFF(SECOND, f.claimed_at, t.created_at)) > 5))"],
         // Plaintext temporary passwords are emailed (or shown once), never stored;
         // these columns only ever held NULL.
         'users:temp_password' => ['users', ['temp_password'],
@@ -8836,8 +8841,6 @@ function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
             amount          DECIMAL(10,2) NULL,
             status          ENUM('empty', 'pending', 'posted', 'claimed') NOT NULL DEFAULT 'empty',
             waiver_file     VARCHAR(255) NULL,
-            claimed_at         DATETIME NULL,
-            claimed_by_user_id INT UNSIGNED NULL,
             claim_reference    VARCHAR(30) NULL,
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -8850,8 +8853,6 @@ function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
     $fwcCols = gjc_table_columns($db, 'fee_waiver_credits');
     $fwcAltered = false;
     foreach ([
-        'claimed_at'         => 'DATETIME NULL',
-        'claimed_by_user_id' => 'INT UNSIGNED NULL',
         'claim_reference'    => 'VARCHAR(30) NULL',
     ] as $col => $def) {
         if (!in_array($col, $fwcCols, true)) {
@@ -8908,8 +8909,12 @@ function gjc_student_waiver_credit(PDO $db, int $studentUserId): array
     gjc_ensure_fee_waiver_credits_schema($db);
 
     $stmt = $db->prepare(
-        "SELECT amount, status, waiver_file, claimed_at, claim_reference
-           FROM fee_waiver_credits WHERE student_user_id = ? LIMIT 1"
+        // When it was claimed is the claim transaction's time (3NF).
+        "SELECT f.amount, f.status, f.waiver_file, f.claim_reference,
+                CASE WHEN f.status = 'claimed' THEN t.created_at END AS claimed_at
+           FROM fee_waiver_credits f
+           LEFT JOIN transactions t ON t.reference_no = f.claim_reference
+          WHERE f.student_user_id = ? LIMIT 1"
     );
     $stmt->execute([$studentUserId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
@@ -8958,10 +8963,10 @@ function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUse
 
     $claim = $db->prepare(
         "UPDATE fee_waiver_credits
-            SET status = 'claimed', claimed_at = NOW(), claimed_by_user_id = ?
+            SET status = 'claimed'
           WHERE id = ? AND status = 'posted'"
     );
-    $claim->execute([$actingUserId, $creditId]);
+    $claim->execute([$creditId]);
     if ($claim->rowCount() === 0) {
         throw new RuntimeException('This credit is not available to claim — it may already have been claimed.');
     }
@@ -9001,7 +9006,7 @@ function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUse
         // Mint failed after the claim was taken — give the credit back to the queue
         // instead of leaving it stuck 'claimed' with no money behind it.
         $db->prepare(
-            "UPDATE fee_waiver_credits SET status = 'posted', claimed_at = NULL, claimed_by_user_id = NULL WHERE id = ? AND status = 'claimed'"
+            "UPDATE fee_waiver_credits SET status = 'posted' WHERE id = ? AND status = 'claimed'"
         )->execute([$creditId]);
         throw $e;
     }
@@ -9032,10 +9037,10 @@ function gjc_import_fee_waiver_credit(PDO $db, int $studentUserId, float $amount
 
     $claim = $db->prepare(
         "UPDATE fee_waiver_credits
-            SET status = 'claimed', amount = ?, claimed_at = NOW(), claimed_by_user_id = ?
+            SET status = 'claimed', amount = ?
           WHERE id = ? AND status = 'empty'"
     );
-    $claim->execute([$amount, $initiatedBy, $creditId]);
+    $claim->execute([$amount, $creditId]);
     if ($claim->rowCount() === 0) {
         throw new RuntimeException("Fee Waiver Credit #{$creditId} was not in the 'empty' state.");
     }
@@ -9073,7 +9078,7 @@ function gjc_import_fee_waiver_credit(PDO $db, int $studentUserId, float $amount
         return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
     } catch (\Throwable $e) {
         $db->prepare(
-            "UPDATE fee_waiver_credits SET status = 'empty', amount = NULL, claimed_at = NULL, claimed_by_user_id = NULL WHERE id = ? AND status = 'claimed'"
+            "UPDATE fee_waiver_credits SET status = 'empty', amount = NULL WHERE id = ? AND status = 'claimed'"
         )->execute([$creditId]);
         throw $e;
     }

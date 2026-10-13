@@ -601,8 +601,6 @@ function maintenance_provision_parent(PDO $db, array $parent, array &$cache): ar
             'password'              => password_hash($tempPassword, PASSWORD_DEFAULT),
             'profile_img'           => '',
             'force_password_change' => 1,
-            'is_first_login'        => 1,
-            'password_changed'      => 0,
         ];
 
         $insert = [];
@@ -680,8 +678,6 @@ function maintenance_insert_student_user(PDO $db, array $row): int
         'password' => password_hash($studentId, PASSWORD_DEFAULT),
         'profile_img' => '',
         'force_password_change' => 1,
-        'is_first_login' => 1,
-        'password_changed' => 0,
     ];
     $details = gjc_collect_profile_details($row, $columns);
     if ($details['error'] !== null) {
@@ -742,8 +738,6 @@ function maintenance_insert_merchant_user(PDO $db, array $data): int
         'password' => password_hash((string) $data['temp_password'], PASSWORD_BCRYPT),
         'profile_img' => '',
         'force_password_change' => 1,
-        'is_first_login' => 1,
-        'password_changed' => 0,
     ];
 
     $insert = [];

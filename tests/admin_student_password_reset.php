@@ -28,7 +28,7 @@ try {
     $after = $read->fetch();
     reset_expect(password_verify($temporary, $after['password']), 'Temporary password must authenticate against the saved hash.');
     reset_expect($after['password'] !== $before['password'] && ($after['temp_password'] ?? null) === null, 'Replace the password without storing plaintext.');
-    reset_expect((int) $after['force_password_change'] === 1 && (int) $after['is_first_login'] === 1 && (int) $after['password_changed'] === 0, 'Reset must force a password change.');
+    reset_expect((int) $after['force_password_change'] === 1, 'Reset must force a password change.');
     reset_expect($after['status'] === $before['status'], 'Reset must preserve account restrictions.');
     reset_expect(!gjc_password_session_valid($after), 'Existing session must be rejected.');
     unset($_SESSION['password_fingerprint']);
@@ -65,8 +65,7 @@ try {
     $read->execute([$id]);
     $changed = $read->fetch();
     reset_expect(password_verify('Regression-new-password', $changed['password'])
-        && (int) $changed['force_password_change'] === 0 && (int) $changed['password_changed'] === 1
-        && (int) $changed['is_first_login'] === 0, 'Change-password page must save the new password and clear reset flags.');
+        && (int) $changed['force_password_change'] === 0, 'Change-password page must save the new password and clear reset flags.');
     unset($_SESSION['password_fingerprint']);
     reset_expect(!gjc_password_session_valid($changed), 'Legacy sessions must stay invalid after completing password recovery.');
     $_SESSION['password_fingerprint'] = hash('sha256', $hash);

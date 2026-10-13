@@ -145,9 +145,7 @@ class Record
                     }
 
                     $mustChangePassword =
-                        !empty($user['force_password_change']) ||
-                        !empty($user['is_first_login']) ||
-                        (isset($user['password_changed']) && (int) $user['password_changed'] === 0);
+                        !empty($user['force_password_change']);
 
                     // Remember me: issue a 30-day token when ticked (never for
                     // accounts still on a forced password change); an unticked
