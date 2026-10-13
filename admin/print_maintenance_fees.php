@@ -50,7 +50,7 @@ $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
 
 $rowsStmt = $db->prepare(
     "SELECT reference_no, source_type, txn_amount, fee_amount, status, created_at
-       FROM maintenance_fees
+       FROM " . gjc_maintenance_fee_source('mf') . "
       WHERE student_user_id = ? AND status <> 'voided'
       ORDER BY created_at ASC, id ASC"
 );

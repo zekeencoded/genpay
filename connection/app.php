@@ -5187,6 +5187,125 @@ function gjc_quickfix_export(PDO $db, string $table): array
     return $db->query("SELECT * FROM `{$table}` ORDER BY `{$key}`")->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/** The maintenance_fees columns that copy the fee's ledger row or its receipt (3NF). */
+function gjc_maintenance_fee_legacy_columns(): array
+{
+    return ['student_user_id', 'source_type', 'txn_amount', 'school_year_id', 'created_at', 'collected_at', 'collected_by'];
+}
+
+/**
+ * 3NF CONTRACT for maintenance_fees: drop every column that belongs to the
+ * fee's ledger row or its receipt, leaving id, reference_no, fee_amount,
+ * status, collection_id. reference_no becomes the unique key; the row now
+ * depends on its transaction and receipt, so both get RESTRICT foreign keys,
+ * and a CHECK keeps status = 'collected' in step with collection_id.
+ * Same CLI/plan/archive rules as the other contracts.
+ */
+function gjc_ensure_maintenance_fees_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Maintenance fee CONTRACT requires CLI and no transaction.');
+    }
+    foreach (['maintenance_fees', 'maintenance_fee_collections', 'transactions', 'student_wallets'] as $table) {
+        if (!gjc_table_exists($db, $table)) {
+            throw new RuntimeException('Contract source table is missing: ' . $table);
+        }
+    }
+    $legacy = gjc_maintenance_fee_legacy_columns();
+    $live = gjc_table_columns($db, 'maintenance_fees', true);
+    $present = array_values(array_intersect($legacy, $live));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== count($legacy) || !in_array('collection_id', $live, true)) {
+        throw new RuntimeException('maintenance_fees is partially contracted; restore it from the export first.');
+    }
+
+    $duplicates = (int) $db->query("SELECT COUNT(*) FROM (SELECT reference_no FROM maintenance_fees
+        GROUP BY reference_no HAVING COUNT(*) > 1) d")->fetchColumn();
+    if ($duplicates !== 0) {
+        throw new RuntimeException("{$duplicates} transaction reference(s) carry more than one fee row.");
+    }
+    // The fee's own created_at came from a separate NOW(), so allow a few seconds;
+    // the ledger row's time is the authoritative one.
+    $conflicts = (int) $db->query("SELECT COUNT(*) FROM maintenance_fees f
+        LEFT JOIN transactions t ON t.reference_no = f.reference_no
+        LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
+        LEFT JOIN maintenance_fee_collections c ON c.id = f.collection_id
+        WHERE t.id IS NULL OR sw.id IS NULL
+           OR f.student_user_id <> sw.user_id
+           OR f.source_type <> t.transaction_type
+           OR f.txn_amount <> t.amount
+           OR NOT (f.school_year_id <=> t.school_year_id)
+           OR ABS(TIMESTAMPDIFF(SECOND, f.created_at, t.created_at)) > 5
+           OR (f.status = 'collected') <> (f.collection_id IS NOT NULL)
+           OR (f.collection_id IS NOT NULL AND c.id IS NULL)
+           OR NOT (f.collected_at <=> c.collected_at)
+           OR NOT (f.collected_by <=> c.collected_by)")->fetchColumn();
+    if ($conflicts !== 0) {
+        throw new RuntimeException("{$conflicts} maintenance_fees row(s) disagree with their transaction or receipt.");
+    }
+    foreach ($legacy as $column) {
+        gjc_assert_column_unreferenced($db, $column);
+    }
+
+    // Every index that uses a dropped column goes with it (they are composites).
+    $marks = implode(',', array_fill(0, count($legacy), '?'));
+    $idx = $db->prepare("SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'maintenance_fees' AND COLUMN_NAME IN ({$marks})");
+    $idx->execute($legacy);
+    $fkOnLegacy = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL
+          AND ((TABLE_NAME = 'maintenance_fees' AND COLUMN_NAME IN ({$marks}))
+            OR (REFERENCED_TABLE_NAME = 'maintenance_fees' AND REFERENCED_COLUMN_NAME IN ({$marks})))");
+    $fkOnLegacy->execute(array_merge($legacy, $legacy));
+    if ((int) $fkOnLegacy->fetchColumn() !== 0) {
+        throw new RuntimeException('A foreign key uses a maintenance_fees column that is being dropped.');
+    }
+    $alter = [];
+    foreach ($idx->fetchAll(PDO::FETCH_COLUMN) as $index) {
+        if ($index === 'PRIMARY') {
+            throw new RuntimeException('The primary key uses a column that is being dropped.');
+        }
+        $alter[] = "DROP INDEX `{$index}`";
+    }
+    foreach ($legacy as $column) {
+        $alter[] = "DROP COLUMN `{$column}`";
+    }
+    $has = static function (string $sql) use ($db): bool {
+        return (int) $db->query($sql)->fetchColumn() > 0;
+    };
+    if (!$has("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'maintenance_fees' AND INDEX_NAME = 'uq_mfee_reference'")) {
+        $alter[] = "ADD UNIQUE KEY `uq_mfee_reference` (`reference_no`)";
+    }
+    if (!$has("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'maintenance_fees' AND INDEX_NAME = 'idx_mfee_status'")) {
+        $alter[] = "ADD KEY `idx_mfee_status` (`status`)";
+    }
+    foreach (['reference_no' => ['transactions', 'reference_no'], 'collection_id' => ['maintenance_fee_collections', 'id']] as $column => [$parent, $parentKey]) {
+        if (!$has("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'maintenance_fees' AND COLUMN_NAME = '{$column}' AND REFERENCED_TABLE_NAME = '{$parent}'")) {
+            $alter[] = "ADD CONSTRAINT `fk_core_maintenance_fees_{$column}` FOREIGN KEY (`{$column}`)
+            REFERENCES `{$parent}` (`{$parentKey}`) ON DELETE RESTRICT ON UPDATE RESTRICT";
+        }
+    }
+    if (!$has("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'maintenance_fees' AND CONSTRAINT_NAME = 'chk_mfee_collected'")) {
+        $alter[] = "ADD CONSTRAINT `chk_mfee_collected` CHECK ((`status` = 'collected') = (`collection_id` IS NOT NULL))";
+    }
+    $plan = ["ALTER TABLE `maintenance_fees` " . implode(', ', $alter)];
+    if (!$apply) {
+        return $plan;
+    }
+    $cols = implode(', ', array_map(static fn($c) => "`{$c}`", $legacy));
+    $rows = $db->query("SELECT id, reference_no, {$cols} FROM maintenance_fees ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    gjc_assert_contract_archive($archivePath, 'maintenance_fees:ledger_and_receipt_copies', $rows);
+    $db->exec($plan[0]);
+    gjc_table_columns($db, 'maintenance_fees', true);
+    return $plan;
+}
+
 /** A contract may only drop data that a matching private export already holds. */
 function gjc_assert_contract_archive(?string $archivePath, string $column, array $rows): void
 {
@@ -6020,6 +6139,10 @@ function gjc_ensure_core_integrity_schema(PDO $db): void
         ],
         'sales_remittances' => [
             'merchant_wallet_id' => ['merchant_wallets', 'id', 'RESTRICT'],
+        ],
+        'maintenance_fees' => [
+            'reference_no' => ['transactions', 'reference_no', 'RESTRICT'],
+            'collection_id' => ['maintenance_fee_collections', 'id', 'RESTRICT'],
         ],
         'vouchers' => [
             'issued_by' => ['users', 'userID', 'RESTRICT'],
@@ -8918,21 +9041,20 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
     $done = true;
 
     $db->exec(
+        // 3NF: a fee row holds only its own facts. Student, type, amount, school
+        // year and time are its ledger row's (reference_no); when and by whom it
+        // was collected are its receipt's (collection_id). Read them through
+        // gjc_maintenance_fee_source().
         "CREATE TABLE IF NOT EXISTS maintenance_fees (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            student_user_id INT UNSIGNED NOT NULL,
             reference_no    VARCHAR(40) NOT NULL,
-            source_type     ENUM('payment', 'p2p_transfer') NOT NULL,
-            txn_amount      DECIMAL(12,2) NOT NULL,
             fee_amount      DECIMAL(10,2) NOT NULL,
             status          ENUM('accrued', 'collected', 'voided') NOT NULL DEFAULT 'accrued',
-            school_year_id  INT NULL,
-            created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            collected_at    DATETIME NULL,
-            collected_by    INT UNSIGNED NULL,
-            UNIQUE KEY uq_mfee_ref_student (reference_no, student_user_id),
-            INDEX idx_mfee_student_status (student_user_id, status),
-            INDEX idx_mfee_status_created (status, created_at)
+            collection_id   INT UNSIGNED NULL,
+            UNIQUE KEY uq_mfee_reference (reference_no),
+            INDEX idx_mfee_status (status),
+            INDEX idx_mfee_collection (collection_id),
+            CONSTRAINT chk_mfee_collected CHECK ((status = 'collected') = (collection_id IS NOT NULL))
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
@@ -8957,7 +9079,9 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
 
     // Fees collected before receipts existed: group them into one legacy
     // receipt per (student, collected_at, collector) so the history is complete.
-    $legacy = $db->query(
+    // (Reads the legacy copies, so it only runs before the 3NF contract; after it
+    // a collected fee cannot exist without its receipt.)
+    $legacy = !gjc_maintenance_fees_has_legacy_copies($db) ? [] : $db->query(
         "SELECT student_user_id, collected_at, collected_by, COUNT(*) AS n, SUM(fee_amount) AS total
            FROM maintenance_fees
           WHERE status = 'collected' AND collection_id IS NULL AND collected_at IS NOT NULL
@@ -9027,6 +9151,35 @@ function gjc_ensure_sales_remittances_schema(PDO $db): void
     }
 }
 
+/**
+ * maintenance_fees as a FROM source, with every derived fact a query needs.
+ * A fee row only stores its own facts (reference_no, fee_amount, status,
+ * collection_id); the rest belongs to the ledger row it is a line on, or to
+ * its receipt (3NF):
+ *   student_user_id  the payer = owner of the transaction's student wallet
+ *   source_type      transactions.transaction_type (payment | p2p_transfer)
+ *   txn_amount, school_year_id, created_at   the transaction's
+ *   collected_at, collected_by               the receipt's
+ * Use as: "FROM " . gjc_maintenance_fee_source('mf') . " WHERE mf.student_user_id = ?".
+ */
+function gjc_maintenance_fee_source(string $alias = 'mf'): string
+{
+    return "(SELECT f.id, f.reference_no, f.fee_amount, f.status, f.collection_id,
+                    fsw.user_id AS student_user_id, ft.transaction_type AS source_type,
+                    ft.amount AS txn_amount, ft.school_year_id, ft.created_at,
+                    fc.collected_at, fc.collected_by
+               FROM maintenance_fees f
+               JOIN transactions ft ON ft.reference_no = f.reference_no
+               JOIN student_wallets fsw ON fsw.id = ft.student_wallet_id
+               LEFT JOIN maintenance_fee_collections fc ON fc.id = f.collection_id) {$alias}";
+}
+
+/** True while maintenance_fees still stores the ledger/receipt copies the 3NF contract drops. */
+function gjc_maintenance_fees_has_legacy_copies(PDO $db): bool
+{
+    return in_array('student_user_id', gjc_table_columns($db, 'maintenance_fees'), true);
+}
+
 /** True while maintenance_fee_collections still stores entry_count/total_amount (before the 3NF contract). */
 function gjc_mfc_has_stored_totals(PDO $db): bool
 {
@@ -9042,14 +9195,18 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
 {
     // $createdBefore limits the settle to fees created before that datetime
     // (the auto-collect sweep leaves today's open so a same-day return can still void them).
-    $cutoffSql = $createdBefore !== null ? ' AND created_at < ' . $db->quote($createdBefore) : '';
+    // Student and time are the ledger row's (3NF), so the fees are reached through it.
+    $cutoffSql = $createdBefore !== null ? ' AND t.created_at < ' . $db->quote($createdBefore) : '';
+    $scopeSql = "maintenance_fees mf
+           JOIN transactions t ON t.reference_no = mf.reference_no
+           JOIN student_wallets sw ON sw.id = t.student_wallet_id";
 
     // Lock first so the receipt total is exactly what flips.
     $sumStmt = $db->prepare(
-        "SELECT COUNT(*) AS n, COALESCE(SUM(fee_amount), 0) AS total
-           FROM maintenance_fees
-          WHERE student_user_id = ? AND status = 'accrued'{$cutoffSql}
-            FOR UPDATE"
+        "SELECT COUNT(*) AS n, COALESCE(SUM(mf.fee_amount), 0) AS total
+           FROM {$scopeSql}
+          WHERE sw.user_id = ? AND mf.status = 'accrued'{$cutoffSql}
+            FOR UPDATE OF mf"
     );
     $sumStmt->execute([$studentUserId]);
     $sum = $sumStmt->fetch(PDO::FETCH_ASSOC);
@@ -9072,11 +9229,14 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
     ));
     $collectionId = (int) $db->lastInsertId();
 
+    // When and by whom is the receipt's; the copies are written only until the contract drops them.
+    $legacy = gjc_maintenance_fees_has_legacy_copies($db);
     $db->prepare(
-        "UPDATE maintenance_fees
-            SET status = 'collected', collected_at = NOW(), collected_by = ?, collection_id = ?
-          WHERE student_user_id = ? AND status = 'accrued'{$cutoffSql}"
-    )->execute([$collectedBy, $collectionId, $studentUserId]);
+        "UPDATE {$scopeSql}
+            SET mf.status = 'collected', mf.collection_id = ?"
+            . ($legacy ? ", mf.collected_at = NOW(), mf.collected_by = ?" : "") . "
+          WHERE sw.user_id = ? AND mf.status = 'accrued'{$cutoffSql}"
+    )->execute(array_merge([$collectionId], $legacy ? [$collectedBy] : [], [$studentUserId]));
 
     return ['receipt_no' => $receiptNo, 'entries' => (int) $sum['n'], 'total' => (float) $sum['total']];
 }
@@ -9091,8 +9251,8 @@ function gjc_auto_collect_maintenance_fees(PDO $db): array
 {
     $cutoff = date('Y-m-d 00:00:00');
     $ids = $db->query(
-        "SELECT DISTINCT student_user_id FROM maintenance_fees
-          WHERE status = 'accrued' AND created_at < " . $db->quote($cutoff)
+        "SELECT DISTINCT mf.student_user_id FROM " . gjc_maintenance_fee_source('mf') . "
+          WHERE mf.status = 'accrued' AND mf.created_at < " . $db->quote($cutoff)
     )->fetchAll(PDO::FETCH_COLUMN);
 
     $receipts = [];
@@ -9139,7 +9299,7 @@ function gjc_maintenance_fees_by_reference(PDO $db, array $referenceNos, ?int $s
     $out = [];
     foreach (array_chunk($referenceNos, 500) as $chunk) {
         $sql = "SELECT mf.reference_no, mf.student_user_id, mf.fee_amount, mf.status, mf.collected_at, c.receipt_no
-                  FROM maintenance_fees mf
+                  FROM " . gjc_maintenance_fee_source('mf') . "
                   LEFT JOIN maintenance_fee_collections c ON c.id = mf.collection_id
                  WHERE mf.reference_no IN (" . implode(',', array_fill(0, count($chunk), '?')) . ")";
         $params = $chunk;
@@ -9212,11 +9372,18 @@ function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referen
         return 0.0;
     }
 
-    $db->prepare(
-        "INSERT IGNORE INTO maintenance_fees
-            (student_user_id, reference_no, source_type, txn_amount, fee_amount, school_year_id)
-         VALUES (?, ?, ?, ?, ?, ?)"
-    )->execute([$studentUserId, $referenceNo, $sourceType, round($txnAmount, 2), $fee, gjc_active_school_year_id($db)]);
+    // The fee is a line on its ledger row: student, type, amount and school year
+    // are that row's (3NF) and are copied here only until the contract drops them.
+    if (gjc_maintenance_fees_has_legacy_copies($db)) {
+        $db->prepare(
+            "INSERT IGNORE INTO maintenance_fees
+                (student_user_id, reference_no, source_type, txn_amount, fee_amount, school_year_id)
+             VALUES (?, ?, ?, ?, ?, ?)"
+        )->execute([$studentUserId, $referenceNo, $sourceType, round($txnAmount, 2), $fee, gjc_active_school_year_id($db)]);
+    } else {
+        $db->prepare("INSERT IGNORE INTO maintenance_fees (reference_no, fee_amount) VALUES (?, ?)")
+           ->execute([$referenceNo, $fee]);
+    }
 
     return $fee;
 }
@@ -9245,8 +9412,8 @@ function gjc_student_maintenance_fees(PDO $db, int $studentUserId): array
             COALESCE(SUM(CASE WHEN status = 'accrued'   THEN fee_amount END), 0) AS accrued,
             COALESCE(SUM(CASE WHEN status = 'collected' THEN fee_amount END), 0) AS collected,
             COALESCE(SUM(CASE WHEN status = 'accrued'   THEN 1 END), 0)          AS accrued_count
-           FROM maintenance_fees
-          WHERE student_user_id = ?"
+           FROM " . gjc_maintenance_fee_source('mf') . "
+          WHERE mf.student_user_id = ?"
     );
     $stmt->execute([$studentUserId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];

@@ -31,7 +31,7 @@ if (!in_array($statusFilter, ['all', 'accrued', 'collected', 'voided'], true)) {
 $entrySql =
     "SELECT mf.id, mf.student_user_id, mf.reference_no, mf.source_type, mf.txn_amount,
             mf.fee_amount, mf.status, mf.created_at, mf.collected_at, si.studentID
-       FROM maintenance_fees mf
+       FROM " . gjc_maintenance_fee_source('mf') . "
        LEFT JOIN student_info si ON si.userID = mf.student_user_id"
     . ($statusFilter !== 'all' ? " WHERE mf.status = " . $db->quote($statusFilter) : '')
     . " ORDER BY mf.created_at DESC, mf.id DESC";
@@ -91,7 +91,7 @@ $byStudent = $db->query(
             SUM(CASE WHEN mf.status = 'accrued'   THEN mf.fee_amount ELSE 0 END) AS accrued,
             SUM(CASE WHEN mf.status = 'collected' THEN mf.fee_amount ELSE 0 END) AS collected,
             SUM(CASE WHEN mf.status <> 'voided'   THEN 1 ELSE 0 END)             AS txn_count
-       FROM maintenance_fees mf
+       FROM " . gjc_maintenance_fee_source('mf') . "
        LEFT JOIN student_info si ON si.userID = mf.student_user_id
       GROUP BY mf.student_user_id, si.studentID
      HAVING txn_count > 0

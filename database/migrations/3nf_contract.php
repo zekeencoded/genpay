@@ -24,6 +24,9 @@
  *   cart_orders.buyer_role, p2p_transfers ledger copies, merchant_leases.stall_number,
  *   stalls.merchant_id (+ stored 'occupied'; merchant.stall_id becomes UNIQUE)
  *                        quick fixes (gjc_quickfix_contracts()).
+ *   maintenance_fees     drops the copies of its ledger row and receipt (student, type,
+ *                        amount, school year, time, collected at/by); reference_no becomes
+ *                        UNIQUE with RESTRICT foreign keys and a status/collection CHECK.
  *
  *   php database/migrations/3nf_contract.php            apply
  *   php database/migrations/3nf_contract.php --dry-run  verify + show the plan, change nothing
@@ -106,6 +109,15 @@ foreach (gjc_quickfix_contracts() as $key => [$table]) {
         'rows' => static fn(PDO $db): array => gjc_quickfix_export($db, $table),
     ];
 }
+
+$contracts['maintenance_fees:ledger_and_receipt_copies'] = [
+    'run'  => static fn(PDO $db, bool $apply, ?string $archive = null): array =>
+        gjc_ensure_maintenance_fees_contract_schema($db, $apply, $archive),
+    'rows' => static fn(PDO $db): array => $db->query(
+        'SELECT id, reference_no, ' . implode(', ', array_map(static fn($c) => "`{$c}`", gjc_maintenance_fee_legacy_columns()))
+        . ' FROM maintenance_fees ORDER BY id'
+    )->fetchAll(PDO::FETCH_ASSOC),
+];
 
 try {
     // Verify everything before touching anything.

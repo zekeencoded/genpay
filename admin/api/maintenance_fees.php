@@ -86,7 +86,7 @@ try {
         // accrued fee is settled or none is.
         case 'collect_all': {
             $studentIds = $db->query(
-                "SELECT DISTINCT student_user_id FROM maintenance_fees WHERE status = 'accrued'"
+                "SELECT DISTINCT mf.student_user_id FROM " . gjc_maintenance_fee_source('mf') . " WHERE mf.status = 'accrued'"
             )->fetchAll(PDO::FETCH_COLUMN);
 
             $receipts = [];
