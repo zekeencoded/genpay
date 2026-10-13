@@ -4942,6 +4942,251 @@ function gjc_table_export(PDO $db, string $table): array
     ];
 }
 
+/**
+ * Claim a stall for a merchant whose merchant.stall_id already names it. Runs
+ * inside the caller's transaction and locks the stall row. Returns false when
+ * the stall is reserved or another merchant already holds it.
+ *
+ * Occupancy is merchant.stall_id (3NF), unique per stall. Until the contract
+ * drops the legacy reverse link, stalls.status = 'occupied' / stalls.merchant_id
+ * are still written here; afterwards the claim only clears any reservation.
+ */
+function gjc_claim_stall(PDO $db, string $stallId, int $merchantId): bool
+{
+    if (!$db->inTransaction()) {
+        throw new LogicException('Claiming a stall requires an open transaction.');
+    }
+    $stmt = $db->prepare("SELECT status FROM stalls WHERE stall_id = ? FOR UPDATE");
+    $stmt->execute([$stallId]);
+    $status = $stmt->fetchColumn();
+    $others = $db->prepare("SELECT COUNT(*) FROM merchant WHERE stall_id = ? AND merchantID <> ?");
+    $others->execute([$stallId, $merchantId]);
+    if ($status !== 'vacant' || (int) $others->fetchColumn() !== 0) {
+        return false;
+    }
+    if (in_array('merchant_id', gjc_table_columns($db, 'stalls'), true)) {
+        $db->prepare("UPDATE stalls SET status = 'occupied', merchant_id = ?, pending_expires_at = NULL WHERE stall_id = ?")
+           ->execute([$merchantId, $stallId]);
+    } else {
+        $db->prepare("UPDATE stalls SET pending_expires_at = NULL WHERE stall_id = ?")->execute([$stallId]);
+    }
+    return true;
+}
+
+/**
+ * A lease's stall is merchant_leases.stall_id (FK -> stalls). The free-text
+ * stall_number copy is only read as a fallback until the 3NF contract drops it.
+ */
+function gjc_lease_has_stall_number(PDO $db): bool
+{
+    return in_array('stall_number', gjc_table_columns($db, 'merchant_leases'), true);
+}
+
+/** The stall code shown for a lease row. */
+function gjc_lease_stall_code(array $lease): string
+{
+    $id = (string) ($lease['stall_id'] ?? '');
+    return $id !== '' ? $id : (string) ($lease['stall_number'] ?? '');
+}
+
+/** SQL for a lease's stall code, for WHERE/ORDER clauses on merchant_leases \$alias. */
+function gjc_lease_stall_sql(PDO $db, string $alias = 'ml'): string
+{
+    return gjc_lease_has_stall_number($db) ? "COALESCE({$alias}.stall_id, {$alias}.stall_number)" : "{$alias}.stall_id";
+}
+
+/**
+ * `<option>`s for a lease form's stall picker: every registry stall, labelled
+ * with its current occupant (merchant.stall_id) so finance picks the right one.
+ */
+function gjc_stall_registry_options_html(PDO $db, string $selected = ''): string
+{
+    if (!gjc_table_exists($db, 'stalls')) {
+        return '';
+    }
+    $rows = $db->query(
+        "SELECT s.stall_id, s.label, m.stall_name AS occupant
+           FROM stalls s LEFT JOIN merchant m ON m.stall_id = s.stall_id
+          ORDER BY s.row_label, s.col_number, s.stall_id"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+    $html = '';
+    foreach ($rows as $row) {
+        $occupant = trim((string) ($row['occupant'] ?? ''));
+        $html .= '<option value="' . $e($row['stall_id']) . '"' . ((string) $row['stall_id'] === $selected ? ' selected' : '') . '>'
+            . $e($row['stall_id']) . ' — ' . $e($row['label']) . ' · ' . ($occupant !== '' ? $e($occupant) : 'Vacant')
+            . '</option>';
+    }
+    return $html;
+}
+
+/** A registry stall code, or null if it does not exist. */
+function gjc_registry_stall_id(PDO $db, string $stallId): ?string
+{
+    $stmt = $db->prepare("SELECT stall_id FROM stalls WHERE stall_id = ? LIMIT 1");
+    $stmt->execute([$stallId]);
+    $found = $stmt->fetchColumn();
+    return $found === false ? null : (string) $found;
+}
+
+/**
+ * Foreign keys and single-column indexes on $table.$column, so a contract can
+ * drop them with the column. Refuses composite/primary indexes and inbound FKs.
+ * Returns [fkNames, indexNames].
+ */
+function gjc_column_own_keys(PDO $db, string $table, string $column): array
+{
+    $fk = $db->prepare("SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL");
+    $fk->execute([$table, $column]);
+    $inbound = $db->prepare("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND REFERENCED_COLUMN_NAME = ?");
+    $inbound->execute([$table, $column]);
+    if ((int) $inbound->fetchColumn() !== 0) {
+        throw new RuntimeException("Another table references {$table}.{$column}.");
+    }
+    $idx = $db->prepare("SELECT INDEX_NAME, COUNT(*) AS width, SUM(COLUMN_NAME = ?) AS uses
+        FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+        GROUP BY INDEX_NAME HAVING uses > 0");
+    $idx->execute([$column, $table]);
+    $indexes = [];
+    foreach ($idx->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ((int) $row['width'] !== 1 || $row['INDEX_NAME'] === 'PRIMARY') {
+            throw new RuntimeException("Composite or primary index {$table}.{$row['INDEX_NAME']} uses {$column}.");
+        }
+        $indexes[] = $row['INDEX_NAME'];
+    }
+    return [$fk->fetchAll(PDO::FETCH_COLUMN), $indexes];
+}
+
+/**
+ * 3NF quick fixes. key => [table, columns, SQL counting rows that disagree with
+ * the data the column duplicates]. Applied by gjc_ensure_quickfix_contract_schema().
+ */
+function gjc_quickfix_contracts(): array
+{
+    return [
+        // C. The buyer is a parent exactly when a parent wallet paid.
+        'cart_orders:buyer_role' => ['cart_orders', ['buyer_role'],
+            "SELECT COUNT(*) FROM cart_orders
+              WHERE buyer_role NOT IN ('student', 'parent')
+                 OR (buyer_role = 'parent') <> (parent_wallet_id IS NOT NULL)"],
+        // D. Sender, amount, status and time are the ledger row's.
+        'p2p_transfers:from_wallet_id,amount,status,created_at' => ['p2p_transfers',
+            ['from_wallet_id', 'amount', 'status', 'created_at'],
+            "SELECT COUNT(*) FROM p2p_transfers p
+               LEFT JOIN transactions t ON t.reference_no = p.reference_no
+              WHERE t.id IS NULL OR p.amount <> t.amount OR p.status <> t.status
+                 OR NOT (p.from_wallet_id <=> t.student_wallet_id) OR p.created_at <> t.created_at"],
+        // B. A lease's stall is stall_id (FK -> stalls); leases without one are
+        //    matched to the registry by stall_number before it is dropped.
+        'merchant_leases:stall_number' => ['merchant_leases', ['stall_number'],
+            "SELECT COUNT(*) FROM merchant_leases l
+              WHERE (l.stall_id IS NOT NULL AND l.stall_number <> l.stall_id)
+                 OR (l.stall_id IS NULL AND NOT EXISTS (SELECT 1 FROM stalls s WHERE s.stall_id = l.stall_number))"],
+        // A. Occupancy is merchant.stall_id; stalls keeps only its reservation state.
+        'stalls:merchant_id' => ['stalls', ['merchant_id'],
+            "SELECT
+                (SELECT COUNT(*) FROM stalls s LEFT JOIN merchant m ON m.merchantID = s.merchant_id
+                  WHERE (s.merchant_id IS NOT NULL AND NOT (m.stall_id <=> s.stall_id))
+                     OR (s.status = 'occupied') <> EXISTS (SELECT 1 FROM merchant o WHERE o.stall_id = s.stall_id))
+              + (SELECT COUNT(*) FROM merchant m LEFT JOIN stalls s ON s.stall_id = m.stall_id
+                  WHERE m.stall_id IS NOT NULL AND NOT (s.merchant_id <=> m.merchantID))
+              + (SELECT COUNT(*) FROM (SELECT stall_id FROM merchant WHERE stall_id IS NOT NULL
+                                        GROUP BY stall_id HAVING COUNT(*) > 1) d)"],
+    ];
+}
+
+/** 3NF CONTRACT for one gjc_quickfix_contracts() key. Same CLI/plan/archive rules as the other contracts. */
+function gjc_ensure_quickfix_contract_schema(PDO $db, string $key, bool $apply = false, ?string $archivePath = null): array
+{
+    if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
+        throw new RuntimeException('Quick-fix CONTRACT requires CLI and no transaction.');
+    }
+    $config = gjc_quickfix_contracts();
+    if (!isset($config[$key])) {
+        throw new InvalidArgumentException('Not a quick-fix contract: ' . $key);
+    }
+    [$table, $columns, $conflictSql] = $config[$key];
+    if (!gjc_table_exists($db, $table)) {
+        throw new RuntimeException('Contract source table is missing: ' . $table);
+    }
+    $present = array_values(array_intersect($columns, gjc_table_columns($db, $table, true)));
+    if (!$present) {
+        return [];
+    }
+    if (count($present) !== count($columns)) {
+        throw new RuntimeException("{$table} is partially contracted; restore it from the export first.");
+    }
+    $conflicts = (int) $db->query($conflictSql)->fetchColumn();
+    if ($conflicts !== 0) {
+        throw new RuntimeException("{$conflicts} {$table} row(s) disagree with the data the column(s) duplicate.");
+    }
+
+    $steps = [];
+    $fks = [];
+    $drops = [];
+    foreach ($columns as $column) {
+        gjc_assert_column_unreferenced($db, $column);
+        [$colFks, $colIndexes] = gjc_column_own_keys($db, $table, $column);
+        $fks = array_merge($fks, $colFks);
+        foreach ($colIndexes as $index) {
+            if (!in_array($index, $colFks, true)) {
+                $drops[] = "DROP INDEX `{$index}`";
+            }
+        }
+    }
+    if ($fks) {
+        $steps[] = "ALTER TABLE `{$table}` " . implode(', ', array_map(static fn($n) => "DROP FOREIGN KEY `{$n}`", array_unique($fks)));
+        // The index InnoDB created for each FK goes with the column.
+        foreach (array_unique($fks) as $fk) {
+            $own = $db->prepare("SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?");
+            $own->execute([$table, $fk]);
+            if ((int) $own->fetchColumn() > 0) {
+                $drops[] = "DROP INDEX `{$fk}`";
+            }
+        }
+    }
+    if ($key === 'merchant_leases:stall_number') {
+        $steps[] = "UPDATE merchant_leases l JOIN stalls s ON s.stall_id = l.stall_number
+            SET l.stall_id = s.stall_id WHERE l.stall_id IS NULL";
+    }
+    if ($key === 'stalls:merchant_id') {
+        $steps[] = "UPDATE stalls SET status = 'vacant' WHERE status = 'occupied'";
+    }
+    $alter = array_merge(array_unique($drops), array_map(static fn($c) => "DROP COLUMN `{$c}`", $columns));
+    if ($key === 'stalls:merchant_id') {
+        $alter[] = "MODIFY COLUMN `status` ENUM('vacant','pending_application') NOT NULL DEFAULT 'vacant'
+            COMMENT 'Reservation only; occupied = a merchant row has this stall_id'";
+    }
+    $steps[] = "ALTER TABLE `{$table}` " . implode(', ', $alter);
+    if ($key === 'stalls:merchant_id') {
+        $unique = (int) $db->query("SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'merchant' AND COLUMN_NAME = 'stall_id' AND NON_UNIQUE = 0")
+            ->fetchColumn();
+        if ($unique === 0) {
+            $steps[] = "ALTER TABLE `merchant` ADD UNIQUE KEY `uq_merchant_stall` (`stall_id`)";
+        }
+    }
+    if (!$apply) {
+        return $steps;
+    }
+    gjc_assert_contract_archive($archivePath, $key, gjc_quickfix_export($db, $table));
+    foreach ($steps as $sql) {
+        $db->exec($sql);
+    }
+    gjc_table_columns($db, $table, true);
+    return $steps;
+}
+
+/** Every row of a quick-fix table (all columns change or are dropped there), for the export. */
+function gjc_quickfix_export(PDO $db, string $table): array
+{
+    $key = $table === 'stalls' ? 'stall_id' : 'id';
+    return $db->query("SELECT * FROM `{$table}` ORDER BY `{$key}`")->fetchAll(PDO::FETCH_ASSOC);
+}
+
 /** A contract may only drop data that a matching private export already holds. */
 function gjc_assert_contract_archive(?string $archivePath, string $column, array $rows): void
 {
@@ -5370,7 +5615,6 @@ function gjc_ensure_cart_orders_schema(PDO $db): void
             reference_no VARCHAR(30) NOT NULL UNIQUE,
             student_wallet_id INT UNSIGNED NULL,
             merchant_wallet_id INT UNSIGNED NOT NULL,
-            buyer_role VARCHAR(10) NOT NULL DEFAULT 'student',
             parent_wallet_id INT UNSIGNED NULL,
             description TEXT NULL,
             amount DECIMAL(15,2) NOT NULL,
@@ -5384,13 +5628,10 @@ function gjc_ensure_cart_orders_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // Parent shop-cart (2026-08-27). Additive only — existing student rows keep
-    // their values and default to buyer_role 'student', so nothing is rewritten.
+    // Parent shop-cart (2026-08-27). Additive only. The buyer is a parent exactly
+    // when parent_wallet_id is set (3NF: no stored buyer_role).
     $cols = gjc_table_columns($db, 'cart_orders', true);
 
-    if (!in_array('buyer_role', $cols, true)) {
-        $db->exec("ALTER TABLE cart_orders ADD COLUMN buyer_role VARCHAR(10) NOT NULL DEFAULT 'student'");
-    }
     if (!in_array('parent_wallet_id', $cols, true)) {
         $db->exec("ALTER TABLE cart_orders ADD COLUMN parent_wallet_id INT UNSIGNED NULL");
     }
@@ -5759,7 +6000,6 @@ function gjc_ensure_core_integrity_schema(PDO $db): void
             'transaction_id' => ['transactions', 'id', 'RESTRICT'],
         ],
         'p2p_transfers' => [
-            'from_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
             'to_wallet_id' => ['student_wallets', 'id', 'RESTRICT'],
             'reference_no' => ['transactions', 'reference_no', 'RESTRICT'],
         ],
@@ -8153,18 +8393,12 @@ function gjc_ensure_p2p_transfers_schema(PDO $db): void
     $db->exec(
         "CREATE TABLE IF NOT EXISTS `p2p_transfers` (
     `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `reference_no`      VARCHAR(40) NOT NULL,
-    `from_wallet_id`    INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
-    `to_wallet_id`      INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id',
-    `amount`            DECIMAL(15,2) NOT NULL,
+    `reference_no`      VARCHAR(40) NOT NULL COMMENT 'The ledger row: sender, amount, status, time',
+    `to_wallet_id`      INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id (recipient)',
     `message`           VARCHAR(255) NULL DEFAULT NULL,
-    `status`            ENUM('completed','failed','reversed') NOT NULL DEFAULT 'completed',
-    `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `reference_no` (`reference_no`),
-    KEY `idx_p2p_from` (`from_wallet_id`),
-    KEY `idx_p2p_to` (`to_wallet_id`),
-    KEY `idx_p2p_date` (`created_at`)
+    KEY `idx_p2p_to` (`to_wallet_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   COMMENT='Peer-to-peer token transfers between students (atomic, transactionally safe)'"
     );
@@ -8185,15 +8419,26 @@ function gjc_p2p_has_legacy_user_ids(PDO $db): bool
     return $hasFrom;
 }
 
+/**
+ * True while p2p_transfers still stores the copies of its ledger row
+ * (from_wallet_id, amount, status, created_at) that the 3NF contract drops.
+ */
+function gjc_p2p_has_legacy_ledger_copies(PDO $db): bool
+{
+    return in_array('amount', gjc_table_columns($db, 'p2p_transfers'), true);
+}
+
 function gjc_p2p_daily_sent(PDO $db, int $userId): float
 {
     if (!gjc_table_exists($db, "p2p_transfers")) {
         return 0.0;
     }
     $stmt = $db->prepare(
-        "SELECT COALESCE(SUM(p.amount), 0) FROM p2p_transfers p
-           JOIN student_wallets sw ON sw.id = p.from_wallet_id
-          WHERE sw.user_id = ? AND DATE(p.created_at) = CURDATE() AND p.status = 'completed'",
+        // Amount, sender, time and status live on the ledger row (3NF).
+        "SELECT COALESCE(SUM(t.amount), 0) FROM p2p_transfers p
+           JOIN transactions t ON t.reference_no = p.reference_no
+           JOIN student_wallets sw ON sw.id = t.student_wallet_id
+          WHERE sw.user_id = ? AND DATE(t.created_at) = CURDATE() AND t.status = 'completed'",
     );
     $stmt->execute([$userId]);
     return (float) $stmt->fetchColumn();

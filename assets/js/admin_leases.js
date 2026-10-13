@@ -83,7 +83,7 @@
         }
 
         select.innerHTML = '<option value="">Select a merchant…</option>' + data.merchants.map((m) => `
-            <option value="${m.merchant_user_id}" data-stall-name="${escapeHtml(m.stall_name)}" data-active="${m.has_active_lease ? 1 : 0}">
+            <option value="${m.merchant_user_id}" data-stall-name="${escapeHtml(m.stall_name)}" data-stall-id="${escapeHtml(m.stall_id || '')}" data-active="${m.has_active_lease ? 1 : 0}">
                 ${escapeHtml(m.proprietor_name)} — ${escapeHtml(m.stall_name)}${m.has_active_lease ? ' (already leasing)' : ''}
             </option>
         `).join('');
@@ -94,6 +94,11 @@
             const stallNameField = document.getElementById('stallName');
             if (opt && opt.dataset.stallName && !stallNameField.value) {
                 stallNameField.value = opt.dataset.stallName;
+            }
+            // Default the stall to the tenant's own registry stall.
+            const stallIdField = document.getElementById('stallId');
+            if (opt && opt.dataset.stallId && stallIdField && !stallIdField.value) {
+                stallIdField.value = opt.dataset.stallId;
             }
             hint.textContent = opt && opt.dataset.active === '1'
                 ? 'Heads up: this merchant already has an active lease. This creates a second one — it does not replace it.'
@@ -167,6 +172,9 @@
             const select = document.getElementById('merchantUserId');
             select.value = String(presetMerchantId);
             if (presetStallName) document.getElementById('stallName').value = presetStallName;
+            const opt = select.options[select.selectedIndex];
+            const stallIdField = document.getElementById('stallId');
+            if (opt && opt.dataset.stallId && stallIdField) stallIdField.value = opt.dataset.stallId;
         };
 
         if (!merchantsLoaded) {

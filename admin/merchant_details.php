@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
+require_once __DIR__ . '/../connection/StallManager.php';
 require_once __DIR__ . '/../connection/MerchantTenantDirectory.php';
 
 gjc_require_role(['finance']);
@@ -86,16 +87,17 @@ if ($summary) {
     $merchantRow = $merchantStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     // ── Physical stall ───────────────────────────────────────────────────
-    // merchant.stall_id names the stall directly; stalls.merchant_id is the
-    // reverse link (and holds merchantID, not a user id). Try both, since
-    // older rows only ever carried one of the two.
+    // merchant.stall_id is the one link between a merchant and its stall (3NF);
+    // the map status is derived from it.
     $stall = null;
     if (gjc_table_exists($db, 'stalls')) {
         $stallStmt = $db->prepare(
-            "SELECT * FROM stalls WHERE stall_id = ? OR merchant_id = ? ORDER BY (stall_id = ?) DESC LIMIT 1"
+            "SELECT s.*, " . StallManager::statusSql('s', 'm') . " AS status
+               FROM stalls s LEFT JOIN merchant m ON m.stall_id = s.stall_id
+              WHERE s.stall_id = ? LIMIT 1"
         );
         $code = (string) ($merchantRow['stall_id'] ?? '');
-        $stallStmt->execute([$code, $merchantId, $code]);
+        $stallStmt->execute([$code]);
         $stall = $stallStmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 

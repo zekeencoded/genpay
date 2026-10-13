@@ -1271,14 +1271,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 gjc_merchant_wallet($db, $newMerchantUserId);
 
                 if ($merchantData['stall_id'] !== '') {
-                    $occupyStall = $db->prepare(
-                        "UPDATE stalls
-                            SET status = 'occupied', merchant_id = ?, pending_expires_at = NULL
-                          WHERE stall_id = ? AND status = 'vacant'"
-                    );
-                    // stalls.merchant_id references merchant.merchantID (not the user id).
-                    $occupyStall->execute([$newMerchantId, $merchantData['stall_id']]);
-                    if ($occupyStall->rowCount() === 0) {
+                    if (!gjc_claim_stall($db, $merchantData['stall_id'], $newMerchantId)) {
                         throw new RuntimeException('That stall is no longer available — please pick another.');
                     }
                 }
@@ -1348,7 +1341,9 @@ $previewReport = $previewRows ? maintenance_validate_student_rows($db, $previewR
 $feeWaiverPreviewReport = $feeWaiverPreviewRows ? maintenance_validate_fee_waiver_rows($db, $feeWaiverPreviewRows) : null;
 
 $vacantStalls = $db->query(
-    "SELECT stall_id, label, monthly_rate FROM stalls WHERE status = 'vacant' ORDER BY label ASC"
+    "SELECT s.stall_id, s.label, s.monthly_rate FROM stalls s
+      WHERE s.status = 'vacant' AND NOT EXISTS (SELECT 1 FROM merchant m WHERE m.stall_id = s.stall_id)
+      ORDER BY s.label ASC"
 )->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>

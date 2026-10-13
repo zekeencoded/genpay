@@ -22,6 +22,17 @@ class StallManager
     }
 
     /**
+     * The map status of a stall. Occupancy is a fact about the merchant
+     * (merchant.stall_id), so it is derived, never stored (3NF): the stored
+     * stalls.status only says whether a stall is reserved. $merchant is a
+     * merchant row LEFT JOINed ON merchant.stall_id = stall.stall_id.
+     */
+    public static function statusSql(string $stall = 's', string $merchant = 'm'): string
+    {
+        return "(CASE WHEN {$merchant}.merchantID IS NOT NULL THEN 'occupied' ELSE {$stall}.status END)";
+    }
+
+    /**
      * Flush expired pending_application locks back to vacant.
      * Call this at the top of stalls.php and apply.php before any render.
      */
@@ -53,13 +64,13 @@ class StallManager
                 s.col_number,
                 s.area_sqm,
                 s.monthly_rate,
-                s.status,
-                s.merchant_id,
+                " . self::statusSql('s', 'm') . " AS status,
+                m.merchantID   AS merchant_id,
                 s.pending_expires_at,
                 m.stall_name   AS merchant_stall_name,
                 u.profile_img  AS merchant_logo
              FROM stalls s
-             LEFT JOIN merchant m ON m.merchantID = s.merchant_id
+             LEFT JOIN merchant m ON m.stall_id = s.stall_id
              LEFT JOIN users    u ON u.userID      = m.userID
              ORDER BY s.row_label ASC, s.col_number ASC"
         )->fetchAll(PDO::FETCH_ASSOC);

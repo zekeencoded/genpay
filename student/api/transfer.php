@@ -218,18 +218,23 @@ try {
             ]);
 
             // 5. Log p2p_transfers record; retain copied IDs until CONTRACT.
+            //    Sender, amount, status and time are the ledger row's; they are
+            //    only copied here until the 3NF contract drops them.
             $legacyUserIds = gjc_p2p_has_legacy_user_ids($db);
+            $legacyCopies = gjc_p2p_has_legacy_ledger_copies($db);
             $db->prepare(
                 "INSERT INTO p2p_transfers
-                    (reference_no, from_wallet_id, to_wallet_id"
-                    . ($legacyUserIds ? ", from_user_id, to_user_id" : "") . ", amount, message, status)
-                 VALUES (?, ?, ?, " . ($legacyUserIds ? "?, ?, " : "") . "?, ?, 'completed')"
+                    (reference_no" . ($legacyCopies ? ", from_wallet_id" : "") . ", to_wallet_id"
+                    . ($legacyUserIds ? ", from_user_id, to_user_id" : "")
+                    . ($legacyCopies ? ", amount" : "") . ", message" . ($legacyCopies ? ", status" : "") . ")
+                 VALUES (?, " . ($legacyCopies ? "?, " : "") . "?, " . ($legacyUserIds ? "?, ?, " : "")
+                    . ($legacyCopies ? "?, " : "") . "?" . ($legacyCopies ? ", 'completed'" : "") . ")"
             )->execute([
                 $refNo,
-                $senderWallet['id'],
+                ...($legacyCopies ? [$senderWallet['id']] : []),
                 $recipientWallet['id'],
                 ...($legacyUserIds ? [$currentUserId, $recipientUserId] : []),
-                $amount,
+                ...($legacyCopies ? [$amount] : []),
                 $message ?: null,
             ]);
 

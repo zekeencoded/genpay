@@ -97,7 +97,8 @@ try {
         /* ── CREATE LEASE ─────────────────────────────────────────────────── */
         case 'create_lease': {
             $merchantUserId = (int)    ($_POST['merchant_user_id'] ?? 0);
-            $stallNumber    = trim((string) ($_POST['stall_number']    ?? ''));
+            // The stall comes from the stall registry (3NF: merchant_leases.stall_id).
+            $stallId        = trim((string) ($_POST['stall_id']        ?? ''));
             $stallName      = trim((string) ($_POST['stall_name']      ?? ''));
             $monthlyRent    = (float)  ($_POST['monthly_rent']    ?? 0);
             $depositAmount  = (float)  ($_POST['deposit_amount']  ?? 0);
@@ -112,9 +113,14 @@ try {
                 $status = 'active';
             }
 
-            if (!$merchantUserId || !$stallNumber || !$stallName || $monthlyRent <= 0 || !$leaseStart || !$leaseEnd) {
+            if (!$merchantUserId || $stallId === '' || !$stallName || $monthlyRent <= 0 || !$leaseStart || !$leaseEnd) {
                 gjc_lease_json_fail('All required fields must be filled correctly.');
             }
+            $stallId = gjc_registry_stall_id($db, $stallId);
+            if ($stallId === null) {
+                gjc_lease_json_fail('Pick a stall from the stall registry.');
+            }
+            $legacyStallNumber = gjc_lease_has_stall_number($db);
 
             if (!strtotime($leaseStart) || !strtotime($leaseEnd)) {
                 gjc_lease_json_fail('Invalid lease start or end date.');
@@ -133,13 +139,14 @@ try {
             if (in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true)) {
             $stmt = $db->prepare(
                 "INSERT INTO merchant_leases
-                    (merchant_user_id, stall_number, stall_name, monthly_rent, deposit_amount,
+                    (merchant_user_id, stall_id" . ($legacyStallNumber ? ", stall_number" : "") . ", stall_name, monthly_rent, deposit_amount,
                      lease_start, lease_end, next_due_date, status, contract_notes, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                 VALUES (?, ?, " . ($legacyStallNumber ? "?, " : "") . "?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $merchantUserId,
-                $stallNumber,
+                $stallId,
+                ...($legacyStallNumber ? [$stallId] : []),
                 $stallName,
                 $monthlyRent,
                 $depositAmount,
@@ -154,13 +161,14 @@ try {
             } else {
             $stmt = $db->prepare(
                 "INSERT INTO merchant_leases
-                    (merchant_user_id, stall_number, stall_name, monthly_rent, deposit_amount,
+                    (merchant_user_id, stall_id" . ($legacyStallNumber ? ", stall_number" : "") . ", stall_name, monthly_rent, deposit_amount,
                      lease_start, lease_end, status, contract_notes, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                 VALUES (?, ?, " . ($legacyStallNumber ? "?, " : "") . "?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $merchantUserId,
-                $stallNumber,
+                $stallId,
+                ...($legacyStallNumber ? [$stallId] : []),
                 $stallName,
                 $monthlyRent,
                 $depositAmount,
@@ -179,7 +187,7 @@ try {
             logAudit($db, $adminId, $adminRole, 'STALL_UPDATE', 'merchant_leases', null, [
                 'lease_id' => $newId, 'merchant_user_id' => $merchantUserId, 'stall_name' => $stallName,
                 'monthly_rent' => $monthlyRent, 'status' => $status,
-            ], $stallNumber, ['target_id' => $newId]);
+            ], $stallId, ['target_id' => $newId]);
 
             echo json_encode([
                 'success' => true,
@@ -198,7 +206,7 @@ try {
             $leaseEnd       = trim((string) ($_POST['lease_end']       ?? ''));
             $status         = trim((string) ($_POST['status']          ?? 'active'));
             $notes          = trim((string) ($_POST['contract_notes']  ?? ''));
-            $stallNumber    = trim((string) ($_POST['stall_number']    ?? ''));
+            $stallId        = trim((string) ($_POST['stall_id']        ?? ''));
             $stallName      = trim((string) ($_POST['stall_name']      ?? ''));
 
             $allowedStatuses = ['pending', 'active', 'expired', 'terminated'];
@@ -222,7 +230,7 @@ try {
             // log as old_value, and a whole-row dump quietly logs whatever gets
             // added to the table later.
             $chk = $db->prepare(
-                "SELECT id, stall_number, stall_name, monthly_rent, deposit_amount,
+                "SELECT id, stall_id" . (gjc_lease_has_stall_number($db) ? ", stall_number" : "") . ", stall_name, monthly_rent, deposit_amount,
                         lease_start, lease_end, status, contract_notes
                    FROM merchant_leases WHERE id = ? LIMIT 1"
             );
@@ -232,9 +240,14 @@ try {
                 gjc_lease_json_fail('Lease record not found.');
             }
 
-            if (!$stallNumber) {
-                $stallNumber = $old['stall_number'];
+            if ($stallId === '') {
+                $stallId = gjc_lease_stall_code($old);
             }
+            $stallId = gjc_registry_stall_id($db, $stallId);
+            if ($stallId === null) {
+                gjc_lease_json_fail('Pick a stall from the stall registry.');
+            }
+            $legacyStallNumber = gjc_lease_has_stall_number($db);
             if (!$stallName) {
                 $stallName = $old['stall_name'];
             }
@@ -244,7 +257,8 @@ try {
             // payments that have actually been recorded.
             $stmt = $db->prepare(
                 "UPDATE merchant_leases
-                    SET stall_number     = ?,
+                    SET stall_id         = ?," . ($legacyStallNumber ? "
+                        stall_number     = ?," : "") . "
                         stall_name       = ?,
                         monthly_rent     = ?,
                         deposit_amount   = ?,
@@ -255,7 +269,8 @@ try {
                   WHERE id = ?"
             );
             $stmt->execute([
-                $stallNumber,
+                $stallId,
+                ...($legacyStallNumber ? [$stallId] : []),
                 $stallName,
                 $monthlyRent,
                 $depositAmount,
@@ -271,7 +286,7 @@ try {
             logAudit($db, $adminId, $adminRole, 'STALL_UPDATE', 'merchant_leases', $old, [
                 'lease_id' => $leaseId, 'monthly_rent' => $monthlyRent, 'status' => $status,
                 'lease_start' => $leaseStart, 'lease_end' => $leaseEnd,
-            ], $stallNumber, ['target_id' => $leaseId]);
+            ], $stallId, ['target_id' => $leaseId]);
 
             echo json_encode(['success' => true, 'message' => 'Contract updated.'] + gjc_lease_state($directory, $leaseId));
             break;

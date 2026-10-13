@@ -588,7 +588,8 @@ try {
                 'wallet_qr_url' => $walletQrUrl,
                 'student_name' => $studentName !== ''
                     ? $studentName
-                    : (($row['buyer_role'] ?? 'student') === 'parent' ? 'Parent' : 'Student'),
+                    // The buyer is a parent exactly when a parent wallet paid.
+                    : (!empty($row['parent_wallet_id']) ? 'Parent' : 'Student'),
             ]);
             exit;
         }

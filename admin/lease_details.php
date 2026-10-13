@@ -489,8 +489,13 @@ if ($lease) {
                     <input type="hidden" name="action" value="update_lease">
                     <input type="hidden" name="lease_id" value="<?= (int) $lease['id'] ?>">
                     <div class="col-md-4">
-                        <label class="form-label">Stall number</label>
-                        <input type="text" class="form-control" name="stall_number" value="<?= lease_e($lease['stall_number']) ?>">
+                        <label class="form-label">Stall</label>
+                        <select class="form-select" name="stall_id">
+                            <?php if ($lease['stall_id'] === ''): ?>
+                                <option value="" selected>Stall <?= lease_e($lease['stall_number']) ?> (not in the registry) &mdash; pick one&hellip;</option>
+                            <?php endif; ?>
+                            <?= gjc_stall_registry_options_html($db, $lease['stall_id']) ?>
+                        </select>
                     </div>
                     <div class="col-md-8">
                         <label class="form-label">Stall name</label>

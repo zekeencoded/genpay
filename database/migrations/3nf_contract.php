@@ -21,6 +21,9 @@
  *                        stored totals derivable from other rows (gjc_derived_total_columns()).
  *   transaction_items.subtotal
  *                        converted (not dropped) to a STORED generated column.
+ *   cart_orders.buyer_role, p2p_transfers ledger copies, merchant_leases.stall_number,
+ *   stalls.merchant_id (+ stored 'occupied'; merchant.stall_id becomes UNIQUE)
+ *                        quick fixes (gjc_quickfix_contracts()).
  *
  *   php database/migrations/3nf_contract.php            apply
  *   php database/migrations/3nf_contract.php --dry-run  verify + show the plan, change nothing
@@ -93,6 +96,14 @@ foreach (array_keys(gjc_obsolete_fee_tables()) as $table) {
         'run'  => static fn(PDO $db, bool $apply, ?string $archive = null): array =>
             gjc_ensure_obsolete_fee_table_contract_schema($db, $table, $apply, $archive),
         'rows' => static fn(PDO $db): array => gjc_table_export($db, $table),
+    ];
+}
+
+foreach (gjc_quickfix_contracts() as $key => [$table]) {
+    $contracts[$key] = [
+        'run'  => static fn(PDO $db, bool $apply, ?string $archive = null): array =>
+            gjc_ensure_quickfix_contract_schema($db, $key, $apply, $archive),
+        'rows' => static fn(PDO $db): array => gjc_quickfix_export($db, $table),
     ];
 }
 

@@ -70,7 +70,7 @@ if ($leasesExist) {
     $params = [];
 
     if ($q !== '') {
-        $where[] = "(ml.stall_name LIKE ? OR ml.stall_number LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)";
+        $where[] = "(ml.stall_name LIKE ? OR " . gjc_lease_stall_sql($db, 'ml') . " LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)";
         $needle = '%' . $q . '%';
         array_push($params, $needle, $needle, $needle, $needle, $needle);
     }
@@ -386,7 +386,7 @@ $stateBadge = [
                             <td>
                                 <strong><?= lease_e($l['stall_name']) ?></strong><br>
                                 <small class="text-muted">
-                                    Stall <?= lease_e($l['stall_number']) ?> &middot; <?= lease_e($tenant) ?>
+                                    Stall <?= lease_e(gjc_lease_stall_code($l)) ?> &middot; <?= lease_e($tenant) ?>
                                 </small>
                             </td>
                             <td class="gp-num"><?= gjc_money($l['monthly_rent']) ?></td>
@@ -520,10 +520,12 @@ $stateBadge = [
                             <small class="form-text" id="merchantPickerHint">The merchant account that will be billed.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Stall number <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="stall_number" id="stallNumber"
-                                   required placeholder="e.g. A-01">
-                            <small class="form-text">As printed on the stall map.</small>
+                            <label class="form-label fw-semibold">Stall <span class="text-danger">*</span></label>
+                            <select class="form-select" name="stall_id" id="stallId" required>
+                                <option value="">Select a stall&hellip;</option>
+                                <?= gjc_stall_registry_options_html($db) ?>
+                            </select>
+                            <small class="form-text">From the stall registry (the stall map).</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Stall name <span class="text-danger">*</span></label>
@@ -587,7 +589,7 @@ function toggleSidebar() {
 }
 window.leaseApiConfig = { endpoint: '<?= ADMIN_URL ?>/api/leases.php' };
 </script>
-<script src="<?= JS_URL ?>/admin_leases.js?v=4"></script>
+<script src="<?= JS_URL ?>/admin_leases.js?v=5"></script>
 <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 </body>
 </html>

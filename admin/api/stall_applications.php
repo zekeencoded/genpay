@@ -23,6 +23,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
 require_once __DIR__ . '/../../connection/app.php';
+require_once __DIR__ . '/../../connection/StallManager.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
 require_once __DIR__ . '/../../connection/mailer.php';
 
@@ -252,9 +253,12 @@ try {
                 // Named columns, not SELECT * — this row is written to the audit
                 // log as old_value/new_value, and a whole-row dump silently logs
                 // any column added to `stalls` later.
+                // Occupancy comes from merchant.stall_id (3NF); same keys as before.
                 $stallStmt = $db->prepare(
-                    "SELECT stall_id, label, status, merchant_id, monthly_rate, pending_expires_at
-                       FROM stalls WHERE stall_id = ? FOR UPDATE"
+                    "SELECT s.stall_id, s.label, " . StallManager::statusSql('s', 'm') . " AS status,
+                            m.merchantID AS merchant_id, s.monthly_rate, s.pending_expires_at
+                       FROM stalls s LEFT JOIN merchant m ON m.stall_id = s.stall_id
+                      WHERE s.stall_id = ? FOR UPDATE"
                 );
                 $stallStmt->execute([$stallId]);
                 $oldStall = $stallStmt->fetch(PDO::FETCH_ASSOC);
@@ -289,11 +293,9 @@ try {
                 $db->prepare("INSERT IGNORE INTO merchant_wallets (user_id, balance) VALUES (?, 0.00)")
                    ->execute([$newUserId]);
 
-                $db->prepare(
-                    "UPDATE stalls
-                        SET status = 'occupied', merchant_id = ?, pending_expires_at = NULL
-                      WHERE stall_id = ?"
-                )->execute([$newMerchantId, $stallId]);
+                if (!gjc_claim_stall($db, $stallId, $newMerchantId)) {
+                    throw new RuntimeException('STALL_TAKEN');
+                }
                 $newStall = $oldStall;
                 $newStall['status'] = 'occupied';
                 $newStall['merchant_id'] = $newMerchantId;
@@ -305,14 +307,16 @@ try {
                 $nextDue = stall_app_next_due_date($app['rental_start_date'], $scheduleDay);
                 $newLeaseId = null;
                 if (gjc_table_exists($db, 'merchant_leases')) {
+                    // stall_number is only filled until the 3NF contract drops it.
+                    $legacyStallNumber = gjc_lease_has_stall_number($db);
                     if (in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true)) {
                     $db->prepare(
                         "INSERT INTO merchant_leases
-                            (merchant_user_id, stall_number, stall_id, stall_name, monthly_rent,
+                            (merchant_user_id" . ($legacyStallNumber ? ", stall_number" : "") . ", stall_id, stall_name, monthly_rent,
                              deposit_amount, lease_start, lease_end, next_due_date, status, contract_notes, created_by, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 1 YEAR), ?, 'active', ?, ?, NOW())"
+                         VALUES (?, " . ($legacyStallNumber ? "?, " : "") . "?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 1 YEAR), ?, 'active', ?, ?, NOW())"
                     )->execute([
-                        $newUserId, $stallId, $stallId, $app['business_name'], $monthlyRent,
+                        $newUserId, ...($legacyStallNumber ? [$stallId] : []), $stallId, $app['business_name'], $monthlyRent,
                         $app['deposit_amount'], $app['rental_start_date'], $app['rental_start_date'], $nextDue,
                         'Payment every ' . $scheduleDay . 'th. 2-month deposit + 1-month advance collected on award.',
                         $adminId,
@@ -320,11 +324,11 @@ try {
                     } else {
                     $db->prepare(
                         "INSERT INTO merchant_leases
-                            (merchant_user_id, stall_number, stall_id, stall_name, monthly_rent,
+                            (merchant_user_id" . ($legacyStallNumber ? ", stall_number" : "") . ", stall_id, stall_name, monthly_rent,
                              deposit_amount, lease_start, lease_end, status, contract_notes, created_by, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 1 YEAR), 'active', ?, ?, NOW())"
+                         VALUES (?, " . ($legacyStallNumber ? "?, " : "") . "?, ?, ?, ?, ?, DATE_ADD(?, INTERVAL 1 YEAR), 'active', ?, ?, NOW())"
                     )->execute([
-                        $newUserId, $stallId, $stallId, $app['business_name'], $monthlyRent,
+                        $newUserId, ...($legacyStallNumber ? [$stallId] : []), $stallId, $app['business_name'], $monthlyRent,
                         $app['deposit_amount'], $app['rental_start_date'], $app['rental_start_date'],
                         'Payment every ' . $scheduleDay . 'th. 2-month deposit + 1-month advance collected on award.',
                         $adminId,

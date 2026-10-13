@@ -107,6 +107,7 @@ class MerchantTenantDirectory
             SELECT
                 m.userID AS merchant_user_id,
                 m.stall_name,
+                m.stall_id,
                 TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) AS proprietor_name,
                 u.email AS proprietor_email,
                 {$activeLeaseSelect} AS has_active_lease
@@ -119,6 +120,7 @@ class MerchantTenantDirectory
         return array_map(static fn (array $row): array => [
             'merchant_user_id' => (int) $row['merchant_user_id'],
             'stall_name' => (string) $row['stall_name'],
+            'stall_id' => (string) ($row['stall_id'] ?? ''),
             'proprietor_name' => trim((string) $row['proprietor_name']) ?: ((string) ($row['proprietor_email'] ?? 'Unnamed proprietor')),
             'proprietor_email' => (string) ($row['proprietor_email'] ?? ''),
             'has_active_lease' => (bool) $row['has_active_lease'],
@@ -218,7 +220,9 @@ class MerchantTenantDirectory
         $normalised = [
             'id' => (int) $lease['id'],
             'merchant_user_id' => (int) $lease['merchant_user_id'],
-            'stall_number' => (string) $lease['stall_number'],
+            // The stall code; key kept for existing consumers (3NF: from stall_id).
+            'stall_number' => gjc_lease_stall_code($lease),
+            'stall_id' => (string) ($lease['stall_id'] ?? ''),
             'stall_name' => (string) $lease['stall_name'],
             'monthly_rent' => (float) $lease['monthly_rent'],
             'deposit_amount' => (float) $lease['deposit_amount'],

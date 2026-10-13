@@ -190,12 +190,14 @@ try {
             $db->beginTransaction();
             try {
                 $legacyUserIds = gjc_has_legacy_wallet_user_ids($db, 'cart_orders');
+                // buyer_role is implied by parent_wallet_id; written only until the 3NF contract drops it.
+                $legacyBuyerRole = in_array('buyer_role', gjc_table_columns($db, 'cart_orders'), true);
                 $db->prepare(
                     "INSERT INTO cart_orders
-                        (reference_no, buyer_role" . ($legacyUserIds ? ", parent_user_id" : "") . ", parent_wallet_id"
+                        (reference_no" . ($legacyBuyerRole ? ", buyer_role" : "") . ($legacyUserIds ? ", parent_user_id" : "") . ", parent_wallet_id"
                         . ($legacyUserIds ? ", merchant_user_id" : "") . ", merchant_wallet_id,
                          description" . ($legacyItemsJson ? ", items_json" : "") . ", amount, status)
-                     VALUES (?, 'parent', ". ($legacyUserIds ? "?, " : "") . "?, " . ($legacyUserIds ? "?, " : "") . "?, ?, " . ($legacyItemsJson ? "?, " : "") . "?, 'pending')"
+                     VALUES (?, " . ($legacyBuyerRole ? "'parent', " : "") . ($legacyUserIds ? "?, " : "") . "?, " . ($legacyUserIds ? "?, " : "") . "?, ?, " . ($legacyItemsJson ? "?, " : "") . "?, 'pending')"
                 )->execute([
                     $refNo,
                     ...($legacyUserIds ? [$parentUserId] : []),
