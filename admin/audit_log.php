@@ -205,8 +205,6 @@ if ($transactionRefs && gjc_table_exists($db, "transactions")) {
                 "name" => trim((string) ($txn["merchant_name"] ?? "")),
                 "email" => (string) ($txn["merchant_email"] ?? ""),
             ],
-            "voucher_id" =>
-                $txn["voucher_id"] !== null ? (int) $txn["voucher_id"] : null,
             "vault_before" => (float) $txn["vault_before"],
             "vault_after" => (float) $txn["vault_after"],
             "total_in_circulation" => (float) $txn["total_in_circulation"],
@@ -315,9 +313,6 @@ foreach ($logs as &$log) {
                 "name" => "",
                 "email" => "",
             ],
-            "voucher_id" => isset($payload["voucher_id"])
-                ? (int) $payload["voucher_id"]
-                : null,
             "vault_before" => isset($payload["vault_before"])
                 ? (float) $payload["vault_before"]
                 : null,

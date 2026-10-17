@@ -129,6 +129,21 @@ $contracts['maintenance_fees:ledger_and_receipt_copies'] = [
     )->fetchAll(PDO::FETCH_ASSOC),
 ];
 
+$contracts['voucher_removal'] = [
+    'run'  => static fn(PDO $db, bool $apply, ?string $archive = null): array =>
+        gjc_ensure_voucher_removal_contract_schema($db, $apply, $archive),
+    'rows' => static function (PDO $db): array {
+        $export = ['transaction_type' => (string) $db->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'transaction_type'")->fetchColumn()];
+        foreach (['voucher_payment_log', 'vouchers'] as $table) {
+            if (gjc_table_exists($db, $table)) {
+                $export[$table] = gjc_table_export($db, $table);
+            }
+        }
+        return $export;
+    },
+];
+
 try {
     // Verify everything before touching anything.
     $plans = [];

@@ -12,7 +12,7 @@ require_once __DIR__ . '/../connection/CirculationEngine.php';
 $db->exec('CREATE TEMPORARY TABLE transactions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, reference_no VARCHAR(50),
     transaction_type VARCHAR(50), initiated_by INT, student_wallet_id INT,
-    merchant_wallet_id INT, voucher_id INT, amount DECIMAL(12,2),
+    merchant_wallet_id INT, amount DECIMAL(12,2),
     vault_before DECIMAL(12,2), vault_after DECIMAL(12,2), total_in_circulation DECIMAL(12,2),
     status VARCHAR(20), notes TEXT, school_year_id INT, parent_wallet_id INT
 ) ENGINE=InnoDB');

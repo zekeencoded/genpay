@@ -56,9 +56,6 @@ try {
         if ($original['status'] !== 'completed') {
             throw new RuntimeException('Only completed transactions can be returned.');
         }
-        if ($original['transaction_type'] === 'voucher_payment') {
-            throw new RuntimeException('Visitor voucher payments are non-refundable by policy.');
-        }
         if ($original['transaction_type'] !== 'payment') {
             throw new RuntimeException('This transaction type cannot be returned.');
         }
@@ -87,8 +84,7 @@ try {
         $totalCirc = (float) $db->query(
             "SELECT (cashier_vault_points
                     + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
-                    + (SELECT COALESCE(SUM(remaining_balance),0) FROM vouchers WHERE status='active'))
+                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
                FROM system_settings WHERE id = 1"
         )->fetchColumn();
 

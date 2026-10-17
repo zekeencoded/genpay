@@ -28,6 +28,7 @@ try {
     }
 
     gjc_ensure_merchant_qr_orders_schema($db);
+    gjc_ensure_order_items_schema($db);
 
     $payload = json_decode(file_get_contents('php://input'), true);
     if (!is_array($payload)) {
@@ -55,7 +56,9 @@ try {
     $stmt = $db->prepare(
         "SELECT o.id, o.token,
                 (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id,
-                o.description, o.amount, o.status, o.expires_at
+                o.description, o.amount, o.status, o.expires_at,
+                (o.expires_at <= NOW()) AS has_expired,
+                TIMESTAMPDIFF(SECOND, NOW(), o.expires_at) AS seconds_left
            FROM merchant_qr_orders o
           WHERE o.token = ?
              OR (o.short_code IS NOT NULL AND o.short_code = ?)
@@ -82,7 +85,7 @@ try {
         exit;
     }
 
-    if (strtotime((string) $order['expires_at']) < time()) {
+    if ((int) $order['has_expired'] === 1) {
         $db->prepare("UPDATE merchant_qr_orders SET status = 'expired' WHERE id = ? AND status = 'pending'")
             ->execute([(int) $order['id']]);
         http_response_code(422);
@@ -105,9 +108,10 @@ try {
         'lines' => $lines,
         'amount' => round((float) $order['amount'], 2),
         'expires_at' => (string) $order['expires_at'],
-        'seconds_left' => max(0, strtotime((string) $order['expires_at']) - time()),
+        'seconds_left' => max(0, (int) $order['seconds_left']),
     ]);
 } catch (Throwable $e) {
+    error_log('[student/api/validate_qr] ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['success' => false, 'code' => 'server_error', 'message' => 'A server error occurred while checking the code.']);
 }

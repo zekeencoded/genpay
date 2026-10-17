@@ -47,7 +47,7 @@ if ($recordId !== null && $source === 'ledger' && $walletId > 0 && gjc_table_exi
         // Who the money went to / came from, in the student's own words.
         $counterLabel = 'Counterparty';
         $counterparty = '';
-        if (in_array($type, ['payment', 'voucher_payment'], true) && (int) ($row['merchant_wallet_id'] ?? 0) > 0) {
+        if ($type === 'payment' && (int) ($row['merchant_wallet_id'] ?? 0) > 0) {
             $counterLabel = 'Paid To';
             $counterparty = gjc_merchant_wallet_owner_label($db, (int) $row['merchant_wallet_id']);
         } elseif ($type === 'allowance' && (int) ($row['initiated_by'] ?? 0) > 0) {

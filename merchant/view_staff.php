@@ -133,7 +133,7 @@ if ($staff) {
                LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
                LEFT JOIN users u ON u.userID = sw.user_id
               WHERE t.merchant_wallet_id = ?
-                AND t.transaction_type IN (?, ?)
+                AND t.transaction_type = ?
                 AND (
                     t.initiated_by = ?
                     OR EXISTS (
@@ -149,7 +149,6 @@ if ($staff) {
         $salesStmt->execute([
             $walletId,
             CirculationEngine::TXN_PAYMENT,
-            CirculationEngine::TXN_VOUCHER_PAYMENT,
             $staffId,
             $staffId,
         ]);
@@ -474,15 +473,13 @@ if ($staff) {
                     <?php foreach ($salesShown as $s):
                         $buyer = trim(($s['buyer_first'] ?? '') . ' ' . ($s['buyer_last'] ?? ''));
                         $items = $itemsOf($s);
-                        $isVoucher = $s['transaction_type'] === CirculationEngine::TXN_VOUCHER_PAYMENT;
                     ?>
                         <tr data-search="<?= $e(strtolower($s['reference_no'] . ' ' . $buyer . ' ' . $items)) ?>">
                             <td class="ref">
                                 <a href="<?= MERCHANT_URL ?>/view_transaction.php?token=<?= urlencode(gjc_make_view_token((int) $s['id'], 'merchant_txn')) ?>"><?= $e($s['reference_no']) ?></a>
-                                <?php if ($isVoucher): ?><span class="sub"><span class="sv-type">Voucher</span></span><?php endif; ?>
                             </td>
                             <td class="when"><?= $e(gjc_datetime($s['created_at'])) ?></td>
-                            <td><?= $e($buyer !== '' ? $buyer : ($isVoucher ? 'Voucher holder' : 'Walk-in')) ?></td>
+                            <td><?= $e($buyer !== '' ? $buyer : 'Walk-in') ?></td>
                             <td class="items"><?= $e($items !== '' ? $items : '—') ?></td>
                             <td class="num"><?= gjc_gc_amount($s['amount']) ?> GC<span class="sub">&asymp; <?= gjc_money($s['amount']) ?></span></td>
                         </tr>

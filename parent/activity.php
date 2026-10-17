@@ -49,7 +49,7 @@ if ($selectedStudent > 0 && !in_array($selectedStudent, $walletIds, true)) {
 // Normalised back so the <select> below can mark the right option.
 $walletFilter = $showOwnOnly ? 'me' : (string) $selectedStudent;
 $typeOptions = gjc_transaction_type_options() + ['p2p_transfer' => 'Transfer', 'student_withdraw' => 'Withdrawal'];
-unset($typeOptions['voucher_payment'], $typeOptions['voucher_create'], $typeOptions['voucher_expire'], $typeOptions['encashment']);
+unset($typeOptions['encashment']);
 $filterType = trim((string) ($_GET['type'] ?? ''));
 foreach (gjc_parent_activity_types() as $category => $ledgerTypes) {
     if (in_array($filterType, $ledgerTypes, true)) {
@@ -106,7 +106,7 @@ foreach ($rows as &$r) {
         : ($studentByWallet[(int) $r['student_wallet_id']] ?? 'Unlinked student');
 
     $itemsSummary = '';
-    if (in_array($type, ['payment', 'voucher_payment'], true)) {
+    if ($type === 'payment') {
         $decoded = gjc_transaction_line_items($db, (string) $r['reference_no']);
         if (is_array($decoded)) {
             $itemsSummary = implode(', ', array_map(

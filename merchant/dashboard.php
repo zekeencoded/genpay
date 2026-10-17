@@ -26,7 +26,7 @@ $merchantDisplayName = $stallRow['stall_name'] ?? $currentUser['name'];
 $merchantStallId = $stallRow['stall_id'] ?? '';
 $totalEarned = 0;
 $encashmentStatus = "Available";
-$earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
+$earningTypes = [CirculationEngine::TXN_PAYMENT];
 $earningTypePlaceholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 
 gjc_ensure_sales_remittances_schema($db);

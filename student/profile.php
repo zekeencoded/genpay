@@ -59,8 +59,8 @@ $spentToday = 0.0;
 if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     $figStmt = $db->prepare(
         "SELECT
-            COALESCE(SUM(CASE WHEN transaction_type IN ('payment', 'voucher_payment') THEN amount END), 0) AS spent_month,
-            COUNT(CASE WHEN transaction_type IN ('payment', 'voucher_payment') THEN 1 END) AS purchases_month,
+            COALESCE(SUM(CASE WHEN transaction_type = 'payment' THEN amount END), 0) AS spent_month,
+            COUNT(CASE WHEN transaction_type = 'payment' THEN 1 END) AS purchases_month,
             COALESCE(SUM(CASE WHEN transaction_type IN ('payment', 'p2p_transfer') AND DATE(created_at) = CURDATE() THEN amount END), 0) AS spent_today
            FROM transactions
           WHERE student_wallet_id = ?
@@ -88,6 +88,21 @@ if (gjc_table_exists($db, 'parent_student_links') && gjc_table_exists($db, 'pare
     );
     $gStmt->execute([(int) $currentUser['id']]);
     $guardians = $gStmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Parents who asked to link and are waiting for this student's answer.
+$linkRequests = [];
+if (gjc_table_exists($db, 'parent_link_requests')) {
+    $rStmt = $db->prepare(
+        "SELECT r.id, u.first_name, u.last_name, u.email, r.requested_at
+           FROM parent_link_requests r
+           JOIN parents p ON p.id = r.parent_id
+           JOIN users u ON u.userID = p.user_id
+          WHERE r.student_user_id = ?
+          ORDER BY r.requested_at, r.id"
+    );
+    $rStmt->execute([(int) $currentUser['id']]);
+    $linkRequests = $rStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $waiverCredit = gjc_student_waiver_credit($db, (int) $currentUser['id']);
@@ -143,7 +158,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=6">
 </head>
 
 <body class="sd-body">
@@ -170,57 +185,66 @@ $currentPage = 'profile';
                 </div>
                 <?php endif; ?>
 
-                <!-- Hero: who you are, and the three figures you check most -->
-                <section class="ph-hero" aria-label="Account summary">
-                    <div class="ph-hero-top">
-                        <div class="ph-avatar" id="avatarCircle">
-                            <?php if ($profilePhotoUrl): ?>
-                                <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
-                            <?php else: ?>
-                                <span id="avatarInitial"><?= $e($studentInitial) ?></span>
-                            <?php endif; ?>
-                            <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
-                                <i class="fa-solid fa-camera"></i>
-                            </label>
-                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                <!-- Hero: the student's GenPay card as an object (who you are),
+                     with the wallet figures beside it (what you have). -->
+                <section class="ph-id" aria-label="Account summary">
+                    <div class="ph-id-card">
+                        <div class="ph-id-brand">
+                            <img src="<?= ICONS_URL ?>/gp_logo.png" alt="">
+                            GenPay
                         </div>
-
-                        <div class="ph-identity">
-                            <span class="ph-eyebrow">Student account</span>
-                            <h2 class="ph-name"><?= $e($studentName) ?></h2>
-                            <p class="ph-meta"><?= $e($studentID) ?> &middot; <?= $e($email) ?> &middot; Member since <?= $e($memberSince) ?></p>
-                            <div class="ph-photo-msg" id="photoMsg"></div>
-                        </div>
-
-                        <div class="ph-hero-actions">
-                            <a href="<?= $e($editUrl) ?>" class="ph-btn-ghost">
-                                <i class="fa-solid fa-pen"></i> Edit profile
-                            </a>
+                        <div class="ph-id-holder">
+                            <div class="ph-id-photo" id="avatarCircle">
+                                <?php if ($profilePhotoUrl): ?>
+                                    <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
+                                <?php else: ?>
+                                    <span id="avatarInitial"><?= $e($studentInitial) ?></span>
+                                <?php endif; ?>
+                                <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
+                                    <i class="fa-solid fa-camera"></i>
+                                </label>
+                                <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                            </div>
+                            <div class="ph-id-who">
+                                <h2 class="ph-id-name"><?= $e($studentName) ?></h2>
+                                <p class="ph-id-no"><?= $e($studentID) ?></p>
+                                <p class="ph-id-since">Member since <?= $e($memberSince) ?></p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="ph-stats is-odd">
-                        <div class="ph-stat">
-                            <span class="ph-stat-k">Wallet balance</span>
-                            <span class="ph-stat-v"><?= gjc_gc_amount($walletBalance) ?> <small>GC</small></span>
-                            <span class="ph-stat-n">&#8776; <?= gjc_money($walletBalance) ?></span>
+                    <div class="ph-id-wallet">
+                        <div class="ph-id-top">
+                            <div>
+                                <span class="ph-id-k">Wallet balance</span>
+                                <span class="ph-id-amount"><?= gjc_gc_amount($walletBalance) ?> <small>GC</small></span>
+                                <span class="ph-id-k">&#8776; <?= gjc_money($walletBalance) ?></span>
+                            </div>
+                            <a href="<?= $e($editUrl) ?>" class="ph-id-edit">
+                                <i class="fa-solid fa-pen"></i> Edit profile
+                            </a>
                         </div>
-                        <div class="ph-stat">
-                            <span class="ph-stat-k">Spent this month</span>
-                            <span class="ph-stat-v"><?= gjc_gc_amount($spentMonth) ?> <small>GC</small></span>
-                            <span class="ph-stat-n">&#8776; <?= gjc_money($spentMonth) ?> &middot; <?= $purchasesMonth ?> purchase<?= $purchasesMonth === 1 ? '' : 's' ?> in <?= date('F') ?></span>
-                        </div>
-                        <div class="ph-stat">
-                            <?php if ($isFrozen): ?>
-                                <span class="ph-stat-k">Spending today</span>
-                                <span class="ph-stat-v">Paused</span>
-                                <span class="ph-stat-n">Your wallet is frozen by your guardian</span>
-                            <?php else: ?>
-                                <span class="ph-stat-k">Spent today</span>
-                                <span class="ph-stat-v"><?= gjc_gc_amount($spentToday) ?> <small>GC</small></span>
-                                <span class="ph-stat-n">&#8776; <?= gjc_money($spentToday) ?></span>
-                            <?php endif; ?>
-                        </div>
+                        <div class="ph-photo-msg" id="photoMsg"></div>
+
+                        <dl class="ph-id-facts">
+                            <div>
+                                <dt>Spent this month</dt>
+                                <dd><?= gjc_gc_amount($spentMonth) ?> GC <span>in <?= $purchasesMonth ?> purchase<?= $purchasesMonth === 1 ? '' : 's' ?></span></dd>
+                            </div>
+                            <div>
+                                <?php if ($isFrozen): ?>
+                                    <dt>Spending today</dt>
+                                    <dd class="is-paused">Paused by your guardian</dd>
+                                <?php else: ?>
+                                    <dt>Spent today</dt>
+                                    <dd><?= gjc_gc_amount($spentToday) ?> GC</dd>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <dt>Email</dt>
+                                <dd><?= $e($email) ?></dd>
+                            </div>
+                        </dl>
                     </div>
                 </section>
 
@@ -244,8 +268,27 @@ $currentPage = 'profile';
                 </section>
                 <?php endif; ?>
 
-                <div class="ph-grid">
-                <div class="ph-col">
+                <!-- One section at a time instead of one long scroll. A pending
+                     guardian request opens first: it is waiting on the student. -->
+                <?php
+                $phTab = $linkRequests ? 'guardian' : 'details';
+                $phTabs = ['details' => 'Details', 'guardian' => 'Guardian', 'status' => 'Status', 'settings' => 'Settings'];
+                ?>
+                <div class="ph-tabs" role="tablist" aria-label="Profile sections">
+                    <?php foreach ($phTabs as $key => $label): ?>
+                    <button type="button" class="ph-tab<?= $key === $phTab ? ' active' : '' ?>" id="ph-tab-<?= $key ?>"
+                            data-bs-toggle="tab" data-bs-target="#ph-pane-<?= $key ?>" role="tab"
+                            aria-controls="ph-pane-<?= $key ?>" aria-selected="<?= $key === $phTab ? 'true' : 'false' ?>">
+                        <?= $label ?>
+                        <?php if ($key === 'guardian' && $linkRequests): ?>
+                            <span class="ph-tab-count" aria-label="<?= count($linkRequests) ?> pending request<?= count($linkRequests) === 1 ? '' : 's' ?>"><?= count($linkRequests) ?></span>
+                        <?php endif; ?>
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="tab-content">
+                <div class="tab-pane<?= $phTab === 'details' ? ' active' : '' ?>" id="ph-pane-details" role="tabpanel" aria-labelledby="ph-tab-details" tabindex="0">
 
                 <!-- Personal details (editable from Edit Profile) -->
                 <section class="ph-card">
@@ -285,6 +328,8 @@ $currentPage = 'profile';
                         </div>
                     </dl>
                 </section>
+                </div><!-- /.tab-pane -->
+                <div class="tab-pane<?= $phTab === 'guardian' ? ' active' : '' ?>" id="ph-pane-guardian" role="tabpanel" aria-labelledby="ph-tab-guardian" tabindex="0">
 
                 <!-- Linked guardian(s) -->
                 <section class="ph-card">
@@ -294,6 +339,18 @@ $currentPage = 'profile';
                             <p>Can send allowance and freeze your wallet</p>
                         </div>
                     </div>
+                    <?php foreach ($linkRequests as $r):
+                        $rName = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')) ?: 'A parent'; ?>
+                    <div class="ph-row" data-link-request="<?= (int) $r['id'] ?>" data-name="<?= $e($rName) ?>">
+                        <span class="ph-ic"><i class="fa-solid fa-user-clock"></i></span>
+                        <span class="ph-grow">
+                            <span class="ph-t"><?= $e($rName) ?> wants to link to your account</span>
+                            <span class="ph-s"><?= $e($r['email'] ?? '') ?> &middot; requested <?= $e(date('M j, Y g:i A', strtotime($r['requested_at']))) ?>. Approve only if this is your parent or guardian.</span>
+                        </span>
+                        <button type="button" class="ph-mini-btn" data-link-action="approve">Approve</button>
+                        <button type="button" class="ph-link" data-link-action="decline">Decline</button>
+                    </div>
+                    <?php endforeach; ?>
                     <?php if ($guardians): ?>
                         <?php foreach ($guardians as $g):
                             $gName = trim(($g['first_name'] ?? '') . ' ' . ($g['last_name'] ?? '')) ?: 'Guardian'; ?>
@@ -319,8 +376,8 @@ $currentPage = 'profile';
                     <?php endif; ?>
                 </section>
 
-                </div><!-- /.ph-col -->
-                <div class="ph-col">
+                </div><!-- /.tab-pane -->
+                <div class="tab-pane<?= $phTab === 'status' ? ' active' : '' ?>" id="ph-pane-status" role="tabpanel" aria-labelledby="ph-tab-status" tabindex="0">
 
                 <!-- Account status (read-only — managed by admin/parent, not the student) -->
                 <section class="ph-card">
@@ -377,6 +434,8 @@ $currentPage = 'profile';
                         <span>Limits and freezes are set by your guardian or the Finance Office. Maintenance fees are billed with tuition, never taken from your wallet.</span>
                     </div>
                 </section>
+                </div><!-- /.tab-pane -->
+                <div class="tab-pane<?= $phTab === 'settings' ? ' active' : '' ?>" id="ph-pane-settings" role="tabpanel" aria-labelledby="ph-tab-settings" tabindex="0">
 
                 <!-- Settings -->
                 <section class="ph-card">
@@ -416,10 +475,10 @@ $currentPage = 'profile';
                     </nav>
                 </section>
 
-                <div class="ph-foot">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
+                </div><!-- /.tab-pane -->
+                </div><!-- /.tab-content -->
 
-                </div><!-- /.ph-col -->
-                </div><!-- /.ph-grid -->
+                <div class="ph-foot">GenPay v<?= $e(GJC_APP_VERSION) ?></div>
 
             </div>
 
@@ -513,6 +572,21 @@ $currentPage = 'profile';
     </div>
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+    <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
+
+    <script>
+    // Keep the open tab in the URL, so a reload (approving a guardian,
+    // claiming the waiver credit) lands back on the same section.
+    document.querySelectorAll('.ph-tab').forEach(function (tab) {
+        tab.addEventListener('shown.bs.tab', function () {
+            history.replaceState(null, '', '#' + tab.id.replace('ph-tab-', ''));
+        });
+    });
+    (function () {
+        const tab = document.getElementById('ph-tab-' + location.hash.slice(1));
+        if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+    })();
+    </script>
 
     <script>
     // Show the signed waiver inline in a modal instead of opening a new tab/window.
@@ -595,7 +669,7 @@ $currentPage = 'profile';
 
         const msg = document.getElementById('photoMsg');
         msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-        msg.style.color = 'rgba(255,255,255,.7)';
+        msg.style.color = 'var(--gp-muted)';
 
         const fd = new FormData();
         fd.append('action', 'upload');
@@ -611,13 +685,49 @@ $currentPage = 'profile';
                 return;
             } else {
                 msg.textContent = data.error || 'Upload failed.';
-                msg.style.color = '#fca5a5';
+                msg.style.color = 'var(--gp-danger)';
             }
         } catch(err) {
             msg.textContent = 'Network error. Please try again.';
-            msg.style.color = '#fca5a5';
+            msg.style.color = 'var(--gp-danger)';
         }
         this.value = '';
+    });
+    </script>
+
+    <script>
+    // Approve / decline a parent's link request.
+    document.querySelectorAll('[data-link-action]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            const row = btn.closest('[data-link-request]');
+            const action = btn.dataset.linkAction;
+            const approve = action === 'approve';
+            const confirmed = await gpConfirm({
+                title: approve ? 'Approve this guardian?' : 'Decline this request?',
+                body: approve
+                    ? 'Approve only if this is really your parent or guardian.'
+                    : 'They will not be linked to your account. They can send a new request later.',
+                detail: [['Requested by', row.dataset.name]],
+                note: approve ? 'They will be able to view your wallet and transactions, send you allowance, and set spending limits or freeze your wallet.' : '',
+                danger: !approve,
+                confirmLabel: approve ? 'Approve' : 'Decline'
+            });
+            if (!confirmed) return;
+            row.querySelectorAll('button').forEach(b => b.disabled = true);
+            try {
+                const res = await fetch('<?= STUDENT_URL ?>/api/guardian_link.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, request_id: +row.dataset.linkRequest, csrf_token: <?= json_encode($csrfToken, JSON_UNESCAPED_SLASHES) ?> }),
+                });
+                const data = await res.json();
+                if (data.success) { location.reload(); return; }
+                gpToast(data.error || 'Could not save your answer.', false);
+            } catch (e) {
+                gpToast('Network error. Please try again.', false);
+            }
+            row.querySelectorAll('button').forEach(b => b.disabled = false);
+        });
     });
     </script>
 

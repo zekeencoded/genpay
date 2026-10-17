@@ -111,7 +111,6 @@ $typeLabels = [
     'cash_in'       => ['label' => 'Top-Up',   'icon' => 'fa-circle-plus',    'color' => '#15803d', 'bg' => '#dcf3e4'],
     'payment'       => ['label' => 'POS',       'icon' => 'fa-store',          'color' => '#b45309', 'bg' => '#fdf1d8'],
     'p2p_transfer'  => ['label' => 'Transfer',  'icon' => 'fa-money-bill-transfer', 'color' => '#2563eb', 'bg' => '#e3edfd'],
-    'voucher_payment' => ['label' => 'Voucher', 'icon' => 'fa-ticket',         'color' => '#7c3aed', 'bg' => '#efe7fb'],
     'allowance'     => ['label' => 'Allowance', 'icon' => 'fa-hand-holding-dollar', 'color' => '#15803d', 'bg' => '#dcf3e4'],
     'fee_waiver_claim' => ['label' => 'Fee Waiver', 'icon' => 'fa-hand-holding-dollar', 'color' => '#15803d', 'bg' => '#dcf3e4'],
 ];

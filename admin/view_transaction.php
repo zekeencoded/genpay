@@ -57,7 +57,6 @@ if ($transaction) {
         'topup'      => 'fa-wallet',
         'encashment' => 'fa-money-bill-transfer',
         'payment'    => 'fa-cart-shopping',
-        'voucher'    => 'fa-ticket',
         'transfer'   => 'fa-right-left',
         'refund'     => 'fa-rotate-left',
     ];

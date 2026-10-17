@@ -113,7 +113,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=5">
 </head>
 
 <body class="sd-body">
@@ -140,51 +140,66 @@ $currentPage = 'profile';
                 </div>
                 <?php endif; ?>
 
-                <!-- Hero -->
-                <section class="ph-hero" aria-label="Account summary">
-                    <div class="ph-hero-top">
-                        <div class="ph-avatar" id="avatarCircle">
-                            <?php if ($profilePhotoUrl): ?>
-                                <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
-                            <?php else: ?>
-                                <span id="avatarInitial"><?= $e($staffInitial) ?></span>
-                            <?php endif; ?>
-                            <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
-                                <i class="fa-solid fa-camera"></i>
-                            </label>
-                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                <!-- Hero: the staff member's GenPay card as an object (who you
+                     are), with the stall you work at beside it. Same design as
+                     student/profile.php. -->
+                <section class="ph-id" aria-label="Account summary">
+                    <div class="ph-id-card">
+                        <div class="ph-id-brand">
+                            <img src="<?= ICONS_URL ?>/gp_logo.png" alt="">
+                            GenPay
                         </div>
-
-                        <div class="ph-identity">
-                            <span class="ph-eyebrow">Staff account</span>
-                            <h2 class="ph-name"><?= $e($staffName) ?></h2>
-                            <p class="ph-meta"><?= $e($staffID) ?> &middot; <?= $e($email) ?> &middot; Member since <?= $e($memberSince) ?></p>
-                            <div class="ph-photo-msg" id="photoMsg"></div>
-                        </div>
-
-                        <div class="ph-hero-actions">
-                            <a href="<?= $e($editUrl) ?>" class="ph-btn-ghost">
-                                <i class="fa-solid fa-pen"></i> Edit profile
-                            </a>
+                        <div class="ph-id-holder">
+                            <div class="ph-id-photo" id="avatarCircle">
+                                <?php if ($profilePhotoUrl): ?>
+                                    <img id="avatarImg" src="<?= $e($profilePhotoUrl) ?>" alt="Profile Photo">
+                                <?php else: ?>
+                                    <span id="avatarInitial"><?= $e($staffInitial) ?></span>
+                                <?php endif; ?>
+                                <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
+                                    <i class="fa-solid fa-camera"></i>
+                                </label>
+                                <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                            </div>
+                            <div class="ph-id-who">
+                                <h2 class="ph-id-name"><?= $e($staffName) ?></h2>
+                                <p class="ph-id-no"><?= $e($staffID) ?></p>
+                                <p class="ph-id-since">Member since <?= $e($memberSince) ?></p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="ph-stats is-odd">
-                        <div class="ph-stat">
-                            <span class="ph-stat-k">Works at</span>
-                            <span class="ph-stat-v is-text"><?= $e($stallName) ?></span>
-                            <span class="ph-stat-n"><?= $stall && $stall['stall_id'] ? 'Stall ' . $e($stall['stall_id']) : 'Ask your merchant admin to link you' ?></span>
+                    <div class="ph-id-wallet">
+                        <div class="ph-id-top">
+                            <div>
+                                <span class="ph-id-k">Works at</span>
+                                <span class="ph-id-amount is-text"><?= $e($stallName) ?></span>
+                                <span class="ph-id-k"><?= $stall && $stall['stall_id'] ? 'Stall ' . $e($stall['stall_id']) : 'Ask your merchant admin to link you' ?></span>
+                            </div>
+                            <a href="<?= $e($editUrl) ?>" class="ph-id-edit">
+                                <i class="fa-solid fa-pen"></i> Edit profile
+                            </a>
                         </div>
-                        <div class="ph-stat">
-                            <span class="ph-stat-k">Position</span>
-                            <span class="ph-stat-v is-text"><?= $e($position) ?></span>
-                            <span class="ph-stat-n">Set by your merchant admin</span>
-                        </div>
-                        <div class="ph-stat">
-                            <span class="ph-stat-k">POS access</span>
-                            <span class="ph-stat-v"><?= $posEnabled ? 'Enabled' : 'Paused' ?></span>
-                            <span class="ph-stat-n"><?= $posEnabled ? 'You can ring up sales' : (!$isActive ? 'Your account is inactive' : 'The stall is not open') ?></span>
-                        </div>
+                        <div class="ph-photo-msg" id="photoMsg"></div>
+
+                        <dl class="ph-id-facts">
+                            <div>
+                                <dt>Position</dt>
+                                <dd><?= $e($position) ?> <span>set by your merchant admin</span></dd>
+                            </div>
+                            <div>
+                                <dt>POS access</dt>
+                                <?php if ($posEnabled): ?>
+                                    <dd>Enabled <span>you can ring up sales</span></dd>
+                                <?php else: ?>
+                                    <dd class="is-paused">Paused <span><?= !$isActive ? 'your account is inactive' : 'the stall is not open' ?></span></dd>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <dt>Email</dt>
+                                <dd><?= $e($email) ?></dd>
+                            </div>
+                        </dl>
                     </div>
                 </section>
 
@@ -404,7 +419,7 @@ $currentPage = 'profile';
 
         const msg = document.getElementById('photoMsg');
         msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-        msg.style.color = 'rgba(255,255,255,.7)';
+        msg.style.color = 'var(--gp-muted)';
 
         const fd = new FormData();
         fd.append('action', 'upload');
@@ -420,11 +435,11 @@ $currentPage = 'profile';
                 return;
             } else {
                 msg.textContent = data.error || 'Upload failed.';
-                msg.style.color = '#fca5a5';
+                msg.style.color = 'var(--gp-danger)';
             }
         } catch(err) {
             msg.textContent = 'Network error. Please try again.';
-            msg.style.color = '#fca5a5';
+            msg.style.color = 'var(--gp-danger)';
         }
         this.value = '';
     });

@@ -6,6 +6,8 @@ require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['parent']);
 gjc_ensure_user_profile_schema($db);
+gjc_ensure_parent_schema($db);
+gjc_ensure_parent_wallet_schema($db);
 
 $currentUser = gjc_current_user($db);
 $rawUser     = $currentUser['raw'] ?? [];
@@ -112,6 +114,17 @@ $memberSince   = $createdAt !== '' ? date('F Y', strtotime($createdAt)) : 'N/A';
 $profileImg    = (string) ($rawUser['profile_img']      ?? '');
 $profilePhotoUrl = ($profileImg !== '') ? (BASE_URL . '/' . ltrim($profileImg, '/')) : '';
 
+// Hero figures: the wallet and how many students it serves.
+$parentId      = gjc_parent_id_for_user($db, (int) $currentUser['id']);
+$walletBalance = (float) gjc_parent_wallet($db, $parentId)['balance'];
+$linkedStmt    = $db->prepare('SELECT COUNT(*) FROM parent_student_links WHERE parent_id = ?');
+$linkedStmt->execute([$parentId]);
+$linkedCount   = (int) $linkedStmt->fetchColumn();
+
+// Open the tab whose form was just submitted, so its result is in view.
+$phTab  = ($_POST['profile_action'] ?? '') === 'password' ? 'password' : 'details';
+$phTabs = ['details' => 'Edit profile', 'password' => 'Change password'];
+
 $currentPage = 'profile';
 ?>
 <!DOCTYPE html>
@@ -125,7 +138,8 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=6">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=10">
 </head>
 <body class="gp-theme">
 <div class="parent-layout">
@@ -148,38 +162,75 @@ $currentPage = 'profile';
             <div class="flash err"><i class="fa-solid fa-circle-xmark me-1"></i><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <!-- Hero card -->
-            <div class="profile-hero">
-                <div class="profile-avatar-wrap">
-                    <div class="profile-avatar-lg" id="avatarCircle" <?= $profilePhotoUrl ? 'style="padding:0;"' : '' ?>>
-                        <?php if ($profilePhotoUrl): ?>
-                            <img id="avatarImg" src="<?= htmlspecialchars($profilePhotoUrl) ?>" alt="Profile Photo"
-                                 style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
-                        <?php else: ?>
-                            <span id="avatarInitial"><?= htmlspecialchars($initial) ?></span>
-                        <?php endif; ?>
+            <!-- Hero: the parent's GenPay card as an object (who you are), with
+                 the wallet beside it. Same design as student/profile.php. -->
+            <section class="ph-id" aria-label="Account summary">
+                <div class="ph-id-card">
+                    <div class="ph-id-brand">
+                        <img src="<?= ICONS_URL ?>/gp_logo.png" alt="">
+                        GenPay
                     </div>
-                    <label for="photoInput" class="photo-edit-btn" title="Change photo">
-                        <i class="fa-solid fa-camera"></i>
-                    </label>
-                    <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
+                    <div class="ph-id-holder">
+                        <div class="ph-id-photo" id="avatarCircle">
+                            <?php if ($profilePhotoUrl): ?>
+                                <img id="avatarImg" src="<?= htmlspecialchars($profilePhotoUrl) ?>" alt="Profile Photo">
+                            <?php else: ?>
+                                <span id="avatarInitial"><?= htmlspecialchars($initial) ?></span>
+                            <?php endif; ?>
+                            <label for="photoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change photo" aria-label="Change photo">
+                                <i class="fa-solid fa-camera"></i>
+                            </label>
+                            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                        </div>
+                        <div class="ph-id-who">
+                            <h2 class="ph-id-name"><?= htmlspecialchars($fullName) ?></h2>
+                            <p class="ph-id-no is-text">Parent / Guardian</p>
+                            <p class="ph-id-since">Member since <?= htmlspecialchars($memberSince) ?></p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="profile-hero-info">
-                    <h2><?= htmlspecialchars($fullName) ?></h2>
-                    <p><?= htmlspecialchars($email) ?></p>
-                    <span class="hero-badge"><i class="fa-solid fa-user-shield me-1"></i>Parent / Guardian</span>
-                    <div id="photoMsg"></div>
-                </div>
+                <div class="ph-id-wallet">
+                    <div class="ph-id-top">
+                        <div>
+                            <span class="ph-id-k">Wallet balance</span>
+                            <span class="ph-id-amount"><?= gjc_gc_amount($walletBalance) ?> <small>GC</small></span>
+                            <span class="ph-id-k">&#8776; <?= gjc_money($walletBalance) ?></span>
+                        </div>
+                    </div>
+                    <div class="ph-photo-msg" id="photoMsg"></div>
 
-                <div style="margin-left:auto;text-align:right;opacity:.75;font-size:12px;">
-                    Member since<br><strong style="font-size:14px;opacity:1;"><?= htmlspecialchars($memberSince) ?></strong>
+                    <dl class="ph-id-facts">
+                        <div>
+                            <dt>Linked students</dt>
+                            <dd><?= $linkedCount ?></dd>
+                        </div>
+                        <div>
+                            <dt>Phone</dt>
+                            <dd><?= $phone !== '' ? htmlspecialchars($phone) : '<span>Not set</span>' ?></dd>
+                        </div>
+                        <div>
+                            <dt>Email</dt>
+                            <dd><?= htmlspecialchars($email) ?></dd>
+                        </div>
+                    </dl>
                 </div>
+            </section>
+
+            <!-- One form at a time instead of both stacked. -->
+            <div class="ph-tabs" role="tablist" aria-label="Profile sections">
+                <?php foreach ($phTabs as $key => $label): ?>
+                <button type="button" class="ph-tab<?= $key === $phTab ? ' active' : '' ?>" id="ph-tab-<?= $key ?>"
+                        data-bs-toggle="tab" data-bs-target="#ph-pane-<?= $key ?>" role="tab"
+                        aria-controls="ph-pane-<?= $key ?>" aria-selected="<?= $key === $phTab ? 'true' : 'false' ?>">
+                    <?= $label ?>
+                </button>
+                <?php endforeach; ?>
             </div>
 
-            <div class="parent-grid">
+            <div class="tab-content">
 
-                <div class="parent-grid-col">
+                <div class="tab-pane<?= $phTab === 'details' ? ' active' : '' ?>" id="ph-pane-details" role="tabpanel" aria-labelledby="ph-tab-details" tabindex="0">
                     <!-- Edit profile -->
                     <div class="pcard">
                         <h5><i class="fa-solid fa-pen me-2" style="color:var(--gp-green-700)"></i>Edit Profile</h5>
@@ -218,7 +269,7 @@ $currentPage = 'profile';
                     </div>
                 </div>
 
-                <div class="parent-grid-col">
+                <div class="tab-pane<?= $phTab === 'password' ? ' active' : '' ?>" id="ph-pane-password" role="tabpanel" aria-labelledby="ph-tab-password" tabindex="0">
                     <!-- Change password -->
                     <div class="pcard">
                         <h5><i class="fa-solid fa-lock me-2" style="color:var(--gp-green-700)"></i>Change Password</h5>
@@ -266,7 +317,7 @@ document.getElementById('photoInput').addEventListener('change', async function(
 
     const msg = document.getElementById('photoMsg');
     msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-    msg.style.color = 'rgba(255,255,255,.8)';
+    msg.style.color = 'var(--gp-muted)';
 
     const fd = new FormData();
     fd.append('action', 'upload');
@@ -278,14 +329,12 @@ document.getElementById('photoInput').addEventListener('change', async function(
         if (data.success) {
             const circle  = document.getElementById('avatarCircle');
             const initial = document.getElementById('avatarInitial');
-            circle.style.padding = '0';
             if (initial) initial.remove();
             let img = document.getElementById('avatarImg');
             if (!img) {
                 img = document.createElement('img');
                 img.id = 'avatarImg';
                 img.alt = 'Profile Photo';
-                img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;';
                 circle.appendChild(img);
             }
             img.src = data.photo_url;
@@ -309,7 +358,7 @@ document.getElementById('photoInput').addEventListener('change', async function(
             }
 
             msg.innerHTML = '<i class="fa-solid fa-check"></i> Photo updated.';
-            msg.style.color = 'rgba(255,255,255,.9)';
+            msg.style.color = 'var(--gp-success)';
             setTimeout(() => { msg.innerHTML = ''; }, 3000);
         } else {
             msg.innerHTML = data.error || 'Upload failed.';

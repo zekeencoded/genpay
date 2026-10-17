@@ -74,20 +74,31 @@ try {
                 break;
             }
 
-            $db->prepare(
-                "INSERT INTO parent_student_links (parent_id, student_user_id) VALUES (?, ?)"
-            )->execute([$parentId, $studentUserId]);
+            // A school ID alone must not grant control of a wallet: the link only
+            // becomes real once the student approves it (student/api/guardian_link.php).
+            $req = $db->prepare(
+                "INSERT IGNORE INTO parent_link_requests (parent_id, student_user_id) VALUES (?, ?)"
+            );
+            $req->execute([$parentId, $studentUserId]);
+            if ($req->rowCount() === 0) {
+                throw new \RuntimeException('Your request is still waiting for ' . $studentName . ' to approve it.');
+            }
 
-            // Linking grants a parent visibility of, and control over, a student's
-            // wallet on the strength of a school ID alone. It was never logged.
+            $me = gjc_current_user($db);
+            gjc_notify(
+                $db, $studentUserId, 'guardian_link', 'A parent wants to link to your account',
+                $me['name'] . ' asked to link to your wallet. Approve only if this is your parent or guardian.',
+                'link', STUDENT_URL . '/profile.php'
+            );
+
             logAudit(
-                $db, $parentUserId, gjc_current_role(), 'PARENT_LINK', 'parent_student_links',
+                $db, $parentUserId, gjc_current_role(), 'PARENT_LINK', 'parent_link_requests',
                 null,
                 [
                     'parent_id'       => $parentId,
                     'student_user_id' => $studentUserId,
                     'school_id'       => $schoolId,
-                    'event'           => 'linked',
+                    'event'           => 'requested',
                 ],
                 null,
                 ['target_id' => $studentUserId]
@@ -95,7 +106,7 @@ try {
 
             echo json_encode([
                 'success' => true,
-                'message' => $studentName . ' has been linked to your account.',
+                'message' => 'Request sent. ' . $studentName . ' must approve it from their GenPay profile.',
             ]);
             break;
         }

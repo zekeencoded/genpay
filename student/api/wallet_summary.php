@@ -26,7 +26,7 @@ try {
         $spentStmt = $db->prepare(
             "SELECT COALESCE(SUM(amount), 0) FROM transactions
               WHERE student_wallet_id = ?
-                AND transaction_type IN ('payment', 'voucher_payment')
+                AND transaction_type = 'payment'
                 AND status = 'completed'"
         );
         $spentStmt->execute([$wallet['id']]);

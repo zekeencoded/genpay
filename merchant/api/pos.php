@@ -187,7 +187,8 @@ try {
         }
 
         $stmt = $db->prepare(
-            "SELECT id, status, paid_ref, paid_at, expires_at
+            "SELECT id, status, paid_ref, expires_at,
+                    (SELECT t.created_at FROM transactions t WHERE t.reference_no = merchant_qr_orders.paid_ref) AS paid_at
                FROM merchant_qr_orders
               WHERE id = ?
                 AND merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)
@@ -331,7 +332,7 @@ try {
         $remittedToday = gjc_merchant_remitted_sales_today($db, $merchantWallet['id']);
 
         if ($merchantWallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
-            $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
+            $earningTypes = [CirculationEngine::TXN_PAYMENT];
             $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 
             $totalStmt = $db->prepare(
@@ -376,7 +377,7 @@ try {
         $confirmed = gjc_merchant_confirmed_sale_sql($db);
 
         if ($merchantWallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
-            $earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
+            $earningTypes = [CirculationEngine::TXN_PAYMENT];
             $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 
             $stmt = $db->prepare(
@@ -489,9 +490,10 @@ try {
 
         if ($source === 'pos') {
             $stmt = $db->prepare(
-                "SELECT mqo.*, u.first_name, u.last_name
+                "SELECT mqo.*, t.created_at AS paid_at, u.first_name, u.last_name
                    FROM merchant_qr_orders mqo
-                   LEFT JOIN users u ON u.userID = mqo.paid_by
+                   LEFT JOIN transactions t ON t.reference_no = mqo.paid_ref
+                   LEFT JOIN users u ON u.userID = t.initiated_by
                   WHERE mqo.id = ?
                     AND mqo.merchant_wallet_id IN (SELECT id FROM merchant_wallets WHERE user_id = ?)"
             );
@@ -535,7 +537,8 @@ try {
         if ($source === 'cart_pending') {
             $stmt = $db->prepare(
                 // Resolve either buyer through the wallet owner, including parent orders.
-                "SELECT co.*, u.first_name, u.last_name
+                "SELECT co.*, (SELECT t.created_at FROM transactions t WHERE t.reference_no = co.paid_ref) AS paid_at,
+                        u.first_name, u.last_name
                    FROM cart_orders co
                    LEFT JOIN student_wallets sw ON sw.id = co.student_wallet_id
                    LEFT JOIN parent_wallets pw ON pw.id = co.parent_wallet_id
@@ -825,8 +828,7 @@ try {
             $totalCirc = (float) $db->query(
                 "SELECT (cashier_vault_points
                         + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                        + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
-                        + (SELECT COALESCE(SUM(remaining_balance),0) FROM vouchers WHERE status='active'))
+                        + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
                    FROM system_settings WHERE id = 1"
             )->fetchColumn();
 

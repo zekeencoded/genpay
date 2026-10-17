@@ -96,10 +96,10 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
         "SELECT COALESCE(SUM(amount), 0), COUNT(*)
            FROM transactions
           WHERE merchant_wallet_id = ?
-            AND transaction_type IN (?, ?)
+            AND transaction_type = ?
             AND created_at >= CURDATE()"
     );
-    $q->execute([$wallet['id'], CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT]);
+    $q->execute([$wallet['id'], CirculationEngine::TXN_PAYMENT]);
     [$amount, $orders] = $q->fetch(PDO::FETCH_NUM);
     $salesToday = ['amount' => (float) $amount, 'orders' => (int) $orders];
 }

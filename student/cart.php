@@ -50,7 +50,7 @@ $csrfToken = gjc_csrf_token();
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=12">
     <link rel="stylesheet" href="<?= CSS_URL ?>/cart.css?v=11">
 
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="<?= JS_URL ?>/vendor/jsQR-1.4.0.js"></script>
 </head>
 
 <body class="sd-body sp-page sp-shop-cart">
@@ -346,6 +346,10 @@ $csrfToken = gjc_csrf_token();
     let lastDetectedPayload = "";
     let currentPendingOrder = null; // set once the student has Submitted an Order, cleared on pay/cancel
     let pendingWalletPayload = null;
+    let scannerReady = false;
+    let cameraRequest = 0;
+    let posLookupPending = false;
+    let paymentInFlight = false;
 
     function setCameraStatus(text, tone = "") {
         const map = { active: "is-active", blocked: "is-blocked" };
@@ -513,11 +517,15 @@ $csrfToken = gjc_csrf_token();
     async function loadPendingOrder() {
         try {
             const result = await callCartApi("get_pending_order");
-            if (result.success) renderPendingOrder(result.order);
+            if (!result.success) throw new Error(result.message || "Unable to load your pending order.");
+            renderPendingOrder(result.order);
+            return true;
         } catch (error) {
-            // Non-critical on page load — student can still build a cart.
+            showAlert(error.message || "Unable to load your pending order. Please try again.");
+            return false;
+        } finally {
+            updateUiState();
         }
-        updateUiState();
     }
 
     async function addItemByCode(code) {
@@ -601,14 +609,18 @@ $csrfToken = gjc_csrf_token();
     });
 
     function openPayConfirmModal(walletPayload) {
-        pendingWalletPayload = walletPayload;
+        if (!currentPendingOrder || Number(walletPayload.merchant_user_id) !== Number(currentPendingOrder.merchant_user_id)) {
+            showAlert("This Wallet QR belongs to a different stall than your pending order.", "warning");
+            return;
+        }
+        pendingWalletPayload = { ...walletPayload, order_reference: currentPendingOrder.reference };
         setPaused(true);
         cartSheet.classList.remove("is-open");
 
         const order = currentPendingOrder || { lines: [], total: 0 };
         const lines = order.lines || [];
 
-        payConfirmMerchant.textContent = walletPayload.merchant || order.merchant_label || "--";
+        payConfirmMerchant.textContent = order.merchant_label || "--";
         payConfirmItemCount.textContent = lines.reduce((sum, l) => sum + l.qty, 0) + " item(s)";
         payConfirmTotal.textContent = gcAmt(Number(order.total || 0)) + " GC";
         document.getElementById("payConfirmPhp").textContent = "₱" + Number(order.total || 0).toFixed(2);
@@ -621,6 +633,8 @@ $csrfToken = gjc_csrf_token();
     }
 
     async function lookupPosQr(input) {
+        if (posLookupPending || paymentInFlight || pendingWalletPayload) return;
+        posLookupPending = true;
         setPaused(true);
         try {
             const form = new FormData();
@@ -644,6 +658,8 @@ $csrfToken = gjc_csrf_token();
             pendingWalletPayload = null;
             setPaused(false);
             showAlert(error.message || "Unable to check the POS bill. Please try again.");
+        } finally {
+            posLookupPending = false;
         }
     }
 
@@ -655,7 +671,7 @@ $csrfToken = gjc_csrf_token();
     });
     posCodeModalEl.addEventListener("shown.bs.modal", () => document.getElementById("posCodeInput").focus());
     posCodeModalEl.addEventListener("hidden.bs.modal", () => {
-        if (!pendingWalletPayload) setPaused(false);
+        if (!pendingWalletPayload && !posLookupPending && !paymentInFlight) setPaused(false);
     });
 
     document.getElementById("posCodeForm").addEventListener("submit", async (event) => {
@@ -664,28 +680,31 @@ $csrfToken = gjc_csrf_token();
         const code = document.getElementById("posCodeInput").value.trim();
         if (!code) return;
         button.disabled = true;
+        // Keep the camera paused through the manual-code modal transition.
+        posLookupPending = true;
         try {
             await new Promise(resolve => {
                 posCodeModalEl.addEventListener("hidden.bs.modal", resolve, { once: true });
                 posCodeModal.hide();
             });
+            posLookupPending = false;
             await lookupPosQr(code);
         }
-        finally { button.disabled = false; }
+        finally { posLookupPending = false; button.disabled = false; }
     });
 
     cartPayConfirmModalEl.addEventListener("hidden.bs.modal", () => {
         pendingWalletPayload = null;
-        setPaused(false);
-        lastDetectedPayload = "";
+        if (!paymentInFlight && !posLookupPending) setPaused(false);
         if (activeStream) {
             setCameraStatus("Camera Active", "active");
         }
     });
 
     cartPayConfirmBtn.addEventListener("click", async () => {
-        if (!pendingWalletPayload) return;
+        if (!pendingWalletPayload || paymentInFlight) return;
         const walletPayload = pendingWalletPayload;
+        paymentInFlight = true;
 
         cartPayConfirmBtn.disabled = true;
         cartPayConfirmBtn.textContent = "Processing...";
@@ -715,18 +734,21 @@ $csrfToken = gjc_csrf_token();
             showAlert(`Payment completed. Reference: ${result.reference}`, "success");
             if (walletPayload.type !== "payment") currentPendingOrder = null;
             updateUiState();
-            refreshCart();
+            await refreshCart();
             if (window.gjcRefreshNotifications) window.gjcRefreshNotifications();
         } catch (error) {
             showAlert("Checkout isn't available right now. Please try again later.");
             cartPayConfirmModal.hide();
         } finally {
+            paymentInFlight = false;
+            if (!pendingWalletPayload && !posLookupPending) setPaused(false);
             cartPayConfirmBtn.disabled = false;
             cartPayConfirmBtn.textContent = "Confirm Payment";
         }
     });
 
     async function handleScannedPayload(raw) {
+        if (paymentInFlight || posLookupPending || pendingWalletPayload) return;
         let parsed = null;
         try { parsed = JSON.parse(raw); } catch (ignored) { /* not JSON, treat as plain code */ }
 
@@ -739,6 +761,12 @@ $csrfToken = gjc_csrf_token();
             return;
         }
 
+
+        if (parsed && parsed.type === "merchant_wallet") {
+            // Refresh before checking: the scan may follow a reload or a payment
+            // in another tab, and must confirm the actual server-recorded order.
+            if (!await loadPendingOrder()) return;
+        }
 
         if (currentPendingOrder) {
             if (!parsed || parsed.type !== "merchant_wallet") {
@@ -760,7 +788,7 @@ $csrfToken = gjc_csrf_token();
             return;
         }
         const code = parsed && parsed.sku ? parsed.sku : raw.trim();
-        addItemByCode(code);
+        await addItemByCode(code);
     }
 
     function stopScannerStream() {
@@ -771,6 +799,7 @@ $csrfToken = gjc_csrf_token();
     }
 
     async function startScanner(facingMode = currentFacingMode) {
+        const request = ++cameraRequest;
         stopScannerStream();
         currentFacingMode = facingMode;
         showFrameMsg("Opening camera…");
@@ -778,8 +807,14 @@ $csrfToken = gjc_csrf_token();
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } } });
+            if (request !== cameraRequest) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
             activeStream = stream;
             video.srcObject = stream;
+            await video.play();
+            if (request !== cameraRequest) return;
             hideFrameMsg();
             setCameraStatus("Camera Active", "active");
             if (!scanLoopRunning) {
@@ -787,10 +822,12 @@ $csrfToken = gjc_csrf_token();
                 requestAnimationFrame(scanLoop);
             }
         } catch (error) {
+            if (request !== cameraRequest) return;
+            stopScannerStream();
             setCameraStatus("Camera Blocked", "blocked");
             showFrameMsg(
-                "Camera access denied.",
-                "Please allow camera permissions, then retry.",
+                "Unable to start the camera.",
+                "Allow camera access and retry, or use Enter POS code to pay.",
                 true,
                 true
             );
@@ -803,31 +840,42 @@ $csrfToken = gjc_csrf_token();
             return;
         }
         // Keep the video live, but decode at most eight resized frames per second.
-        if (!document.hidden && !scanningPaused && !scanCooldown
-            && timestamp - lastDecodeAt >= 125
-            && video.readyState === video.HAVE_ENOUGH_DATA
-            && video.videoWidth > 0 && video.videoHeight > 0) {
-            lastDecodeAt = timestamp;
-            const scale = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
-            const width = Math.max(1, Math.round(video.videoWidth * scale));
-            const height = Math.max(1, Math.round(video.videoHeight * scale));
-            if (canvas.width !== width) canvas.width = width;
-            if (canvas.height !== height) canvas.height = height;
-            canvasContext.drawImage(video, 0, 0, width, height);
-            const imageData = canvasContext.getImageData(0, 0, width, height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
-            if (code && code.data && code.data !== lastDetectedPayload) {
-                lastDetectedPayload = code.data;
-                scanCooldown = true;
-                handleScannedPayload(code.data).finally(() => {
-                    setTimeout(() => {
-                        scanCooldown = false;
-                        lastDetectedPayload = "";
-                    }, 1200);
-                });
+        try {
+            if (scannerReady && !document.hidden && !scanningPaused && !scanCooldown && !posLookupPending && !paymentInFlight
+                && timestamp - lastDecodeAt >= 125
+                && video.readyState === video.HAVE_ENOUGH_DATA
+                && video.videoWidth > 0 && video.videoHeight > 0) {
+                lastDecodeAt = timestamp;
+                const scale = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
+                const width = Math.max(1, Math.round(video.videoWidth * scale));
+                const height = Math.max(1, Math.round(video.videoHeight * scale));
+                if (canvas.width !== width) canvas.width = width;
+                if (canvas.height !== height) canvas.height = height;
+                canvasContext.drawImage(video, 0, 0, width, height);
+                const imageData = canvasContext.getImageData(0, 0, width, height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+                if (!code || !code.data) lastDetectedPayload = "";
+                if (code && code.data && code.data !== lastDetectedPayload) {
+                    lastDetectedPayload = code.data;
+                    scanCooldown = true;
+                    handleScannedPayload(code.data).catch(() => {
+                        showAlert("Unable to process this QR. Please try again.");
+                    }).finally(() => {
+                        setTimeout(() => {
+                            scanCooldown = false;
+                        }, 1200);
+                    });
+                }
             }
+        } catch (error) {
+            // A transient video/canvas error must not permanently kill scanning.
+            if (typeof jsQR !== "function") {
+                setCameraStatus("Scanner Unavailable", "blocked");
+                showFrameMsg("QR scanner unavailable.", "Refresh the page, or use Enter POS code to pay.", true, false);
+            }
+        } finally {
+            requestAnimationFrame(scanLoop);
         }
-        requestAnimationFrame(scanLoop);
     }
 
     function switchCamera() {
@@ -840,7 +888,16 @@ $csrfToken = gjc_csrf_token();
 
     retryCameraBtn.addEventListener("click", () => startScanner());
 
-    window.addEventListener("beforeunload", stopScannerStream);
+    window.addEventListener("beforeunload", () => { ++cameraRequest; stopScannerStream(); });
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        if (!activeStream || activeStream.getVideoTracks().every(track => track.readyState === "ended")) {
+            startScanner();
+        } else {
+            video.play().catch(() => startScanner());
+        }
+    });
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraStatus("Camera Unsupported", "blocked");
@@ -849,8 +906,7 @@ $csrfToken = gjc_csrf_token();
         startScanner();
     }
 
-    refreshCart();
-    loadPendingOrder();
+    Promise.all([refreshCart(), loadPendingOrder()]).finally(() => { scannerReady = true; });
     </script>
 
 </body>

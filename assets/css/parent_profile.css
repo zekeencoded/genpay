@@ -1,39 +1,10 @@
 /* Parent Profile page-specific components. Shell components
    (.parent-card, buttons, badges) live in parent_shell.css. */
 
-.profile-hero {
-    background: var(--gp-grad-hero);
-    border-radius: var(--gp-radius);
-    padding: 28px;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    margin-bottom: 22px;
-    flex-wrap: wrap;
-}
-.profile-avatar-wrap { position: relative; flex-shrink: 0; }
-.profile-avatar-lg {
-    width: 84px; height: 84px;
-    border-radius: 50%;
-    background: rgba(255,255,255,.18);
-    border: 3px solid rgba(255,255,255,.35);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 32px; font-weight: 800; color: #fff;
-    overflow: hidden;
-}
-.photo-edit-btn {
-    position: absolute; bottom: 0; right: 0;
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    background: #fff; color: var(--gp-green-700);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; border: 2px solid rgba(255,255,255,.6);
-    font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
-}
-.profile-hero-info h2 { font-size: 20px; font-weight: 800; margin: 0 0 2px; }
-.profile-hero-info p  { font-size: 13px; opacity: .75; margin: 0 0 8px; }
-.hero-badge { background: var(--gp-gold-soft); border: 1px solid var(--gp-gold-line); color: var(--gp-gold); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700; display: inline-block; }
+/* The hero and tabs come from profile_hub.css (ph-id / ph-tabs) and are
+   spaced by .parent-content's own gap. A lone form card is capped so its
+   fields do not stretch across a wide screen. */
+.parent-content .tab-pane .pcard { max-width: 760px; margin-bottom: 0; }
 .pcard { background: #fff; border-radius: var(--ad-radius); border: 1px solid var(--ad-line); padding: 20px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16, 32, 24, 0.04); }
 .pcard h5 { font-size: 15px; font-weight: 800; color: var(--gp-ink); margin: 0 0 4px; }
 .pcard p  { font-size: 13px; color: var(--gp-muted); margin: 0 0 18px; }

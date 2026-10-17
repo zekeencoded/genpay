@@ -68,6 +68,17 @@ $linkedStmt = $db->prepare(
 $linkedStmt->execute([$parentId]);
 $linkedStudents = $linkedStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Link requests the student has not answered yet
+$pendingStmt = $db->prepare(
+    "SELECT u.first_name, u.last_name
+       FROM parent_link_requests r
+       JOIN users u ON u.userID = r.student_user_id
+      WHERE r.parent_id = ?
+      ORDER BY r.requested_at"
+);
+$pendingStmt->execute([$parentId]);
+$pendingLinks = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
+
 // Alerts are fetched client-side via AJAX (parent/api/alerts.php)
 
 // Handle link errors/success from redirect
@@ -207,6 +218,9 @@ $currentPage = 'dashboard';
                             <button type="submit" class="btn-link"><i class="fa-solid fa-link me-1"></i>Link Student</button>
                         </form>
                         <div id="linkMsg" style="margin-top:8px;font-size:13px;"></div>
+                        <?php foreach ($pendingLinks as $pl): ?>
+                        <p style="font-size:13px;color:var(--gp-muted);margin:8px 0 0;"><i class="fa-solid fa-hourglass-half me-1"></i>Waiting for <strong><?= htmlspecialchars(trim($pl['first_name'] . ' ' . $pl['last_name'])) ?></strong> to approve</p>
+                        <?php endforeach; ?>
                     </div>
 
                     <!-- Low Balance Alerts (AJAX) -->
@@ -294,15 +308,15 @@ document.getElementById('linkForm').addEventListener('submit', async function(e)
             title: 'Link this student?',
             body: 'Please check the name and school ID before linking this student to your account.',
             detail: [['Student Name', student.student_name], ['Student School ID', student.school_id]],
-            note: 'You will be able to view their wallet and transactions, send allowances, and manage spending controls.',
-            confirmLabel: 'Link Student'
+            note: 'The student will be notified and must approve the link from their GenPay profile. Once approved you can view their wallet and transactions, send allowances, and manage spending controls.',
+            confirmLabel: 'Send Request'
         });
         if (!confirmed) {
             document.getElementById('linkSchoolId').focus();
             return;
         }
-        btn.textContent = 'Linking...';
-        msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Linking...';
+        btn.textContent = 'Sending...';
+        msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Sending request...';
         const res = await fetch(LINK_API, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},

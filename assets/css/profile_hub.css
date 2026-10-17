@@ -208,6 +208,143 @@
 .ph-pill-dark.is-off { background: rgba(253, 226, 226, .14); color: #f7b4ad; }
 .ph-pill-dark::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+/* ── ID card hero (student, parent and merchant profile.php) */
+/* Two halves: the student's GenPay card drawn as a real card (identity),
+   and the key figures on plain white beside it. The card is the only
+   green on the hero, so it reads as an object rather than a banner. */
+.ph-id {
+    background: var(--gp-card);
+    border: 1px solid var(--gp-line);
+    border-radius: 6px;
+    padding: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px 36px;
+}
+
+/* The card. ID-1 proportions; the lighter disc is a GenCoin rising behind
+   it. No overflow:hidden, so a long name grows the card instead of being
+   clipped. */
+.ph-id-card {
+    flex: 1 1 320px;
+    max-width: 380px;
+    aspect-ratio: 1.586;
+    border-radius: 14px;
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 20px;
+    color: #fff;
+    background:
+        radial-gradient(circle at 100% 0, var(--gp-green-850) 0 150px, transparent 151px),
+        var(--gp-green-950);
+    box-shadow: 0 10px 24px rgba(13, 36, 24, .22);
+}
+.ph-id-brand { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.ph-id-brand img { width: 28px; height: 28px; object-fit: contain; }
+
+.ph-id-holder { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.ph-id-photo {
+    position: relative;
+    flex: none;
+    width: 68px;
+    aspect-ratio: 4 / 5;
+    border-radius: 6px;
+    background: var(--gp-green-700);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+}
+.ph-id-photo > img {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    display: block;
+}
+.ph-id-who { min-width: 0; }
+.ph-id-name {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -.01em;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+.ph-id-no {
+    margin: 6px 0 0;
+    font-family: var(--gp-mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--gp-gold-light);
+}
+/* A role (parents have no ID number) is set as plain text, not a code. */
+.ph-id-no.is-text { font-family: inherit; letter-spacing: 0; }
+.ph-id-since { margin: 2px 0 0; font-size: 12px; color: rgba(255, 255, 255, .74); }
+.ph-id-card label:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* The wallet side. */
+.ph-id-wallet { flex: 1 1 280px; min-width: 0; }
+.ph-id-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ph-id-k { display: block; font-size: 13px; color: var(--gp-muted); }
+.ph-id-amount {
+    display: block;
+    margin: 2px 0;
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+    color: var(--gp-ink);
+    white-space: nowrap;
+}
+.ph-id-amount small { font-size: 18px; font-weight: 600; color: var(--gp-muted); }
+/* Words (a stall name) wrap and sit smaller; amounts stay on one line. */
+.ph-id-amount.is-text { font-size: 28px; line-height: 1.2; letter-spacing: -.01em; white-space: normal; overflow-wrap: anywhere; }
+.ph-id-edit {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--gp-line);
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    text-decoration: none;
+}
+.ph-id-edit:hover { background: var(--gp-cream); color: var(--gp-ink); }
+.ph-id-edit:focus-visible { outline: 2px solid var(--gp-focus-border); outline-offset: 2px; }
+
+.ph-id-facts { margin: 18px 0 0; }
+.ph-id-facts > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--gp-line);
+}
+.ph-id-facts > div:last-child { padding-bottom: 0; }
+.ph-id-facts dt { flex: none; font-size: 13px; font-weight: 500; color: var(--gp-muted); }
+.ph-id-facts dd { margin: 0; font-size: 13px; font-weight: 600; color: var(--gp-ink); text-align: right; overflow-wrap: anywhere; }
+.ph-id-facts dd span { font-weight: 500; color: var(--gp-muted); }
+.ph-id-facts dd.is-paused { color: var(--gp-warning); }
+
+@media (max-width: 767.98px) {
+    .ph-id { padding: 16px; }
+    .ph-id-card { max-width: none; }
+    .ph-id-amount { font-size: 36px; }
+    .ph-id-amount.is-text { font-size: 24px; }
+}
+
 /* ── Cards ─────────────────────────────────────────────────── */
 .ph-card {
     background: var(--gp-card);
@@ -448,6 +585,55 @@ button.ph-pill { cursor: pointer; }
 }
 .ph-chip:hover { background: var(--gp-line); color: var(--gp-ink); }
 .ph-chip > i { color: var(--gp-green-700); font-size: 11px; }
+
+/* ── Section tabs (student and parent profile.php) ─────────── */
+/* Bootstrap's tab plugin drives these; it toggles .active. The baseline is
+   an inset shadow, not a border, so the 2px marker sits on it without a
+   negative margin (which would give the scrolling row a vertical scrollbar). */
+.ph-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: inset 0 -1px 0 var(--gp-line);
+}
+.ph-tabs::-webkit-scrollbar { display: none; }
+.ph-tab {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gp-muted);
+    white-space: nowrap;
+}
+.ph-tab:hover { color: var(--gp-ink); }
+.ph-tab.active { color: var(--gp-ink); border-bottom-color: var(--gp-green-700); }
+.ph-tab:focus-visible { outline: 2px solid var(--gp-focus-border); outline-offset: -2px; }
+.ph-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--gp-danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+.ph .tab-pane:focus-visible { outline: 2px solid var(--gp-focus-border); outline-offset: 2px; }
+@media (max-width: 767.98px) {
+    .ph-tab { flex: 1 0 auto; padding: 0 8px; }
+}
 
 /* ── Body grid ─────────────────────────────────────────────── */
 .ph-grid {

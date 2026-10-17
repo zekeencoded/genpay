@@ -77,7 +77,7 @@ if ($txnId !== null && ($walletIds || $parentWalletId > 0) && gjc_table_exists($
 
         $counterLabel = 'Counterparty';
         $counterparty = '';
-        if (in_array($type, ['payment', 'voucher_payment'], true) && (int) ($row['merchant_wallet_id'] ?? 0) > 0) {
+        if ($type === 'payment' && (int) ($row['merchant_wallet_id'] ?? 0) > 0) {
             $counterLabel = 'Merchant';
             $counterparty = gjc_merchant_wallet_owner_label($db, (int) $row['merchant_wallet_id']);
         } elseif ($type === 'allowance' && (int) ($row['initiated_by'] ?? 0) > 0) {

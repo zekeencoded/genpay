@@ -170,6 +170,7 @@ $currentPage = '';
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
 <script>
 function toggleParentSidebar() {
     document.getElementById('parentSidebar').classList.toggle('collapsed');
@@ -233,7 +234,15 @@ document.getElementById('limitForm').addEventListener('submit', async function(e
 });
 
 async function unlinkStudent() {
-    if (!confirm('Remove your link to <?= htmlspecialchars(addslashes($studentName)) ?>? Your controls remain on the wallet.')) return;
+    const confirmed = await gpConfirm({
+        title: 'Unlink this student?',
+        body: 'You will no longer be able to view this wallet, send allowances, or apply controls.',
+        detail: [['Student', <?= json_encode($studentName, JSON_HEX_TAG | JSON_HEX_AMP) ?>]],
+        note: 'Existing controls (freeze, daily limit) stay on the wallet until a Finance administrator changes them. To link again, the student will have to approve a new request.',
+        danger: true,
+        confirmLabel: 'Unlink'
+    });
+    if (!confirmed) return;
     const data = await apiPost('unlink_student', {});
     if (data.success) {
         window.location.href = '<?= PARENT_URL ?>/dashboard.php';

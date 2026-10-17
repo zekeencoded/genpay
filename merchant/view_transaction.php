@@ -69,7 +69,6 @@ if ($txnId !== null && $walletId > 0 && gjc_table_exists($db, 'transactions')) {
         $outgoing = in_array($type, ['refund', 'merchant_settle', 'encashment'], true);
         $iconMap = [
             'payment' => 'fa-cart-shopping',
-            'voucher_payment' => 'fa-credit-card',
             'refund' => 'fa-rotate-left',
             'merchant_settle' => 'fa-money-bill-transfer',
             'encashment' => 'fa-money-bill-transfer',

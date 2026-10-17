@@ -15,16 +15,6 @@ class CirculationEngine
     const TXN_ALLOWANCE = "allowance";
     const TXN_FEE_WAIVER_CLAIM = "fee_waiver_claim";
 
-    // Read-only history. The visitor voucher feature was removed, so nothing
-    // writes these any more, but rows carrying them stay in the ledger forever
-    // — merchant/dashboard.php and merchant/api/pos.php still count
-    // TXN_VOUCHER_PAYMENT toward historical earnings, and the labels in
-    // connection/app.php still render them in transaction views. Do not reuse
-    // these strings for anything else.
-    const TXN_VOUCHER_PAYMENT = "voucher_payment";
-    const TXN_VOUCHER_CREATE = "voucher_create";
-    const TXN_VOUCHER_EXPIRE = "voucher_expire";
-
     // ── Service fees ──────────────────────────────────────────────────────
     // Fees are ADDED ON TOP of the requested amount, never deducted from it.
     // The amount passed to the fee-charging methods is the amount the RECIPIENT
@@ -439,8 +429,8 @@ class CirculationEngine
             );
             gjc_store_transaction_items($this->db, $txnId, $lines);
             $paid = $this->db->prepare("UPDATE merchant_qr_orders SET status = 'paid',
-                paid_by = ?, paid_ref = ?, paid_at = NOW() WHERE id = ? AND status = 'pending'");
-            $paid->execute([$payerUserId, $reference, (int) $order['id']]);
+                paid_ref = ? WHERE id = ? AND status = 'pending'");
+            $paid->execute([$reference, (int) $order['id']]);
             if ($paid->rowCount() !== 1) {
                 throw new RuntimeException('This POS bill was already settled.');
             }
@@ -1093,11 +1083,6 @@ class CirculationEngine
 
     private function validateCirculation(float $expectedCap): void
     {
-        // The active-voucher term below is deliberately retained after the
-        // visitor feature was removed. Every voucher was expired back into the
-        // vault first, so it sums to zero today — but keeping it means that if
-        // an 'active' voucher row ever reappears, the money still counts toward
-        // circulation instead of silently vanishing from the closed loop.
         $row = $this->db
             ->query(
                 "SELECT
@@ -1105,8 +1090,6 @@ class CirculationEngine
                 + COALESCE((SELECT SUM(balance) FROM student_wallets), 0)
                 + COALESCE((SELECT SUM(balance) FROM merchant_wallets), 0)
                 + COALESCE((SELECT SUM(balance) FROM parent_wallets), 0)
-                + COALESCE((SELECT SUM(remaining_balance)
-                            FROM vouchers WHERE status = 'active'), 0)
              AS total_in_circulation",
             )
             ->fetchColumn();
@@ -1151,13 +1134,11 @@ class CirculationEngine
                 COALESCE((SELECT SUM(balance) FROM student_wallets), 0) AS student_wallets_total,
                 COALESCE((SELECT SUM(balance) FROM merchant_wallets), 0) AS merchant_wallets_total,
                 COALESCE((SELECT SUM(balance) FROM parent_wallets), 0) AS parent_wallets_total,
-                COALESCE((SELECT SUM(remaining_balance) FROM vouchers WHERE status = 'active'), 0) AS active_vouchers_total,
                 (
                     ss.cashier_vault_points
                     + COALESCE((SELECT SUM(balance) FROM student_wallets), 0)
                     + COALESCE((SELECT SUM(balance) FROM merchant_wallets), 0)
                     + COALESCE((SELECT SUM(balance) FROM parent_wallets), 0)
-                    + COALESCE((SELECT SUM(remaining_balance) FROM vouchers WHERE status = 'active'), 0)
                 ) AS total_in_circulation,
                 (
                     ss.total_circulation_cap
@@ -1165,7 +1146,6 @@ class CirculationEngine
                     - COALESCE((SELECT SUM(balance) FROM student_wallets), 0)
                     - COALESCE((SELECT SUM(balance) FROM merchant_wallets), 0)
                     - COALESCE((SELECT SUM(balance) FROM parent_wallets), 0)
-                    - COALESCE((SELECT SUM(remaining_balance) FROM vouchers WHERE status = 'active'), 0)
                 ) AS circulation_drift,
                 ss.updated_at AS as_of
              FROM system_settings ss
@@ -1184,7 +1164,6 @@ class CirculationEngine
         float $vaultAfter,
         int $studentWalletId = null,
         int $merchantWalletId = null,
-        int $voucherId = null,
         string $notes = null,
         // Fee-related optional fields (populated only for cashInWithFee calls)
         string $topUpSource = null,
@@ -1206,9 +1185,7 @@ class CirculationEngine
                 (SELECT cashier_vault_points FROM system_settings WHERE id = 1)
                 + COALESCE((SELECT SUM(balance) FROM student_wallets), 0)
                 + COALESCE((SELECT SUM(balance) FROM merchant_wallets), 0)
-                + COALESCE((SELECT SUM(balance) FROM parent_wallets), 0)
-                + COALESCE((SELECT SUM(remaining_balance)
-                            FROM vouchers WHERE status = 'active'), 0)",
+                + COALESCE((SELECT SUM(balance) FROM parent_wallets), 0)",
             )
             ->fetchColumn();
 
@@ -1222,9 +1199,9 @@ class CirculationEngine
             ->prepare(
                 "INSERT INTO transactions
                 (reference_no, transaction_type, initiated_by, student_wallet_id,
-                 merchant_wallet_id, voucher_id, amount, vault_before, vault_after,
+                 merchant_wallet_id, amount, vault_before, vault_after,
                  total_in_circulation, status, notes, school_year_id, parent_wallet_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)",
             )
             ->execute([
                 $ref,
@@ -1232,7 +1209,6 @@ class CirculationEngine
                 $initiatedBy,
                 $studentWalletId,
                 $merchantWalletId,
-                $voucherId,
                 $amount,
                 $vaultBefore,
                 $vaultAfter,
@@ -1281,7 +1257,6 @@ class CirculationEngine
             "amount" => $amount,
             "student_wallet_id" => $studentWalletId,
             "merchant_wallet_id" => $merchantWalletId,
-            "voucher_id" => $voucherId,
             "vault_before" => $vaultBefore,
             "vault_after" => $vaultAfter,
             "total_in_circulation" => $total,

@@ -170,8 +170,7 @@ try {
         $totalCirc = (float) $db->query(
             "SELECT (cashier_vault_points
                     + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
-                    + (SELECT COALESCE(SUM(remaining_balance),0) FROM vouchers WHERE status='active'))
+                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
                FROM system_settings WHERE id = 1"
         )->fetchColumn();
 
@@ -200,14 +199,19 @@ try {
         gjc_store_transaction_items($db, (int) $db->lastInsertId(), $lines);
 
         $db->prepare(
-            "UPDATE cart_orders SET status = 'paid', paid_at = NOW(), paid_ref = ? WHERE id = ?"
+            "UPDATE cart_orders SET status = 'paid', paid_ref = ? WHERE id = ?"
         )->execute([$refNo, (int) $order['id']]);
 
         // Billed to tuition, never taken from the wallet.
         gjc_record_maintenance_fee($db, $studentUserId, $refNo, 'payment', $total);
 
         $db->commit();
-        gjc_check_parent_balance_alert($db, (int) $studentWallet['id']);
+        // The payment is final. Optional alerts must not report a paid order as failed.
+        try {
+            gjc_check_parent_balance_alert($db, (int) $studentWallet['id']);
+        } catch (\Throwable $alertError) {
+            error_log('[student checkout balance alert] ' . $alertError->getMessage());
+        }
 
         logAudit(
             $db,
@@ -229,25 +233,29 @@ try {
             ['target_id' => $refNo]
         );
 
-        gjc_notify(
-            $db,
-            $studentUserId,
-            'payment',
-            'Payment Successful',
-            sprintf('You paid %s at %s.', gjc_money_plain($total), gjc_user_label($db, (int) $order['merchant_user_id'])),
-            'cart-shopping',
-            STUDENT_URL . '/history.php'
-        );
+        try {
+            gjc_notify(
+                $db,
+                $studentUserId,
+                'payment',
+                'Payment Successful',
+                sprintf('You paid %s at %s.', gjc_money_plain($total), gjc_user_label($db, (int) $order['merchant_user_id'])),
+                'cart-shopping',
+                STUDENT_URL . '/history.php'
+            );
 
-        gjc_notify(
-            $db,
-            (int) $order['merchant_user_id'],
-            'sale',
-            'Payment Received',
-            sprintf('%s paid %s at your stall.', gjc_user_label($db, $studentUserId), gjc_money_plain($total)),
-            'cart-shopping',
-            MERCHANT_URL . '/history.php'
-        );
+            gjc_notify(
+                $db,
+                (int) $order['merchant_user_id'],
+                'sale',
+                'Payment Received',
+                sprintf('%s paid %s at your stall.', gjc_user_label($db, $studentUserId), gjc_money_plain($total)),
+                'cart-shopping',
+                MERCHANT_URL . '/history.php'
+            );
+        } catch (\Throwable $notificationError) {
+            error_log('[student checkout notification] ' . $notificationError->getMessage());
+        }
 
         echo json_encode([
             'success' => true,

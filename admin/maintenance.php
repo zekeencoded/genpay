@@ -177,8 +177,7 @@ function maintenance_assert_exact_template_header(array $header, array $canonica
 
     if ($cleaned !== $canonicalOrder) {
         throw new RuntimeException(
-            'This file doesn\'t match the required template. Use "Download Template" to get the correct CSV '
-            . '(columns must be exactly: ' . implode(', ', $canonicalOrder) . ', in that order) and re-enter your data into it.'
+            'This file doesn\'t match the required template. Click "Download Template" and re-enter your data without changing its structure.'
         );
     }
 

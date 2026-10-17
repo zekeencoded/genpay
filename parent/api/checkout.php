@@ -147,8 +147,7 @@ try {
             "SELECT (cashier_vault_points
                     + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
                     + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
-                    + (SELECT COALESCE(SUM(balance),0) FROM parent_wallets)
-                    + (SELECT COALESCE(SUM(remaining_balance),0) FROM vouchers WHERE status='active'))
+                    + (SELECT COALESCE(SUM(balance),0) FROM parent_wallets))
                FROM system_settings WHERE id = 1"
         )->fetchColumn();
 
@@ -177,7 +176,7 @@ try {
         gjc_store_transaction_items($db, (int) $db->lastInsertId(), $lines);
 
         $db->prepare(
-            "UPDATE cart_orders SET status = 'paid', paid_at = NOW(), paid_ref = ? WHERE id = ?"
+            "UPDATE cart_orders SET status = 'paid', paid_ref = ? WHERE id = ?"
         )->execute([$refNo, (int) $order['id']]);
 
         $db->commit();

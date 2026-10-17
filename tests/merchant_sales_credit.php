@@ -5,11 +5,10 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 class CirculationEngine {
     const TXN_PAYMENT = 'payment';
-    const TXN_VOUCHER_PAYMENT = 'voucher_payment';
 }
 function gjc_table_exists(PDO $db, string $table): bool { return true; }
 function gjc_table_columns(PDO $db, string $table): array { return ['created_by']; }
-$source = file_get_contents(__DIR__ . '/../connection/app.php');
+$source = file_get_contents(__DIR__ . '/../connection/app/merchant.php');
 $start = strpos($source, 'function gjc_merchant_unremitted_sales(');
 $end = strpos($source, 'function gjc_merchant_owner_id(', $start);
 eval(substr($source, $start, $end - $start));
@@ -25,7 +24,7 @@ $stmt = $db->prepare("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?)");
 $day = date('Y-m-d');
 foreach ([['ADMIN',7,10,100,'payment','completed'], ['STAFF',7,11,40,'payment','completed'],
     ['ADMIN-QR',7,12,50,'payment','completed'], ['STAFF-QR',7,12,30,'payment','completed'],
-    ['DIRECT',7,12,20,'payment','completed'], ['VOUCHER',7,10,15,'voucher_payment','completed'],
+    ['DIRECT',7,12,20,'payment','completed'],
     ['FAILED',7,10,999,'payment','failed'], ['OTHER',8,21,999,'payment','completed']] as $row) {
     $stmt->execute([...$row, "$day 09:00:00"]);
 }
@@ -39,13 +38,13 @@ function checkSales(PDO $db, float $credited, float $pending, int $count): void 
     }
     $predicate = gjc_merchant_confirmed_sale_sql($db);
     $total = $db->query("SELECT SUM(t.amount) FROM transactions t WHERE t.merchant_wallet_id = 7
-        AND t.transaction_type IN ('payment','voucher_payment') AND t.status = 'completed'
+        AND t.transaction_type = 'payment' AND t.status = 'completed'
         AND DATE(t.created_at) = CURDATE() AND {$predicate}")->fetchColumn();
     if ((float) $total !== $credited) throw new RuntimeException('Sales list and summary differ');
 }
-checkSales($db, 185.0, 70.0, 4);
+checkSales($db, 170.0, 70.0, 3);
 $db->exec("INSERT INTO sales_remittances VALUES (7, '$day 00:00:00', '$day 10:00:00')");
-checkSales($db, 255.0, 0.0, 6);
+checkSales($db, 240.0, 0.0, 5);
 $db->exec("INSERT INTO sales_remittances VALUES (7, '$day 00:00:00', '$day 11:00:00')");
-checkSales($db, 255.0, 0.0, 6);
+checkSales($db, 240.0, 0.0, 5);
 echo "PASS: admin and direct sales credit immediately; staff sales require remittance; overlapping remittances do not double count.\n";

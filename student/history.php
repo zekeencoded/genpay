@@ -20,7 +20,7 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     // so the totals stay correct even past 200 lifetime transactions.
     $spentStmt = $db->prepare(
         "SELECT COALESCE(SUM(amount), 0) FROM transactions
-          WHERE student_wallet_id = ? AND transaction_type IN ('payment', 'voucher_payment')"
+          WHERE student_wallet_id = ? AND transaction_type = 'payment'"
     );
     $spentStmt->execute([$wallet['id']]);
     $totalSpent = (float) $spentStmt->fetchColumn();

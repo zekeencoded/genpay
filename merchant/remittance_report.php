@@ -45,7 +45,7 @@ if ($staffName === '') {
     $staffName = 'Merchant staff';
 }
 
-$earningTypes = [CirculationEngine::TXN_PAYMENT, CirculationEngine::TXN_VOUCHER_PAYMENT];
+$earningTypes = [CirculationEngine::TXN_PAYMENT];
 $placeholders = implode(', ', array_fill(0, count($earningTypes), '?'));
 $staffSale = gjc_merchant_staff_sale_sql($db);
 $rowsStmt = $db->prepare(
