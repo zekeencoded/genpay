@@ -28,8 +28,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $error = 'Security check failed. Please reload the page and try again.';
     } elseif (!$validCurrentPassword) {
         $error = 'Current password is incorrect.';
-    } elseif (strlen($newPassword) < 6) {
-        $error = 'New password must be at least 6 characters.';
+    } elseif (strlen($newPassword) < 8) {
+        $error = 'New password must be at least 8 characters.';
     } elseif ($newPassword !== $confirmPassword) {
         $error = 'New passwords do not match.';
     } else {
@@ -125,12 +125,12 @@ $csrfToken = gjc_csrf_token();
                         <div class="pf-form-grid">
                             <div class="pf-field">
                                 <label>New Password</label>
-                                <input type="password" name="new_password" minlength="6" autocomplete="new-password" required>
+                                <input type="password" name="new_password" minlength="8" autocomplete="new-password" required>
                             </div>
 
                             <div class="pf-field">
                                 <label>Confirm New Password</label>
-                                <input type="password" name="confirm_password" minlength="6" autocomplete="new-password" required>
+                                <input type="password" name="confirm_password" minlength="8" autocomplete="new-password" required>
                             </div>
                         </div>
 

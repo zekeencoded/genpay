@@ -18,9 +18,14 @@ if (!isset($_SESSION['userID'], $_SESSION['roleID'])) {
 }
 
 $userId = (int)$_SESSION['userID'];
-$role = gjc_current_role();
-$adminEconomyRoles = ['finance']; // gjc_current_role() only ever returns finance for staff
+// Only admin/cash_management.php calls this; merchants and parents have their own endpoints.
+if (gjc_current_role() !== 'finance') {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Access denied.']);
+    exit;
+}
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_parent_wallet_schema($db);
 
 
@@ -39,7 +44,6 @@ try {
 
         
         case 'topup':
-            if (!in_array($role, $adminEconomyRoles, true)) throw new RuntimeException('ACCESS_DENIED');
 
             $walletId = (int)($body['student_wallet_id'] ?? 0);
             $amount   = (float)($body['amount'] ?? 0);
@@ -63,18 +67,7 @@ try {
             break;
 
         
-        case 'pay':
-            $studentWallet  = (int)($body['student_wallet_id']  ?? 0);
-            $merchantWallet = (int)($body['merchant_wallet_id'] ?? 0);
-            $amount         = (float)($body['amount'] ?? 0);
-
-            $result = $engine->studentPay($studentWallet, $merchantWallet, $amount, $userId);
-            echo json_encode(array_merge(['success' => true], $result));
-            break;
-
-        
         case 'settle':
-            if (!in_array($role, $adminEconomyRoles, true)) throw new RuntimeException('ACCESS_DENIED');
 
             $merchantWallet = (int)($body['merchant_wallet_id'] ?? 0);
             $amount         = (float)($body['amount'] ?? 0);
@@ -128,7 +121,6 @@ try {
         // linked student's school ID instead, same model as
         // merchant/api/topup.php's lookup_parent_by_student action.
         case 'lookup_parent_by_student':
-            if (!in_array($role, $adminEconomyRoles, true)) throw new RuntimeException('ACCESS_DENIED');
 
             $schoolId = trim($body['school_id'] ?? '');
             if (!$schoolId) throw new InvalidArgumentException('Student ID is required.');
@@ -156,7 +148,6 @@ try {
             break;
 
         case 'topup_parent':
-            if (!in_array($role, $adminEconomyRoles, true)) throw new RuntimeException('ACCESS_DENIED');
 
             $parentId = (int)($body['parent_id'] ?? 0);
             $amount   = (float)($body['amount'] ?? 0);

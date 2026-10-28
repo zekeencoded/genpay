@@ -215,4 +215,75 @@
         }
     });
 
+    /* ── Record payment dialog (stays on the rent roll) ─────────────────── */
+    const payData = window.leaseQuickPay || {};
+    const payModalEl = document.getElementById('payModal');
+    const payModal = payModalEl ? new bootstrap.Modal(payModalEl) : null;
+    const payForm = document.getElementById('payForm');
+    const payPeriod = document.getElementById('payPeriod');
+    const payAmount = document.getElementById('payAmount');
+    const payHint = document.getElementById('payHint');
+    const paySubmit = document.getElementById('paySubmitBtn');
+    let currentPay = null;
+
+    // Fill the amount with what that month still owes, and say so.
+    function syncPayAmount() {
+        if (!currentPay || !payPeriod.value) return;
+        const inTerm = Object.prototype.hasOwnProperty.call(currentPay.owed, payPeriod.value);
+        const owed = inTerm ? Number(currentPay.owed[payPeriod.value]) : 0;
+        payAmount.value = owed > 0 ? owed.toFixed(2) : '';
+
+        if (!inTerm) {
+            payHint.textContent = 'That month is outside this contract.';
+        } else if (owed > 0) {
+            payHint.textContent = `${money(owed)} still unpaid for this month.`;
+        } else {
+            payHint.textContent = 'This month is already paid. Anything you add counts as extra.';
+        }
+    }
+
+    document.querySelectorAll('.js-quick-pay').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const info = payData[btn.dataset.leaseId];
+            if (!info || !payModal) return;
+
+            currentPay = info;
+            payForm.reset();
+            document.getElementById('payLeaseId').value = btn.dataset.leaseId;
+            document.getElementById('payTenant').textContent = `${info.tenant} · Stall ${info.stall}`;
+            payPeriod.min = info.start;
+            payPeriod.max = info.end;
+            payPeriod.value = info.pick;
+            document.getElementById('payMsg').innerHTML = '';
+            paySubmit.disabled = false;
+            paySubmit.textContent = 'Record payment';
+            syncPayAmount();
+            payModal.show();
+        });
+    });
+
+    payPeriod?.addEventListener('change', syncPayAmount);
+
+    payForm?.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const msg = document.getElementById('payMsg');
+        paySubmit.disabled = true;
+        paySubmit.textContent = 'Recording…';
+
+        try {
+            const data = await postForm(new FormData(this));
+            if (data.success) {
+                msg.innerHTML = `<div class="alert alert-success">${escapeHtml(data.message)} Refreshing…</div>`;
+                setTimeout(() => location.reload(), 1500);
+                return;
+            }
+            msg.innerHTML = `<div class="alert alert-danger">${escapeHtml(data.message || 'Could not record that payment.')}</div>`;
+        } catch (err) {
+            msg.innerHTML = '<div class="alert alert-danger">Network error. The payment was not recorded.</div>';
+        }
+
+        paySubmit.disabled = false;
+        paySubmit.textContent = 'Record payment';
+    });
+
 })();

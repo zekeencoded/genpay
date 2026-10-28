@@ -58,9 +58,7 @@ $remittedToday = array_sum(array_map(fn($a) => (float) $a["today_amount"], $acti
 $remittedTotal = array_sum(array_map(fn($a) => (float) $a["total_amount"], $activity));
 
 $csrfToken = gjc_csrf_token();
-// Real escaping: gjc_e() only casts to string, and staff can now edit their
-// own names from merchant/profile.php.
-$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$e = gjc_e(...);
 $currentPage = "staff";
 ?>
 <!DOCTYPE html>
@@ -303,7 +301,7 @@ $currentPage = "staff";
                             <label class="form-label fw-semibold">Temporary Password *</label>
                             <div class="staff-password-row">
                                 <div class="staff-password-wrap">
-                                    <input type="password" class="form-control" name="password" id="staffPasswordInput" required minlength="6">
+                                    <input type="password" class="form-control" name="password" id="staffPasswordInput" required minlength="8">
                                     <button type="button" class="staff-pw-toggle" id="staffPwToggle" aria-label="Show password" title="Show password"><i class="fa-solid fa-eye"></i></button>
                                 </div>
                                 <button type="button" class="btn btn-outline-secondary staff-pw-generate" id="staffPwGenerate"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
@@ -398,7 +396,7 @@ $currentPage = "staff";
                     <div class="staff-section-title"><i class="fa-solid fa-key"></i>Reset password</div>
                     <div class="staff-password-row">
                         <div class="staff-password-wrap">
-                            <input type="text" class="form-control" name="password" id="resetPwInput" minlength="6" placeholder="New temporary password" autocomplete="new-password" required>
+                            <input type="text" class="form-control" name="password" id="resetPwInput" minlength="8" placeholder="New temporary password" autocomplete="new-password" required>
                         </div>
                         <button type="button" class="btn btn-outline-secondary staff-pw-generate" id="resetPwGenerate"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
                     </div>

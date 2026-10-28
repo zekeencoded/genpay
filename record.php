@@ -11,6 +11,9 @@ require_once __DIR__ . '/connection/audit_logger.php';
 
 class Record
 {
+    /** Failed sign-ins from one network address per 15 minutes before it is paused. */
+    private const IP_FAILURE_LIMIT = 100;
+
     private $con;
 
     public function __construct($db){
@@ -23,14 +26,41 @@ class Record
             \gjc_ensure_first_login_schema($this->con);
             
 
-            $email = $_POST['email'] ?? '';
+            $email = trim((string) ($_POST['email'] ?? '')); // email or student ID
             $password = $_POST['password'] ?? '';
 
-            $stmt = $this->con->prepare("SELECT * FROM users WHERE email = ?");
-            $stmt->execute([$email]);
+            // Checked for every identifier, real or not, so the lockout reveals nothing
+            // about which accounts exist. Five failures in the last 15 minutes lock it.
+            // Throttled attempts add no rows, so the lock lifts once the oldest of those
+            // failures is 15 minutes old: 15 minutes after the FIRST of the five.
+            $throttleKey = hash('sha256', strtolower($email));
+            // Also counted per network address, so one script cannot try a password on
+            // every account. Set high because a campus can share one address.
+            // REMOTE_ADDR only: X-Forwarded-For is client-controlled (see gjc_audit_ip()).
+            $ipKey = \gjc_throttle_key('ip', (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+            if (\gjc_login_throttled($this->con, $throttleKey)
+                || \gjc_login_throttled($this->con, $ipKey, self::IP_FAILURE_LIMIT)) {
+                return 'Too many failed sign-in attempts. Try again in 15 minutes.';
+            }
+
+            $stmt = $this->con->prepare(
+                "SELECT * FROM users
+                  WHERE email = ?
+                     OR userID = (SELECT userID FROM student_info WHERE studentID = ? LIMIT 1)
+                  ORDER BY email = ? DESC
+                  LIMIT 1"
+            );
+            $stmt->execute([$email, $email, $email]);
 
             if ($stmt->rowCount()) {
                 $user = $stmt->fetch();
+
+                // Email and student ID both reach this account, so failures are also
+                // counted per account: five in total, not five for each way of typing it.
+                $accountKey = \gjc_throttle_key('account', (string) (int) ($user['id'] ?? $user['userID'] ?? 0));
+                if (\gjc_login_throttled($this->con, $accountKey)) {
+                    return 'Too many failed sign-in attempts. Try again in 15 minutes.';
+                }
 
                 $storedPassword = (string) ($user['password'] ?? '');
                 // bcrypt only. This used to fall back to hash_equals($storedPassword,
@@ -41,6 +71,8 @@ class Record
                 $validPassword = password_verify($password, $storedPassword);
 
                 if ($validPassword) {
+                    \gjc_clear_login_failures($this->con, $throttleKey);
+                    \gjc_clear_login_failures($this->con, $accountKey);
                     // The three blocks below turn away an account whose password was
                     // CORRECT. That is a different event from a bad password, and none
                     // of them used to leave any trace — probing a deactivated or banned
@@ -203,7 +235,12 @@ class Record
                             'reason'    => 'Incorrect password.',
                         ]
                     );
-                    return "Invalid password";
+                    \gjc_record_login_failure($this->con, $throttleKey);
+                    \gjc_record_login_failure($this->con, $accountKey);
+                    \gjc_record_login_failure($this->con, $ipKey);
+                    // One message for a wrong password and an unknown account, so the form
+                    // does not reveal which emails or student IDs are registered.
+                    return "Invalid email/ID or password.";
                 }
             } else {
                 // No matching account. This is the shape a password spray against
@@ -231,7 +268,9 @@ class Record
                         'reason'  => 'Login attempted for an address with no account.',
                     ]
                 );
-                return "User not found";
+                \gjc_record_login_failure($this->con, $throttleKey);
+                \gjc_record_login_failure($this->con, $ipKey);
+                return "Invalid email/ID or password.";
             }
         }
     }

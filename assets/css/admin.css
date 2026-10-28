@@ -1105,7 +1105,7 @@ a.mini-metric-card:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .ce-bottom-grid > * { min-width: 0; }
 

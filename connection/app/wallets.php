@@ -155,8 +155,35 @@ function gjc_merchant_wallet_user_stats(PDO $db): array
     ];
 }
 
+function gjc_parent_wallet_user_stats(PDO $db): array
+{
+    $days = 30;
+    $row  = $db->prepare(
+        "SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN last_txn >= DATE_SUB(NOW(), INTERVAL ? DAY) THEN 1 ELSE 0 END) AS active_count
+         FROM (
+             SELECT p.id, MAX(t.created_at) AS last_txn
+             FROM parents p
+             LEFT JOIN parent_wallets pw ON pw.parent_id = p.id
+             LEFT JOIN transactions t ON t.parent_wallet_id = pw.id
+             GROUP BY p.id
+         ) sub"
+    );
+    $row->execute([$days]);
+    $data   = $row->fetch(PDO::FETCH_ASSOC);
+    $total  = (int) ($data['total']        ?? 0);
+    $active = (int) ($data['active_count'] ?? 0);
+    return [
+        'total'    => $total,
+        'active'   => $active,
+        'inactive' => $total - $active,
+        'days'     => $days,
+    ];
+}
+
 /**
- * Lists every wallet user (students + merchants) with name, type, current
+ * Lists every wallet user (students + merchants + parents) with name, type, current
  * balance, and last-activity date. Powers the Total Wallet Users drill-in
  * table on the economy page. Mirrors the 30-day "active" rule used by
  * gjc_wallet_user_stats() / gjc_merchant_wallet_user_stats().
@@ -165,7 +192,8 @@ function gjc_wallet_users_list(PDO $db): array
 {
     // Definitions mirror the economy pool cards: a "student wallet user" is any
     // student-role user (wallet row optional), a "merchant wallet user" is any
-    // merchant_wallets row. This keeps the combined card count == the two pool
+    // merchant_wallets row, a "parent wallet user" is any parents row (wallet
+    // row optional). This keeps the combined card count == the three pool
     // cards == this table's row count.
     $sql = "
         SELECT
@@ -186,6 +214,16 @@ function gjc_wallet_users_list(PDO $db): array
               WHERE t.merchant_wallet_id = mw.id) AS last_txn
         FROM merchant_wallets mw
         LEFT JOIN users u ON u.userID = mw.user_id
+        UNION ALL
+        SELECT
+            COALESCE(CONCAT(u.first_name, ' ', u.last_name), '(unknown)') AS name,
+            'Parent' AS type,
+            COALESCE(pw.balance, 0) AS balance,
+            (SELECT MAX(t.created_at) FROM transactions t
+              WHERE t.parent_wallet_id = pw.id) AS last_txn
+        FROM parents p
+        LEFT JOIN parent_wallets pw ON pw.parent_id = p.id
+        LEFT JOIN users u ON u.userID = p.user_id
         ORDER BY name ASC
     ";
     $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
@@ -198,30 +236,7 @@ function gjc_wallet_users_list(PDO $db): array
     return $rows;
 }
 
-/** Defines normalized cap logs for fresh installs; preserves existing tables. */
-function gjc_ensure_cap_increase_log_schema(PDO $db): void
-{
-    if (gjc_table_exists($db, 'cap_increase_log')) {
-        return;
-    }
-    if ($db->inTransaction()) {
-        throw new RuntimeException('Cap log schema creation must run before a transaction.');
-    }
-    $db->exec(
-        "CREATE TABLE IF NOT EXISTS `cap_increase_log` (
-  `id` int unsigned NOT NULL AUTO_INCREMENT,
-  `super_admin_id` int unsigned NOT NULL COMMENT 'FK -> users.id -- must be super-admin role',
-  `old_cap` decimal(15,2) NOT NULL,
-  `new_cap` decimal(15,2) NOT NULL,
-  `reason` text COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Mandatory justification for audit compliance',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `source` enum('super_admin_mint','tuition_credit','fee_waiver_claim') COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `source_ref_id` int unsigned DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
-    );
-    gjc_table_columns($db, 'cap_increase_log', true);
-}
+
 
 /** Preserve cap-log compatibility writes until amount_added is contracted. */
 function gjc_cap_log_has_legacy_amount_added(PDO $db): bool
@@ -232,25 +247,7 @@ function gjc_cap_log_has_legacy_amount_added(PDO $db): bool
     return in_array('amount_added', gjc_table_columns($db, 'cap_increase_log', true), true);
 }
 
-/** Defines new P2P tables with wallet IDs; existing tables are preserved. */
-function gjc_ensure_p2p_transfers_schema(PDO $db): void
-{
-    if (gjc_table_exists($db, 'p2p_transfers')) {
-        return;
-    }
-    $db->exec(
-        "CREATE TABLE IF NOT EXISTS `p2p_transfers` (
-    `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `reference_no`      VARCHAR(40) NOT NULL COMMENT 'The ledger row: sender, amount, status, time',
-    `to_wallet_id`      INT UNSIGNED NOT NULL COMMENT 'FK -> student_wallets.id (recipient)',
-    `message`           VARCHAR(255) NULL DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `reference_no` (`reference_no`),
-    KEY `idx_p2p_to` (`to_wallet_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-  COMMENT='Peer-to-peer token transfers between students (atomic, transactionally safe)'"
-    );
-}
+
 
 /**
  * Keep P2P compatibility writes until the copied user IDs are contracted.
@@ -290,4 +287,20 @@ function gjc_p2p_daily_sent(PDO $db, int $userId): float
     );
     $stmt->execute([$userId]);
     return (float) $stmt->fetchColumn();
+}
+
+/**
+ * Lock one student wallet row until the transaction ends, so two payments or
+ * transfers from the same wallet cannot both pass the daily limits.
+ *
+ * Call it as the FIRST statement after beginTransaction(). Under REPEATABLE READ
+ * the first plain SELECT fixes the snapshot; a read before the lock would let the
+ * later "spent today" sum miss a payment that committed while we waited.
+ */
+function gjc_lock_student_wallet(PDO $db, int $walletId): void
+{
+    if (!$db->inTransaction()) {
+        throw new LogicException('gjc_lock_student_wallet() must run inside a transaction.');
+    }
+    $db->prepare("SELECT id FROM student_wallets WHERE id = ? FOR UPDATE")->execute([$walletId]);
 }

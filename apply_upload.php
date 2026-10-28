@@ -36,5 +36,5 @@ if (!isset($rules[$field])) {
     exit;
 }
 
-$result = gjc_stage_stall_application_upload($field, $_FILES['file'] ?? null, $rules[$field]);
+$result = gjc_stage_stall_application_upload($db, $field, $_FILES['file'] ?? null, $rules[$field]);
 echo json_encode($result);

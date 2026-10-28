@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Your session expired. Refresh the page and try again.";
     } elseif ($new !== $confirm) {
         $error = "Passwords do not match.";
-    } elseif (strlen($new) < 6) {
-        $error = "Password must be at least 6 characters.";
+    } elseif (strlen($new) < 8) {
+        $error = "Password must be at least 8 characters.";
     } elseif (strlen($new) > 72) {
         $error = "Password must be no more than 72 bytes.";
     } else {

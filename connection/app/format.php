@@ -5,7 +5,7 @@
 
 function gjc_e($value): string
 {
-    return (string) $value;
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
 function gjc_money($amount): string
@@ -147,6 +147,7 @@ function gjc_role_name($role): string
             5 => 'merchant',
             6 => 'merchant',
             7 => 'parent',
+            8 => 'finance',
         ][(int) $role] ?? 'guest';
     }
 

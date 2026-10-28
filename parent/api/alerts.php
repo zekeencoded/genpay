@@ -30,6 +30,7 @@ if (str_contains($contentType, 'application/json')) {
 }
 
 $action = strtolower(trim((string) ($body['action'] ?? 'get_alerts')));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 if ($action === 'mark_read') {
     $db->prepare("UPDATE parent_alerts SET is_read = 1 WHERE parent_id = ?")->execute([$parentId]);

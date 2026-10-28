@@ -770,34 +770,36 @@ try {
 
         $refNo = gjc_reference('POS');
 
-        // ── Parent wallet controls ──────────────────────────────────────────────
-        $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
-        $wcStmt->execute([$walletId]);
-        $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
-        if ($wc && (int) $wc['is_frozen'] === 1) {
-            echo json_encode(['success' => false, 'message' => 'This wallet is frozen by a parent or guardian.']);
-            exit;
-        }
-        if ($wc && (float) $wc['daily_spend_limit'] > 0) {
-            $spentStmt = $db->prepare(
-                "SELECT COALESCE(SUM(amount),0) FROM transactions
-                  WHERE student_wallet_id = ? AND transaction_type = 'payment'
-                    AND DATE(created_at) = CURDATE() AND status = 'completed'"
-            );
-            $spentStmt->execute([$walletId]);
-            $todaySpent = (float) $spentStmt->fetchColumn();
-            if ($todaySpent + $totalAmt > (float) $wc['daily_spend_limit']) {
-                echo json_encode(['success' => false, 'message' => 'Daily spending limit of ₱' . number_format($wc['daily_spend_limit'], 2) . ' has been reached.']);
-                exit;
-            }
-        }
-
         // DDL must run before the transaction opens (it would implicitly commit it).
         gjc_ensure_maintenance_fees_schema($db);
 
         // ── BEGIN TRANSACTION ───────────────────────────────────────────────────
         $db->beginTransaction();
         try {
+            // Parent controls are checked under the wallet lock, so two payments
+            // at the same moment cannot both pass the daily limit.
+            gjc_lock_student_wallet($db, $walletId);
+
+            // ── Parent wallet controls ──────────────────────────────────────────
+            $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
+            $wcStmt->execute([$walletId]);
+            $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
+            if ($wc && (int) $wc['is_frozen'] === 1) {
+                throw new \RuntimeException('This wallet is frozen by a parent or guardian.');
+            }
+            if ($wc && (float) $wc['daily_spend_limit'] > 0) {
+                $spentStmt = $db->prepare(
+                    "SELECT COALESCE(SUM(amount),0) FROM transactions
+                      WHERE student_wallet_id = ? AND transaction_type = 'payment'
+                        AND DATE(created_at) = CURDATE() AND status = 'completed'"
+                );
+                $spentStmt->execute([$walletId]);
+                $todaySpent = (float) $spentStmt->fetchColumn();
+                if ($todaySpent + $totalAmt > (float) $wc['daily_spend_limit']) {
+                    throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
+                }
+            }
+
             // 1. Debit student wallet
             $debitStmt = $db->prepare(
                 "UPDATE student_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?"

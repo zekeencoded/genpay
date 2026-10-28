@@ -25,4 +25,7 @@ return [
     'db_pass' => 'REPLACE_WITH_THE_DATABASE_PASSWORD',
 
     'view_token_secret' => 'REPLACE_WITH_A_LONG_RANDOM_STRING',
+
+    // reCAPTCHA v2 secret key for the stall application form (the site key is in connection/app/recaptcha.php).
+    'recaptcha_secret_key' => 'REPLACE_WITH_THE_RECAPTCHA_V2_SECRET_KEY',
 ];

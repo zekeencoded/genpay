@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['merchant']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_inventory_sku_index($db);
 
 $action         = trim((string) ($_POST['action'] ?? ''));

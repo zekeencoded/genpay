@@ -45,7 +45,7 @@ function statusLabel(string $status): string
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=4">
     <link rel="stylesheet" href="<?= CSS_URL ?>/stalls.css?v=17">
 </head>
 <body>

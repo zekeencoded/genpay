@@ -395,7 +395,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                     <div class="settings-note">
                         The fee applies to every student <strong>POS payment</strong> and every <strong>transfer sent</strong>
                         (the sender is charged). It is never taken from the wallet: each fee is recorded against the student,
-                        collected in the <a href="<?= ADMIN_URL ?>/wallet.php">Admin Wallet</a>, and billed with tuition.
+                        collected automatically, and billed with tuition.
                         Returned sales void their fee. Changing the rate only affects future transactions.
                     </div>
 

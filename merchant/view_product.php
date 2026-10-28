@@ -33,9 +33,7 @@ if (!$product) {
     http_response_code(404);
 }
 
-// Local escaper — the shared gjc_e() only casts to string, and this page
-// renders merchant-supplied names, descriptions and restriction notes.
-$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$e = gjc_e(...);
 
 if ($product) {
     $stockQty = (int) ($product['stock_qty'] ?? 0);

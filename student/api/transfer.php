@@ -105,17 +105,6 @@ try {
             exit;
         }
 
-        // --- Daily limit check ---
-        $dailySent = gjc_p2p_daily_sent($db, $currentUserId);
-        if ($dailySent + $amount > $DAILY_LIMIT) {
-            $remaining = max(0, $DAILY_LIMIT - $dailySent);
-            echo json_encode([
-                'success' => false,
-                'message' => sprintf('Daily transfer limit exceeded. Remaining today: %s', gjc_money($remaining)),
-            ]);
-            exit;
-        }
-
         // --- Get sender wallet (for balance check BEFORE transaction) ---
         $senderWallet = gjc_student_wallet($db, $currentUserId);
         if ($senderWallet['id'] === 0) {
@@ -137,28 +126,6 @@ try {
             exit;
         }
 
-        // --- Parent wallet controls check on sender ---
-        $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
-        $wcStmt->execute([$senderWallet['id']]);
-        $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
-        if ($wc && (int) $wc['is_frozen'] === 1) {
-            echo json_encode(['success' => false, 'message' => 'Your wallet is frozen by a parent or guardian.']);
-            exit;
-        }
-        if ($wc && (float) $wc['daily_spend_limit'] > 0) {
-            $spentStmt = $db->prepare(
-                "SELECT COALESCE(SUM(amount),0) FROM transactions
-                  WHERE student_wallet_id = ? AND transaction_type = 'p2p_transfer'
-                    AND DATE(created_at) = CURDATE() AND status = 'completed'"
-            );
-            $spentStmt->execute([$senderWallet['id']]);
-            $todaySpent = (float) $spentStmt->fetchColumn();
-            if ($todaySpent + $amount > (float) $wc['daily_spend_limit']) {
-                echo json_encode(['success' => false, 'message' => 'Daily spending limit of ₱' . number_format($wc['daily_spend_limit'], 2) . ' has been reached.']);
-                exit;
-            }
-        }
-
         // --- Get recipient wallet ---
         $recipientWallet = gjc_student_wallet($db, $recipientUserId);
         if ($recipientWallet['id'] === 0) {
@@ -175,6 +142,37 @@ try {
         // --- BEGIN TRANSACTION ---
         $db->beginTransaction();
         try {
+            // Limits are checked under the wallet lock, so two transfers sent at
+            // the same moment cannot both pass them.
+            gjc_lock_student_wallet($db, $senderWallet['id']);
+
+            // --- Daily transfer limit (school setting) ---
+            $dailySent = gjc_p2p_daily_sent($db, $currentUserId);
+            if ($dailySent + $amount > $DAILY_LIMIT) {
+                $remaining = max(0, $DAILY_LIMIT - $dailySent);
+                throw new \RuntimeException(sprintf('Daily transfer limit exceeded. Remaining today: %s', gjc_money($remaining)));
+            }
+
+            // --- Parent wallet controls on sender ---
+            $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
+            $wcStmt->execute([$senderWallet['id']]);
+            $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
+            if ($wc && (int) $wc['is_frozen'] === 1) {
+                throw new \RuntimeException('Your wallet is frozen by a parent or guardian.');
+            }
+            if ($wc && (float) $wc['daily_spend_limit'] > 0) {
+                $spentStmt = $db->prepare(
+                    "SELECT COALESCE(SUM(amount),0) FROM transactions
+                      WHERE student_wallet_id = ? AND transaction_type = 'p2p_transfer'
+                        AND DATE(created_at) = CURDATE() AND status = 'completed'"
+                );
+                $spentStmt->execute([$senderWallet['id']]);
+                $todaySpent = (float) $spentStmt->fetchColumn();
+                if ($todaySpent + $amount > (float) $wc['daily_spend_limit']) {
+                    throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
+                }
+            }
+
             // 1. Debit sender
             $debitStmt = $db->prepare(
                 "UPDATE student_wallets

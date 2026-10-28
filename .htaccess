@@ -56,6 +56,9 @@ RewriteRule ^uploads(/.*)?$ - [F,L]
 # /storage — queued email spool and mail log (temp passwords, recipient addresses)
 RewriteRule ^storage(/.*)?$ - [F,L]
 
+# /backups — full database dumps + uploaded documents (served through admin/api/backup.php only)
+RewriteRule ^backups(/.*)?$ - [F,L]
+
 # /docs, /screenshots — internal manuscripts and UI captures (private data on screen)
 RewriteRule ^(docs|screenshots)(/.*)?$ - [F,L]
 
@@ -107,6 +110,9 @@ RewriteRule ^PHPMailer-master(/.*)?$ - [F,L]
 
     # Enable XSS filter in older browsers
     Header always set X-XSS-Protection "1; mode=block"
+
+    # Force HTTPS for returning visitors. Sent only over TLS (env=HTTPS), so plain-http localhost is unaffected.
+    Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
 
     # Referrer policy — don't leak the path to external sites
     Header always set Referrer-Policy "strict-origin-when-cross-origin"

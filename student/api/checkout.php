@@ -46,8 +46,15 @@ try {
     // DDL must run before the transaction opens (it would implicitly commit it).
     gjc_ensure_maintenance_fees_schema($db);
 
+    // Looked up before the transaction so the wallet lock can be its first statement.
+    $studentWallet = gjc_student_wallet($db, $studentUserId);
+
     $db->beginTransaction();
     try {
+        // The daily-limit check below runs under this lock, so a payment and a
+        // transfer at the same moment cannot both pass it.
+        gjc_lock_student_wallet($db, (int) $studentWallet['id']);
+
         $orderStmt = $db->prepare(
             "SELECT o.*,
                     (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = o.merchant_wallet_id) AS merchant_user_id
@@ -97,7 +104,6 @@ try {
             }
         }
 
-        $studentWallet = gjc_student_wallet($db, $studentUserId);
         if ($studentWallet['id'] <= 0) {
             throw new RuntimeException('Student wallet not found.');
         }

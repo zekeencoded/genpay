@@ -29,6 +29,7 @@ $body = str_contains($contentType, 'application/json')
     : array_merge($_GET, $_POST);
 
 $action = strtolower(trim((string) ($body['action'] ?? '')));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 // Helper: verify parent-student link and return student wallet id
 function assertLinkedWallet(PDO $db, int $parentId, int $studentUserId): int

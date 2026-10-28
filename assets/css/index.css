@@ -171,20 +171,25 @@ body {
 }
 @media (max-width: 768px) {
     .requirements-list { grid-template-columns: 1fr; }
-    .how-to-apply { padding: 56px 16px; }
+    .how-to-apply { padding: 56px 8px; } /* + Bootstrap .container 12px gutter = 20px, like the navbar */
     .how-to-apply .section-title { font-size: 26px; }
     .requirements-box { padding: 26px 22px; }
 }
 @media (max-width: 768px) {
     .hero {
-        padding: 190px 20px 60px 20px;
+        padding: 100px 20px 60px 20px;
     }
     .hero h1 { font-size: 40px; }
     .hero p { font-size: 16px; }
+    /* gjc-clear.css adds a 20px side margin at <=576px on top of the 20px hero padding */
+    .hero-content {
+        margin-left: 0;
+        margin-right: 0;
+    }
     .features {
         width: 100%;
         max-width: 100%;
-        padding: 48px 16px;
+        padding: 48px 20px;
         overflow: hidden;
     }
     .features .row {

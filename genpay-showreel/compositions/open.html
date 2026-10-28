@@ -1,0 +1,155 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 35%, #17402c 0%, #0d2418 65%);
+      overflow: hidden;
+      font-family: "Plus Jakarta Sans", sans-serif;
+    }
+    #open-seal {
+      position: absolute;
+      left: 710px;
+      top: 80px;
+      width: 500px;
+      height: 500px;
+      object-fit: contain;
+      filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.45));
+    }
+    .ring {
+      position: absolute;
+      left: 710px;
+      top: 80px;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      border: 2px solid rgba(240, 165, 0, 0.55);
+      opacity: 0;
+    }
+    #open-line {
+      position: absolute;
+      left: 560px;
+      top: 612px;
+      width: 800px;
+      height: 2px;
+      background: #f0a500;
+    }
+    #open-word {
+      position: absolute;
+      left: 0;
+      top: 630px;
+      width: 1920px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 172px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      color: #eef4ef;
+    }
+    #open-pay {
+      color: #f0a500;
+    }
+    #open-tag {
+      position: absolute;
+      left: 0;
+      top: 842px;
+      width: 1920px;
+      text-align: center;
+      font-weight: 500;
+      font-size: 42px;
+      color: #cfe0d4;
+    }
+    #open-chip {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 922px;
+      width: fit-content;
+      margin: 0 auto;
+      padding: 12px 26px;
+      border: 1px solid rgba(240, 165, 0, 0.45);
+      background: rgba(240, 165, 0, 0.12);
+      border-radius: 2px;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.06em;
+      color: #f0a500;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="open" data-width="1920" data-height="1080">
+    <div class="ring" id="open-ring-1" data-layout-allow-overflow></div>
+    <div class="ring" id="open-ring-2"></div>
+    <div class="ring" id="open-ring-3"></div>
+    <img id="open-seal" src="assets/brand/gp_logo.png" alt="General de Jesus College seal" />
+    <div id="open-line"></div>
+    <div id="open-word"><span id="open-gen">Gen</span><span id="open-pay">Pay</span></div>
+    <p id="open-tag">The cashless wallet for General de Jesus College.</p>
+    <div id="open-chip">₱10 = 1 GenCoin</div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // Seal drops in with a back-out overshoot, then three rings pulse out from it
+    tl.fromTo(
+      "#open-seal",
+      { scale: 0.5, rotation: -18, opacity: 0.6 },
+      { scale: 1, rotation: 0, opacity: 1, duration: 1.0, ease: "back.out(1.5)" },
+      0,
+    );
+    tl.fromTo(
+      "#open-ring-1",
+      { scale: 0.7, opacity: 0.9 },
+      { scale: 2.0, opacity: 0, duration: 1.6, ease: "power2.out" },
+      0.9,
+    );
+    tl.fromTo(
+      "#open-ring-2",
+      { scale: 0.7, opacity: 0.7 },
+      { scale: 2.0, opacity: 0, duration: 1.6, ease: "power2.out" },
+      1.15,
+    );
+    tl.fromTo(
+      "#open-ring-3",
+      { scale: 0.7, opacity: 0.5 },
+      { scale: 2.0, opacity: 0, duration: 1.6, ease: "power2.out" },
+      1.4,
+    );
+
+    // Gold hairline draws across, then the wordmark wipes in word by word
+    tl.fromTo("#open-line", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "expo.out" }, 1.0);
+    tl.fromTo(
+      "#open-gen",
+      { clipPath: "inset(0 100% 0 0)", x: -30 },
+      { clipPath: "inset(0 0% 0 0)", x: 0, duration: 0.55, ease: "expo.out" },
+      1.05,
+    );
+    tl.fromTo(
+      "#open-pay",
+      { clipPath: "inset(0 100% 0 0)" },
+      { clipPath: "inset(0 0% 0 0)", duration: 0.55, ease: "expo.out" },
+      1.25,
+    );
+
+    tl.fromTo("#open-tag", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 1.85);
+    tl.fromTo(
+      "#open-chip",
+      { opacity: 0, scale: 0.92 },
+      { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.8)" },
+      2.5,
+    );
+
+    window.__timelines["open"] = tl;
+  </script>
+</template>

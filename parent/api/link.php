@@ -29,6 +29,7 @@ $body = str_contains($contentType, 'application/json')
     : array_merge($_GET, $_POST);
 
 $action = strtolower(trim((string) ($body['action'] ?? '')));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 try {
     switch ($action) {

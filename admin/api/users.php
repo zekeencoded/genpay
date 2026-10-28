@@ -78,6 +78,42 @@ function users_suspend_guard(array $user, int $adminId, string $verb = 'suspend'
     return null;
 }
 
+/**
+ * Queues a new finance staff member's login credentials. Mirrors the guardian
+ * credentials mail in admin/maintenance.php, with literal colours because
+ * email clients ignore CSS variables. Returns true when queued.
+ */
+function users_send_staff_credentials(string $email, string $name, string $tempPassword): bool
+{
+    $loginUrl  = rtrim(BASE_URL, '/') . '/login';
+    $safeName  = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    $safeEmail = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+    $safePass  = htmlspecialchars($tempPassword, ENT_QUOTES, 'UTF-8');
+
+    $body = '
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f3faf6;padding:28px;border-radius:14px">
+                <h2 style="color:#0b4a28;margin-top:0">Your GenPay Finance Staff Account</h2>
+                <p style="color:#334155;line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
+                <p style="color:#334155;line-height:1.7">A GenPay finance staff account has been created for you.</p>
+                <div style="background:#052e16;border-radius:10px;padding:16px;margin:16px 0;color:#dcfce7">
+                    <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#86efb2;text-transform:uppercase">Login Credentials</p>
+                    <p style="margin:0"><strong>Email:</strong> ' . $safeEmail . '</p>
+                    <p style="margin:6px 0 0"><strong>Temporary Password:</strong> ' . $safePass . '</p>
+                </div>
+                <p style="color:#b42318;font-weight:700">You must change this password on first login before accessing your dashboard.</p>
+                <p style="color:#334155">Login page: <a href="' . $loginUrl . '" style="color:#147b3a">' . $loginUrl . '</a></p>
+                <p style="font-size:12px;color:#64748b">GenPay Team</p>
+            </div>';
+    $altBody = "Dear {$name},\n\nA GenPay finance staff account has been created for you.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
+
+    try {
+        return gjc_queue_email($email, $name, 'GenPay - Finance Staff Account Credentials', $body, $altBody);
+    } catch (Throwable $e) {
+        error_log('[admin/api/users.php] staff credentials email: ' . $e->getMessage());
+        return false;
+    }
+}
+
 try {
     switch ($action) {
 
@@ -108,6 +144,77 @@ try {
             users_json([
                 'success' => true,
                 'message' => "Password reset. The temporary password was emailed to {$studentEmail}. The student must change it when they sign in.",
+            ]);
+        }
+
+        case 'add_finance_staff': {
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
+                http_response_code(403);
+                users_json(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
+            }
+            if (gjc_sub_role() !== 'super_admin') {
+                users_json(['success' => false, 'message' => 'Only the super admin can add finance staff.']);
+            }
+            $firstName  = trim((string) ($_POST['first_name'] ?? ''));
+            $middleName = trim((string) ($_POST['middle_name'] ?? ''));
+            $lastName   = trim((string) ($_POST['last_name'] ?? ''));
+            $suffix     = trim((string) ($_POST['suffix'] ?? ''));
+            $email     = strtolower(trim((string) ($_POST['email'] ?? '')));
+            $contact   = preg_replace('/\D/', '', (string) ($_POST['contact_number'] ?? ''));
+            $password  = (string) ($_POST['password'] ?? '');
+
+            if ($firstName === '' || $lastName === '' || $email === '' || $password === '') {
+                users_json(['success' => false, 'message' => 'First name, last name, email and temporary password are required.']);
+            }
+            if (mb_strlen($firstName) > 60 || mb_strlen($middleName) > 60 || mb_strlen($lastName) > 60) {
+                users_json(['success' => false, 'message' => 'Name fields must not exceed 60 characters.']);
+            }
+            if (mb_strlen($suffix) > 20) {
+                users_json(['success' => false, 'message' => 'Suffix must not exceed 20 characters.']);
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                users_json(['success' => false, 'message' => 'Enter a valid email address.']);
+            }
+            if (strlen($contact) > 15) {
+                users_json(['success' => false, 'message' => 'Contact number is too long.']);
+            }
+            if (strlen($password) < 8) {
+                users_json(['success' => false, 'message' => 'Temporary password must be at least 8 characters.']);
+            }
+            $dup = $db->prepare("SELECT userID FROM users WHERE email = ? LIMIT 1");
+            $dup->execute([$email]);
+            if ($dup->fetch()) {
+                users_json(['success' => false, 'message' => 'An account with that email already exists.']);
+            }
+
+            gjc_ensure_finance_staff_role($db);
+            // force_password_change: the staff member must replace the temporary password at first sign-in.
+            $db->prepare(
+                "INSERT INTO users (last_name, first_name, middle_name, suffix, email, contact_number, roleID, password, profile_img, force_password_change)
+                 VALUES (?, ?, ?, ?, ?, ?, 8, ?, '', 1)"
+            )->execute([
+                $lastName, $firstName,
+                $middleName !== '' ? $middleName : null,
+                $suffix !== '' ? $suffix : null,
+                $email, $contact !== '' ? $contact : '0', password_hash($password, PASSWORD_BCRYPT),
+            ]);
+            $newId = (int) $db->lastInsertId();
+            $fullName = implode(' ', array_filter([$firstName, $middleName, $lastName, $suffix], fn($part) => $part !== ''));
+
+            // Sent after the insert, so a mail failure never undoes the account.
+            $emailSent = users_send_staff_credentials($email, $fullName, $password);
+
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'USER_ACCOUNT', 'users', null,
+                ['event' => 'created', 'user_id' => $newId, 'name' => $fullName, 'email' => $email, 'roleID' => 8, 'sub_role' => 'finance_staff', 'email_sent' => $emailSent],
+                null, ['target_id' => $newId]
+            );
+
+            users_json([
+                'success' => true,
+                'message' => $emailSent
+                    ? "Finance staff account created for {$fullName}. The login credentials were emailed to {$email}; they must change the password at first sign-in."
+                    : "Finance staff account created for {$fullName}, but the credentials email could not be sent. Give them the temporary password yourself; they must change it at first sign-in.",
             ]);
         }
 

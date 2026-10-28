@@ -1,0 +1,90 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #0d2418;
+      overflow: hidden;
+    }
+    /* The real capture, with a slow push-in so the frame never sits still */
+    #audit-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: 50% 50%;
+    }
+    #audit-cam > img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+    }
+    .band {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 140px;
+      padding: 20px 110px 0 100px;
+      box-sizing: border-box;
+      background: linear-gradient(0deg, rgba(13, 36, 24, 0.97) 0%, rgba(13, 36, 24, 0.92) 72%, rgba(13, 36, 24, 0) 100%);
+    }
+    .band::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 40px;
+      bottom: 40px;
+      width: 8px;
+      background: #f0a500;
+    }
+    .band-kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.08em;
+      color: #f0a500;
+      text-transform: uppercase;
+    }
+    .band-title {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-weight: 800;
+      font-size: 52px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #eef4ef;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="audit" data-width="1920" data-height="1080">
+    <div id="audit-cam" data-layout-allow-overflow>
+      <img src="assets/screens/finance_audit.png" alt="A tamper-evident audit chain" />
+    </div>
+    <div class="band" data-layout-allow-overflow id="audit-band">
+      <div class="band-kicker">FINANCE · AUDIT LOG</div>
+      <div class="band-title">A tamper-evident audit chain</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    tl.fromTo("#audit-cam", { scale: 1, x: 0, y: 0 }, { scale: 1.05, x: 30, y: 0, duration: 2.0, ease: "none" }, 0);
+    tl.fromTo("#audit-band", { y: 140, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, 0.2);
+
+    window.__timelines["audit"] = tl;
+  </script>
+</template>

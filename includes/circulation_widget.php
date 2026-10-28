@@ -19,12 +19,13 @@ $isBalanced = $drift < 0.01;
 
 $walletStats = gjc_wallet_user_stats($db);
 $merchantWalletStats = gjc_merchant_wallet_user_stats($db);
+$parentWalletStats = gjc_parent_wallet_user_stats($db);
 
 // Combined wallet-user figures for the "Total Wallet Users" card + drill-in table.
-$totalWalletUsers = $walletStats["total"] + $merchantWalletStats["total"];
-$activeWalletUsers = $walletStats["active"] + $merchantWalletStats["active"];
+$totalWalletUsers = $walletStats["total"] + $merchantWalletStats["total"] + $parentWalletStats["total"];
+$activeWalletUsers = $walletStats["active"] + $merchantWalletStats["active"] + $parentWalletStats["active"];
 $inactiveWalletUsers =
-    $walletStats["inactive"] + $merchantWalletStats["inactive"];
+    $walletStats["inactive"] + $merchantWalletStats["inactive"] + $parentWalletStats["inactive"];
 $walletUsersList = gjc_wallet_users_list($db);
 
 $vaultPct = round(($vault / $cap) * 100, 1);
@@ -134,17 +135,6 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                 <span class="ce-pool-label">Cashier Vault</span>
                 <div class="ce-pool-amt"><?= gjc_token_display($vault) ?></div>
                 <small class="ce-pool-share">Available to load</small>
-            </div>
-        </div>
-
-        <div class="ce-pool-card ce-pool-parents">
-            <div class="ce-pool-icon-wrap">
-                <i class="fa-solid fa-people-roof ce-pool-icon"></i>
-            </div>
-            <div class="ce-pool-info">
-                <span class="ce-pool-label">Parent Wallets</span>
-                <div class="ce-pool-amt"><?= gjc_token_display($parents) ?></div>
-                <small class="ce-pool-share"><?= $parentPct ?>% of total</small>
             </div>
         </div>
 
@@ -293,6 +283,61 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
             </div>
         </div>
 
+        <div class="ce-pool-card ce-pool-parents ce-pool-card--wallet ce-pool-card--clickable"
+             role="button" tabindex="0"
+             data-bs-toggle="modal" data-bs-target="#walletUsersModal"
+             data-wallet-filter="Parent" data-wallet-title="Parent Wallet Users (<?= number_format(
+                 $parentWalletStats["total"],
+             ) ?>)"
+             aria-label="View parent wallet users in a table">
+            <div class="ce-pool-icon-wrap">
+                <i class="fa-solid fa-people-roof ce-pool-icon"></i>
+            </div>
+            <div class="ce-pool-info" style="flex:1;min-width:0;">
+                <span class="ce-pool-label">
+                    Parent Wallet Users
+                    <span class="ce-info" tabindex="0" data-bs-toggle="tooltip"
+                          title="Parents with no wallet activity in the last 30 days are counted as inactive."
+                          aria-label="How is inactive counted?">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    </span>
+                </span>
+                <div class="ce-pool-amt"><?= number_format(
+                    $parentWalletStats["total"],
+                ) ?></div>
+
+                <?php $pActivePct =
+                    $parentWalletStats["total"] > 0
+                        ? round(
+                            ($parentWalletStats["active"] /
+                                $parentWalletStats["total"]) *
+                                100,
+                        )
+                        : 0; ?>
+                <div class="ce-wu-bar-wrap">
+                    <div class="ce-wu-bar">
+                        <div class="ce-wu-bar-fill ce-wu-bar-fill--parent" style="width:<?= $pActivePct ?>%"></div>
+                    </div>
+                    <span class="ce-wu-pct ce-wu-pct--parent"><?= $pActivePct ?>%</span>
+                </div>
+
+                <div class="ce-wu-badges">
+                    <span class="ce-wu-badge ce-wu-badge--parent-active">
+                        <span class="ce-wu-dot ce-wu-dot--parent"></span>
+                        <?= number_format(
+                            $parentWalletStats["active"],
+                        ) ?> Active
+                    </span>
+                    <span class="ce-wu-badge ce-wu-badge--inactive">
+                        <span class="ce-wu-dot ce-wu-dot--inactive"></span>
+                        <?= number_format(
+                            $parentWalletStats["inactive"],
+                        ) ?> Inactive
+                    </span>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <div class="ce-bottom-grid">
@@ -370,11 +415,9 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                                placeholder="e.g. Q3 budget approved by board" required>
                     </div>
                 </div>
-                <div class="ce-field" id="ce-pin-wrap"
-                     style="display:<?= $limitHit ? "block" : "none" ?>">
+                <div class="ce-field" id="ce-pin-wrap">
                     <label class="ce-label" for="ce-pin">
                         Security PIN
-                        <span class="ce-pin-badge">Monthly limit reached</span>
                     </label>
                     <input type="password" id="ce-pin" class="ce-input" placeholder="Enter Security PIN">
                 </div>
@@ -531,10 +574,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
     const amtInput = document.getElementById('ce-amount');
     if (amtInput) {
         amtInput.addEventListener('input', function () {
-            const pinWrap = document.getElementById('ce-pin-wrap');
-            if (!pinWrap) return;
-            pinWrap.style.display = ((mintedSoFar + (parseFloat(this.value) || 0)) > SOFT_LIMIT)
-                ? 'block' : 'none';
+            // The PIN is required for every mint (MintingGuard), so the field stays visible.
         });
     }
 

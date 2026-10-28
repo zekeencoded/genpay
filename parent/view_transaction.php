@@ -123,9 +123,7 @@ if (!$record) {
 // already scope-checked above, so its reference is safe to look up.
 $maintFee = $record ? gjc_maintenance_fee_for_reference($db, (string) $record['ref']) : null;
 
-// Local escaper — the shared gjc_e() only casts to string, and this page
-// renders student names, merchant names and free-text notes.
-$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$e = gjc_e(...);
 
 if ($record) {
     $statusClass = gjc_transaction_is_success($record['status'])

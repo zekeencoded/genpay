@@ -29,6 +29,7 @@ require_once __DIR__ . '/../../connection/mailer.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 gjc_require_role(['finance']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_stall_application_workflow_schema($db);
 gjc_ensure_first_login_schema($db);
 gjc_ensure_meeting_scheduling_schema($db);

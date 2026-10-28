@@ -13,6 +13,10 @@
 .ce-wu-pct--merchant{color:var(--gp-warning)}
 .ce-wu-badge--merchant-active{background:rgba(245,158,11,.15);color:var(--gp-warning)}
 .ce-wu-dot--merchant{background:#f59e0b}
+.ce-wu-bar-fill--parent{background:var(--gp-info)}
+.ce-wu-pct--parent{color:var(--gp-info)}
+.ce-wu-badge--parent-active{background:var(--gp-info-bg);color:var(--gp-info)}
+.ce-wu-dot--parent{background:var(--gp-info)}
 /* Total Wallet Users card (replaces Active Vouchers) */
 .ce-pool-card.ce-pool-users{background:var(--gjc-panel)}
 .ce-pool-card.ce-pool-users .ce-pool-icon-wrap{background:rgba(14, 99, 50,.1)}
@@ -27,3 +31,4 @@
 .ce-type-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:var(--gp-radius)}
 .ce-type-student{background:var(--gp-success-bg);color:var(--gp-success)}
 .ce-type-merchant{background:var(--gp-warning-bg);color:var(--gp-warning)}
+.ce-type-parent{background:var(--gp-info-bg);color:var(--gp-info)}

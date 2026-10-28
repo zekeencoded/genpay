@@ -93,6 +93,20 @@
   transform: translateY(-2px);
 }
 
+/* Header-sized variant: .filter-btn alone is sized to sit beside the 76px filter fields. */
+.filter-btn.add-staff-btn {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: auto;
+  height: 42px;
+  min-width: 0;
+  padding: 0 18px;
+  border-radius: 13px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 /* .users-table styling now comes from the canonical table system in theme.css. */
 
 .user-cell {

@@ -17,6 +17,7 @@ if (!$userId) {
     echo json_encode(['success' => false, 'error' => 'Not authenticated.']);
     exit;
 }
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 $action = trim((string) ($_POST['action'] ?? 'upload'));
 $photoDir = BASE_PATH . '/assets/profile_photos';

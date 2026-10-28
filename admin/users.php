@@ -54,8 +54,8 @@ if ($statusFilter !== '') {
     $params[] = $statusOptions[$statusFilter];
 }
 if ($excludeAdmin) {
-    $conditions[] = 'LOWER(COALESCE(r.role_name, "")) != ?';
-    $params[] = 'finance';
+    $conditions[] = 'LOWER(COALESCE(r.role_name, "")) NOT IN (?, ?)';
+    array_push($params, 'finance', 'finance_staff');
 }
 if ($conditions) {
     $query .= ' WHERE ' . implode(' AND ', $conditions);
@@ -67,23 +67,22 @@ $stmt->execute($params);
 $dbUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $currentAdminId = gjc_user_id();
+// Finance staff get a read-only list; account actions are super-admin only (admin/api/users.php is off their allowlist).
+$isSuperAdmin = gjc_sub_role() === 'super_admin';
 
-// This page's older rows echo raw; anything added below is admin-entered free
-// text (a suspension reason) or ends up in an HTML attribute, so it gets
-// escaped properly — gjc_e() only casts to string, it does not escape.
-$esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$esc = gjc_e(...);
 
 $users = [];
 foreach ($dbUsers as $u) {
     $u = gjc_with_user_suspension($db, $u, (int) $u['userID']);
-    $roleName = ($u['role'] === 'finance') ? 'Finance' : ucfirst($u['role'] ?? 'User');
+    $roleName = ['finance' => 'Finance', 'finance_staff' => 'Finance Staff'][$u['role'] ?? ''] ?? ucfirst($u['role'] ?? 'User');
     $role = strtolower($u['role'] ?? '');
 
     if ($role === 'student') {
         $displayId = $u['student_id'] ?? ('GJC' . date('Y') . '-????');
     } elseif (in_array($role, ['merchant', 'merchant_admin', 'merchant_staff'], true)) {
         $displayId = 'MER-' . str_pad($u['userID'], 4, '0', STR_PAD_LEFT);
-    } elseif ($role === 'finance') {
+    } elseif ($role === 'finance' || $role === 'finance_staff') {
         $displayId = 'FIN-' . str_pad($u['userID'], 4, '0', STR_PAD_LEFT);
     } else {
         $displayId = 'GJC-' . str_pad($u['userID'], 4, '0', STR_PAD_LEFT);
@@ -142,7 +141,8 @@ $currentPage = 'users';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/users.css?v=11">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/users.css?v=12">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=19">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -181,6 +181,11 @@ $currentPage = 'users';
                         <h3>All Users</h3>
                         <p>Search, filter, and manage every account's wallet access and status.</p>
                     </div>
+                    <?php if ($isSuperAdmin): ?>
+                    <button type="button" class="filter-btn add-staff-btn" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+                        <i class="fa-solid fa-user-plus me-2"></i>Add Finance Staff
+                    </button>
+                    <?php endif; ?>
                 </div>
 
                 <form class="users-filter-grid" method="GET" action="<?= ADMIN_URL ?>/users.php">
@@ -198,6 +203,7 @@ $currentPage = 'users';
                             <option value="student" <?= $roleFilter === 'student' ? 'selected' : '' ?>>Student</option>
                             <option value="merchant" <?= $roleFilter === 'merchant' ? 'selected' : '' ?>>Merchant</option>
                             <option value="finance" <?= $roleFilter === 'finance' ? 'selected' : '' ?>>Finance</option>
+                            <option value="finance_staff" <?= $roleFilter === 'finance_staff' ? 'selected' : '' ?>>Finance Staff</option>
                         </select>
                     </div>
 
@@ -291,6 +297,7 @@ $currentPage = 'users';
                                             <i class="fa-regular fa-eye me-2"></i>View
                                         </a>
 
+                                        <?php if ($isSuperAdmin): ?>
                                         <div class="dropdown">
                                             <button class="premium-action-btn dropdown-toggle" type="button"
                                                 data-bs-toggle="dropdown">
@@ -353,6 +360,7 @@ $currentPage = 'users';
                                                 <?php endif; ?>
                                             </ul>
                                         </div>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -389,6 +397,88 @@ $currentPage = 'users';
             </div>
         </div>
     </div>
+
+    <?php if ($isSuperAdmin): ?>
+    <!-- Add Finance Staff Modal -->
+    <!-- Same markup and styles as Maintenance → Add Merchant, so both account forms look alike. -->
+    <div class="modal fade" id="addStaffModal" tabindex="-1" aria-labelledby="addStaffTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content" style="border-radius:16px;border:none">
+                <div class="modal-header border-0" style="padding:20px 24px 0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="addStaffTitle" style="font-size:17px">
+                            <i class="fa-solid fa-user-plus me-2" style="color:var(--gp-success)"></i>Add Finance Staff
+                        </h5>
+                        <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">Finance staff can open Dashboard, Users (view only), Transactions, Cash Management, Leases &amp; Rent and Stall Applications. Everything else stays super-admin only.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding:16px 24px 24px">
+                    <form id="addStaffForm" class="merchant-bypass-form" autocomplete="off">
+                        <input type="hidden" name="action" value="add_finance_staff">
+                        <input type="hidden" name="csrf_token" value="<?= $esc(gjc_csrf_token()) ?>">
+
+                        <div class="mbf-section">
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-user"></i> Staff member</div>
+                            <div class="maintenance-form-grid">
+                                <div>
+                                    <label for="addStaffFirst">First Name *</label>
+                                    <input type="text" id="addStaffFirst" name="first_name" maxlength="60" required>
+                                </div>
+                                <div>
+                                    <label for="addStaffMiddle">Middle Name</label>
+                                    <input type="text" id="addStaffMiddle" name="middle_name" maxlength="60">
+                                </div>
+                                <div>
+                                    <label for="addStaffLast">Last Name *</label>
+                                    <input type="text" id="addStaffLast" name="last_name" maxlength="60" required>
+                                </div>
+                                <div>
+                                    <label for="addStaffSuffix">Suffix</label>
+                                    <input type="text" id="addStaffSuffix" name="suffix" maxlength="20" placeholder="e.g. Jr., Sr., III">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section">
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-address-book"></i> Contact</div>
+                            <div class="maintenance-form-grid">
+                                <div>
+                                    <label for="addStaffEmail">Email *</label>
+                                    <input type="email" id="addStaffEmail" name="email" maxlength="255" required>
+                                </div>
+                                <div>
+                                    <label for="addStaffContact">Phone</label>
+                                    <input type="tel" id="addStaffContact" name="contact_number" maxlength="15" inputmode="numeric" placeholder="e.g. 09171234567">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section">
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-key"></i> Login credentials</div>
+                            <div class="maintenance-form-grid">
+                                <div class="full">
+                                    <label for="addStaffPassword">Temporary Password *</label>
+                                    <input type="text" id="addStaffPassword" name="password" minlength="8" autocomplete="off" required>
+                                </div>
+                            </div>
+                            <div class="mbf-credentials-note mt-2">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span>The staff member signs in with the email above. This temporary password (at least 8 characters) is emailed to them, and they will be prompted to set a new password on first login.</span>
+                            </div>
+                        </div>
+
+                        <div id="addStaffMsg" role="status"></div>
+                        <div class="maintenance-btn-row mt-2">
+                            <button class="maintenance-btn primary" type="submit" id="addStaffSubmit">Create Staff</button>
+                            <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Suspend Account Modal -->
     <div class="modal fade" id="suspendModal" tabindex="-1">
@@ -596,6 +686,29 @@ $currentPage = 'users';
         if (liftBtn) {
             liftLockout(liftBtn, "lift_suspension", "Lift this suspension?");
         }
+    });
+
+    document.getElementById("addStaffForm")?.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const btn = document.getElementById("addStaffSubmit");
+        const msg = document.getElementById("addStaffMsg");
+        btn.disabled = true;
+        btn.textContent = "Creating...";
+        try {
+            const resp = await fetch(USERS_API, { method: "POST", body: new FormData(this), cache: "no-store" });
+            const data = await resp.json();
+            msg.innerHTML = '<div class="maintenance-alert"></div>';
+            msg.firstChild.classList.add(data.success ? "success" : "error");
+            msg.firstChild.textContent = data.message;
+            if (data.success) {
+                setTimeout(() => location.reload(), 2500);
+                return;
+            }
+        } catch (err) {
+            msg.innerHTML = '<div class="maintenance-alert error">Could not reach the server. Try again.</div>';
+        }
+        btn.disabled = false;
+        btn.textContent = "Create Staff";
     });
 
     document.getElementById("suspendForm").addEventListener("submit", async function (e) {

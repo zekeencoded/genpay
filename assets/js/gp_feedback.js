@@ -253,11 +253,12 @@
        body — admin/api/mint.php is the one endpoint that reads php://input, so
        it gets JSON rather than having its contract changed to suit this. */
     window.gpFetchJson = function (url, body) {
-        var init = { method: 'POST' };
+        // Every mutation carries the session CSRF token (set by feedback_assets.php).
+        var init = { method: 'POST', headers: { 'X-CSRF-Token': window.GJC_CSRF || '' } };
         if (body instanceof FormData) {
             init.body = body;
         } else if (body && typeof body === 'object' && body.json) {
-            init.headers = { 'Content-Type': 'application/json' };
+            init.headers['Content-Type'] = 'application/json';
             init.body = JSON.stringify(body.json);
         } else if (body && typeof body === 'object') {
             var fd = new FormData();

@@ -1,0 +1,481 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 6,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"s-logo\"> is a timeline element that contains nested <div id=\"logo-inner\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#s-logo",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"s-logo\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"s-f1\"> is a timeline element that contains nested <div id=\"f1-inner\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#s-f1",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"s-f1\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"s-f2\"> is a timeline element that contains nested <div id=\"f2-inner\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#s-f2",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"s-f2\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"s-f3\"> is a timeline element that contains nested <div id=\"f3-inner\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#s-f3",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"s-f3\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"s-end\"> is a timeline element that contains nested <div id=\"end-inner\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#s-end",
+        "dataAttributes": {},
+        "sourceFile": "C:\\laragon\\www\\genpayV3.3\\genpay-launch\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"s-end\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      }
+    ],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 3,
+    "findings": [
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 3.875,
+        "selector": "#f1-status-off",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 1231,
+          "top": 486,
+          "right": 1414,
+          "bottom": 517,
+          "width": 183,
+          "height": 31
+        },
+        "containerSelector": "#f1-status-on",
+        "text": "Not connected",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1231,
+          "y": 486,
+          "width": 183,
+          "height": 31
+        },
+        "firstSeen": 3.875,
+        "lastSeen": 3.875,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          3.875
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 3.875,
+        "selector": "#f1-btn-off",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 1522,
+          "top": 459,
+          "right": 1644,
+          "bottom": 495,
+          "width": 122,
+          "height": 36
+        },
+        "containerSelector": "#f1-btn-on",
+        "text": "Connect",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1522,
+          "y": 459,
+          "width": 122,
+          "height": 36
+        },
+        "firstSeen": 3.875,
+        "lastSeen": 3.875,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          3.875
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.notif-value",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 1410,
+          "top": 633,
+          "right": 1729,
+          "bottom": 739,
+          "width": 319,
+          "height": 106
+        },
+        "containerSelector": "#f3-notif",
+        "text": "₱42,834",
+        "fixHint": "Text is 319px x 106px inside 340px x 326px and overflows by up to 9px; widen the container to at least ~349px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 1380,
+          "top": 506,
+          "right": 1720,
+          "bottom": 832.39,
+          "width": 340,
+          "height": 326.39
+        },
+        "overflow": {
+          "right": 9
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1410,
+          "y": 633,
+          "width": 319,
+          "height": 106
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          8.667
+        ]
+      }
+    ],
+    "duration": 12,
+    "samples": [
+      0.667,
+      2,
+      3.333,
+      4.667,
+      6,
+      7.333,
+      8.667,
+      10,
+      11.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 3,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      0.667,
+      3.333,
+      6,
+      8.667,
+      11.333
+    ],
+    "checked": 31,
+    "passed": 31
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 5,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "first_frame_empty",
+        "severity": "warning",
+        "message": "Frame 0 shows only the background, and the first frame is the thumbnail on social players: have the title or key image already on screen at 0 s instead of entering from nothing; see references/review.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Closed-loop wallet and canteen management\" (6 words) is on screen 0.63 s (±0.01 s), under its 1.72 s floor: hold it about 0.5 s + 0.3 s a word (2.30 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Closed-loop wallet and canteen management",
+        "selector": "#logo-tag",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 558.73,
+          "y": 704.12,
+          "width": 802.54,
+          "height": 44
+        },
+        "time": 2.141,
+        "words": 6,
+        "seconds": 0.633,
+        "floorSeconds": 1.725
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Live. New sales flow in automatically.\" (6 words) is on screen 0.50 s (±0.01 s), under its 1.72 s floor: hold it about 0.5 s + 0.3 s a word (2.30 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Live. New sales flow in automatically.",
+        "selector": "#f1-live",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1082,
+          "y": 655.76,
+          "width": 501,
+          "height": 34
+        },
+        "time": 4.367,
+        "words": 6,
+        "seconds": 0.5,
+        "floorSeconds": 1.725
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 8 text elements stay under it for 0.5 s or more, the smallest \"GenPay · now\" at 24 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "GenPay · now",
+        "selector": "div.notif-head > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1468,
+          "y": 534.25,
+          "width": 156,
+          "height": 29
+        },
+        "time": 7.625,
+        "times": [
+          2.875,
+          3,
+          3,
+          3.875,
+          5.125,
+          7.125,
+          7.625,
+          7.625
+        ],
+        "fontPx": 24,
+        "floorPx": 28,
+        "seconds": 1.5,
+        "elements": [
+          {
+            "selector": "div.notif-head > span:nth-of-type(1)",
+            "text": "GenPay · now",
+            "fontPx": 24,
+            "time": 7.625,
+            "seconds": 1.5
+          },
+          {
+            "selector": "#f1-copy > div:nth-of-type(1)",
+            "text": "01 · Connect",
+            "fontPx": 26,
+            "time": 2.875,
+            "seconds": 2
+          },
+          {
+            "selector": "div.card-head",
+            "text": "Store setup",
+            "fontPx": 26,
+            "time": 3,
+            "seconds": 1.875
+          },
+          {
+            "selector": "#f1-status-off",
+            "text": "Not connected",
+            "fontPx": 26,
+            "time": 3,
+            "seconds": 0.875
+          },
+          {
+            "selector": "#f1-status-on",
+            "text": "Connected",
+            "fontPx": 26,
+            "time": 3.875,
+            "seconds": 1
+          },
+          {
+            "selector": "#f2-copy > div:nth-of-type(1)",
+            "text": "02 · Profit",
+            "fontPx": 26,
+            "time": 5.125,
+            "seconds": 1.75
+          },
+          {
+            "selector": "#f3-copy > div:nth-of-type(1)",
+            "text": "03 · Every morning",
+            "fontPx": 26,
+            "time": 7.125,
+            "seconds": 2
+          },
+          {
+            "selector": "div.notif-sub",
+            "text": "After fees, ads and refunds",
+            "fontPx": 26,
+            "time": 7.625,
+            "seconds": 1.5
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "The film's last line \"Join the waitlist\" (3 words) is on screen 1.70 s (±0.01 s), under the 2.00 s a closing line needs: hold it about 0.5 s + 0.3 s a word and at least 2 s before the film ends; see references/motion.md.",
+        "text": "Join the waitlist",
+        "selector": "#end-cta",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 811.07,
+          "y": 775.25,
+          "width": 297.86,
+          "height": 48.5
+        },
+        "time": 10.305,
+        "words": 3,
+        "seconds": 1.699,
+        "floorSeconds": 2
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 96
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 1,
+    "findings": [
+      {
+        "code": "audio_none",
+        "severity": "info",
+        "message": "The film has no sound: no clip in it plays audio.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      }
+    ]
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  }
+}

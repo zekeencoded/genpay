@@ -73,8 +73,8 @@ try {
                 exit;
             }
 
-            if (strlen($password) < 6) {
-                echo json_encode(['success' => false, 'message' => 'Password must be at least 6 characters.']);
+            if (strlen($password) < 8) {
+                echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters.']);
                 exit;
             }
 
@@ -240,8 +240,8 @@ try {
             }
 
             $password = (string) ($_POST['password'] ?? '');
-            if (strlen($password) < 6) {
-                echo json_encode(['success' => false, 'message' => 'Password must be at least 6 characters.']);
+            if (strlen($password) < 8) {
+                echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters.']);
                 exit;
             }
 

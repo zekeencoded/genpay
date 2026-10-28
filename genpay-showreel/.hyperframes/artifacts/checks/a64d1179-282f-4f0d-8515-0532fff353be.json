@@ -1,0 +1,492 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 8
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 5,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 1.389,
+        "selector": "#open-ring-1",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 574.42,
+          "top": -55.58,
+          "right": 1349.58,
+          "bottom": 719.58,
+          "width": 775.15,
+          "height": 775.15
+        },
+        "containerSelector": "#open > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "top": 55.58
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/open.html",
+        "bbox": {
+          "x": 574.42,
+          "y": -55.58,
+          "width": 775.15,
+          "height": 775.15
+        },
+        "firstSeen": 1.389,
+        "lastSeen": 1.389,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          1.389
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 1.389,
+        "selector": "#open-ring-1",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 574.42,
+          "top": -55.58,
+          "right": 1349.58,
+          "bottom": 719.58,
+          "width": 775.15,
+          "height": 775.15
+        },
+        "containerSelector": "#root",
+        "text": "",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "top": 55.58
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/open.html",
+        "bbox": {
+          "x": 574.42,
+          "y": -55.58,
+          "width": 775.15,
+          "height": 775.15
+        },
+        "firstSeen": 1.389,
+        "lastSeen": 1.389,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          1.389
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 6.944,
+        "selector": "#student-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -1344,
+          "top": -412,
+          "right": 1920,
+          "bottom": 1424,
+          "width": 3264,
+          "height": 1836
+        },
+        "containerSelector": "#student > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 1344,
+          "top": 412,
+          "bottom": 344
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/student.html",
+        "bbox": {
+          "x": -1344,
+          "y": -412,
+          "width": 3264,
+          "height": 1836
+        },
+        "firstSeen": 6.944,
+        "lastSeen": 6.944,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          6.944
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 9.722,
+        "selector": "#merchant-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -672,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1458,
+          "width": 2592,
+          "height": 1458
+        },
+        "containerSelector": "#merchant > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 672,
+          "bottom": 378
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/merchant.html",
+        "bbox": {
+          "x": -672,
+          "y": 0,
+          "width": 2592,
+          "height": 1458
+        },
+        "firstSeen": 9.722,
+        "lastSeen": 9.722,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          9.722
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 12.5,
+        "selector": "#finance-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -1152,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1728,
+          "width": 3072,
+          "height": 1728
+        },
+        "containerSelector": "#finance > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 1152,
+          "bottom": 648
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/finance.html",
+        "bbox": {
+          "x": -1152,
+          "y": 0,
+          "width": 3072,
+          "height": 1728
+        },
+        "firstSeen": 12.5,
+        "lastSeen": 12.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          12.5
+        ]
+      }
+    ],
+    "duration": 25,
+    "samples": [
+      1.389,
+      4.167,
+      6.944,
+      9.722,
+      12.5,
+      15.278,
+      18.056,
+      20.833,
+      23.611
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 5,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.389,
+      6.944,
+      12.5,
+      18.056,
+      23.611
+    ],
+    "checked": 3,
+    "passed": 3
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 7,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "first_frame_empty",
+        "severity": "warning",
+        "message": "Frame 0 shows only the background, and the first frame is the thumbnail on social players: have the title or key image already on screen at 0 s instead of entering from nothing; see references/review.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and \"₱10 = 1 GenCoin\" renders at 26 px for 1.88 s: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "₱10 = 1 GenCoin",
+        "selector": "#open-chip",
+        "dataAttributes": {},
+        "sourceFile": "compositions/open.html",
+        "bbox": {
+          "x": 830.71,
+          "y": 935.37,
+          "width": 258.58,
+          "height": 39.26
+        },
+        "time": 2.625,
+        "times": [
+          2.625
+        ],
+        "fontPx": 25.52,
+        "floorPx": 28,
+        "seconds": 1.875,
+        "elements": [
+          {
+            "selector": "#open-chip",
+            "text": "₱10 = 1 GenCoin",
+            "fontPx": 25.52,
+            "time": 2.625,
+            "seconds": 1.875
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Student scans to pay\" (4 words) is on screen 1.03 s (±0.01 s), under its 1.27 s floor: hold it about 0.5 s + 0.3 s a word (1.70 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Student scans to pay",
+        "selector": "#merchant-chip",
+        "dataAttributes": {},
+        "sourceFile": "compositions/merchant.html",
+        "bbox": {
+          "x": 1392.15,
+          "y": 452.55,
+          "width": 460.0999999999999,
+          "height": 54
+        },
+        "time": 9.969,
+        "words": 4,
+        "seconds": 1.031,
+        "floorSeconds": 1.275
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and \"32,000.0 GC total\" renders at 26 px for 0.75 s: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "32,000.0 GC total",
+        "selector": "#finance-chip",
+        "dataAttributes": {},
+        "sourceFile": "compositions/finance.html",
+        "bbox": {
+          "x": 1123,
+          "y": 265.69,
+          "width": 298.32,
+          "height": 41.19
+        },
+        "time": 13.25,
+        "times": [
+          13.25
+        ],
+        "fontPx": 26,
+        "floorPx": 28,
+        "seconds": 0.75,
+        "elements": [
+          {
+            "selector": "#finance-chip",
+            "text": "32,000.0 GC total",
+            "fontPx": 26,
+            "time": 13.25,
+            "seconds": 0.75
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"A closed-loop campus wallet\" (5 words) is on screen 0.50 s (±0.01 s), under its 1.50 s floor: hold it about 0.5 s + 0.3 s a word (2.00 s here) before it leaves or changes; see references/motion.md.",
+        "text": "A closed-loop campus wallet",
+        "selector": "#nc-sub",
+        "dataAttributes": {},
+        "sourceFile": "compositions/nocash.html",
+        "bbox": {
+          "x": 684.59,
+          "y": 830,
+          "width": 550.82,
+          "height": 46
+        },
+        "time": 16,
+        "words": 5,
+        "seconds": 0.5,
+        "floorSeconds": 1.5
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 2 text elements stay under it for 0.5 s or more, the smallest \"genpay · stalls\" at 16 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "genpay · stalls",
+        "selector": "#end-url",
+        "dataAttributes": {},
+        "sourceFile": "compositions/end.html",
+        "bbox": {
+          "x": 1181.7,
+          "y": 279,
+          "width": 150,
+          "height": 27
+        },
+        "time": 19.625,
+        "times": [
+          19.625,
+          20
+        ],
+        "fontPx": 16,
+        "floorPx": 28,
+        "seconds": 2.625,
+        "elements": [
+          {
+            "selector": "#end-url",
+            "text": "genpay · stalls",
+            "fontPx": 16,
+            "time": 19.625,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#end-b-sub",
+            "text": "Stall directory · live occupancy",
+            "fontPx": 26,
+            "time": 20,
+            "seconds": 2.25
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "The film's last line \"General de Jesus College · School e-wallet\" (7 words) is on screen 1.67 s (±0.01 s), under the 2.00 s a closing line needs: hold it about 0.5 s + 0.3 s a word and at least 2 s before the film ends; see references/motion.md.",
+        "text": "General de Jesus College · School e-wallet",
+        "selector": "#end-tag",
+        "dataAttributes": {},
+        "sourceFile": "compositions/end.html",
+        "bbox": {
+          "x": 996,
+          "y": 580,
+          "width": 784.56,
+          "height": 45
+        },
+        "time": 23.336,
+        "words": 7,
+        "seconds": 1.668,
+        "floorSeconds": 2
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 200
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  }
+}

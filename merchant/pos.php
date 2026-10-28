@@ -59,7 +59,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=22">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=26">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         .lw-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
@@ -243,7 +243,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                         <div class="pos-qr-status is-pending" id="posQrStatus">Waiting for payment&hellip;</div>
                         <strong id="posQrTitle">Ready for student scan</strong>
                         <span id="posQrHint">Ask the student to open Shop Cart, scan this QR, or enter the POS code to check the bill.</span>
-                        <div class="pos-qr-frame">
+                        <div class="pos-qr-frame" id="posQrFrame" role="button" tabindex="0" title="Tap to enlarge" aria-label="Enlarge payment QR" onclick="openQrFullscreen(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openQrFullscreen(this); }">
                             <div class="pos-qr-canvas" id="posQrCanvas"></div>
                             <span class="pos-qr-corner tl"></span>
                             <span class="pos-qr-corner tr"></span>
@@ -271,6 +271,26 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
             </div>
         </div>
     </main>
+</div>
+
+<div class="pos-qr-fs" id="posQrFs" role="dialog" aria-modal="true" aria-label="Scan to pay" onclick="closeQrFullscreen()">
+    <div class="pos-qr-fs-card">
+        <span class="pos-qr-status is-pending">Scan to pay</span>
+        <strong class="pos-qr-fs-amount" id="posQrFsAmount"></strong>
+        <div class="pos-qr-frame">
+            <canvas id="posQrFsCanvas" width="250" height="250"></canvas>
+            <span class="pos-qr-corner tl"></span>
+            <span class="pos-qr-corner tr"></span>
+            <span class="pos-qr-corner bl"></span>
+            <span class="pos-qr-corner br"></span>
+        </div>
+        <div class="pos-qr-manual" id="posQrFsCodeBox">
+            <span>Manual entry code</span>
+            <strong id="posQrFsCode"></strong>
+        </div>
+        <p class="pos-qr-fs-hint">Student: open Shop Cart and scan this code, or enter the manual code.</p>
+        <span class="pos-qr-fs-close">Tap anywhere to close</span>
+    </div>
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
@@ -470,6 +490,29 @@ function renderPosQr(payload) {
     });
 }
 
+// el is a QR container (or the QR img itself). Copies its rendered pixels and
+// reads the amount/code from data-amount / data-code; no token is re-fetched.
+function openQrFullscreen(el) {
+    const src = el.querySelector('canvas') || el;
+    if (!(src instanceof HTMLCanvasElement || src instanceof HTMLImageElement)) return;
+    const ctx = document.getElementById('posQrFsCanvas').getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0, 250, 250);
+    const code = el.dataset.code || '';
+    document.getElementById('posQrFsAmount').textContent = el.dataset.amount || '';
+    document.getElementById('posQrFsCode').textContent = code;
+    document.getElementById('posQrFsCodeBox').hidden = !code;
+    document.getElementById('posQrFs').classList.add('is-open');
+}
+
+function closeQrFullscreen() {
+    document.getElementById('posQrFs').classList.remove('is-open');
+}
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeQrFullscreen();
+});
+
 function startStatusPolling(orderId) {
     stopStatusPolling();
     posStatusTimer = setInterval(async () => {
@@ -487,6 +530,7 @@ function startStatusPolling(orderId) {
             if (data.status === 'paid') {
                 qrDraftKey = '';
                 stopStatusPolling();
+                closeQrFullscreen();
                 refreshLiveQueue();
                 // Order done: reset the cart but keep the box visible in its
                 // paid state (renderCart hides it) so the cashier sees the ref.
@@ -501,6 +545,7 @@ function startStatusPolling(orderId) {
                 document.getElementById('posQrBox').style.display = 'block';
             } else if (data.status === 'expired' || data.status === 'voided') {
                 stopStatusPolling();
+                closeQrFullscreen();
                 setQrStatus('expired', 'Expired \u2014 generate a new QR');
                 document.getElementById('posQrTitle').textContent = 'This QR is no longer valid';
                 document.getElementById('posQrHint').textContent = 'Tap Generate Payment QR again for a fresh code.';
@@ -550,6 +595,9 @@ async function generatePaymentQr() {
         }
 
         renderPosQr(result.qr_payload);
+        const qrFrame = document.getElementById('posQrFrame');
+        qrFrame.dataset.amount = `${gcAmount(total)} GC`;
+        qrFrame.dataset.code = result.short_code || '';
         document.getElementById('posQrTitle').textContent = 'Ready for student scan';
         document.getElementById('posQrHint').textContent = 'Ask the student to open Shop Cart and scan this QR, or enter the POS code.';
         document.getElementById('posQrShortCode').textContent = result.short_code || '----';
@@ -771,18 +819,19 @@ async function openQueueOrder(uid, previousOrder = null) {
         const badge = QUEUE_BADGES[stage] || `<span class="badge bg-light text-dark">${escapeHtml(data.status)}</span>`;
         const paidTime = data.paid_at ? new Date(data.paid_at.replace(' ', 'T')).toLocaleString() : null;
         const isPending = data.status === 'pending';
+        if (!isPending) closeQrFullscreen();
 
         let payBlock = '';
         if (isPending && data.wallet_qr_url) {
             payBlock = `
                 <div class="pq-pay">
-                    <img src="${escapeHtml(data.wallet_qr_url)}" alt="Order payment QR">
+                    <img src="${escapeHtml(data.wallet_qr_url)}" alt="Order payment QR" class="pq-qr-zoom" tabindex="0" title="Tap to enlarge" role="button" data-amount="${gcAmount(Number(data.amount || 0))} GC" onclick="openQrFullscreen(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openQrFullscreen(this); }">
                     <div>Pre-order: scan this order's payment QR from Shop Cart to pay <strong>${gcAmount(Number(data.amount || 0))} GC</strong>.</div>
                 </div>`;
         } else if (isPending && data.qr_payload) {
             payBlock = `
                 <div class="pq-pay">
-                    <div class="pq-pay-qr" id="pqPayQr"></div>
+                    <div class="pq-pay-qr pq-qr-zoom" id="pqPayQr" tabindex="0" title="Tap to enlarge" role="button" data-amount="${gcAmount(Number(data.amount || 0))} GC" data-code="${escapeHtml(data.short_code || '')}" onclick="openQrFullscreen(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openQrFullscreen(this); }"></div>
                     <div>Walk-in bill: scan from Shop Cart &rarr; Pay Now, or type code <strong>${escapeHtml(data.short_code || '----')}</strong>.</div>
                 </div>`;
         }

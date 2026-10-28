@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../connection/CirculationEngine.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
 
 gjc_require_role(['merchant']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_operational_tables($db);
 gjc_ensure_parent_wallet_schema($db);
 

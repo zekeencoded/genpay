@@ -26,6 +26,7 @@ $merchantUserId = (int) $currentUser['id'];
 
 gjc_ensure_staff_position_schema($db);
 gjc_ensure_sales_remittances_schema($db);
+gjc_ensure_merchant_qr_orders_schema($db);
 
 $staffId = gjc_verify_view_token($_GET['token'] ?? null, 'merchant_staff');
 
@@ -48,9 +49,7 @@ if (!$staff) {
     http_response_code(404);
 }
 
-// Local escaper — the shared gjc_e() only casts to string, and this page
-// renders staff-supplied names, emails and contact numbers.
-$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$e = gjc_e(...);
 
 if ($staff) {
     $staffId = (int) $staff['userID'];
@@ -120,16 +119,27 @@ if ($staff) {
     $lastRemitAt = $remits[0]['created_at'] ?? null;
 
     // ── Sales attributed to this staff member ─────────────────────────────────
-    // A sale carries no staff id: POS sales record the cashier in initiated_by,
-    // but student QR checkouts record the student. So a sale is theirs when
-    // they rang it up, or when it falls inside a remittance window they closed
-    // (the same (period_start, period_end] rule gjc_merchant_unremitted_sales uses).
-    $sales = [];
+    // Direct POS sales record the cashier in initiated_by. QR bills record the
+    // buyer there instead, and the cashier who created the bill in
+    // merchant_qr_orders.created_by (linked by paid_ref). App pre-orders (CART-)
+    // have no operator, so they belong to the staff who remitted them: the
+    // remittance window they fall in (the same (period_start, period_end] rule
+    // gjc_merchant_unremitted_sales uses).
+    $attributed = [];
     if ($walletId > 0) {
         $salesStmt = $db->prepare(
-            "SELECT t.id, t.reference_no, t.transaction_type, t.amount, t.notes, t.created_at,
+            "SELECT t.id, t.reference_no, t.transaction_type, t.amount, t.notes, t.created_at, t.initiated_by,
+                    q.created_by AS bill_by,
+                    EXISTS (
+                        SELECT 1 FROM sales_remittances r
+                         WHERE r.staff_user_id = ?
+                           AND r.merchant_wallet_id = t.merchant_wallet_id
+                           AND t.created_at >  r.period_start
+                           AND t.created_at <= r.period_end
+                    ) AS in_my_remit,
                     u.first_name AS buyer_first, u.last_name AS buyer_last
                FROM transactions t
+               LEFT JOIN merchant_qr_orders q ON q.paid_ref = t.reference_no
                LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
                LEFT JOIN users u ON u.userID = sw.user_id
               WHERE t.merchant_wallet_id = ?
@@ -147,13 +157,21 @@ if ($staff) {
               ORDER BY t.created_at DESC"
         );
         $salesStmt->execute([
+            $staffId,
             $walletId,
             CirculationEngine::TXN_PAYMENT,
             $staffId,
             $staffId,
         ]);
-        $sales = $salesStmt->fetchAll(PDO::FETCH_ASSOC);
+        $attributed = $salesStmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    // Lists, tiles and charts show only what this profile rang up or remitted as
+    // pre-orders. The window-matched set stays in $attributed, only to reconcile
+    // against the remittances.
+    $sales = array_values(array_filter($attributed, static fn($s) =>
+        (int) $s['initiated_by'] === $staffId
+        || (int) $s['bill_by'] === $staffId
+        || ((int) $s['in_my_remit'] === 1 && strpos((string) $s['reference_no'], 'CART-') === 0)));
 
     // Sales figures come from the ledger; remitted figures from the remittance
     // rows as recorded. The two can disagree on older data: before
@@ -166,7 +184,8 @@ if ($staff) {
         static fn($r) => date('Y-m-d', strtotime((string) $r['created_at'])) === date('Y-m-d') ? (float) $r['amount'] : 0.0,
         $remits
     ));
-    $remitOvercount = $remitTotal - $salesTotal > 0.009;
+    $matchedTotal = array_sum(array_map(static fn($s) => (float) $s['amount'], $attributed));
+    $remitOvercount = $remitTotal - $matchedTotal > 0.009;
 
     // Item summaries live in notes ("POS Sale: 2x Rice Meal, 1x Iced Tea").
     $itemsOf = static fn(array $s): string => preg_replace('/^POS Sale:\s*/i', '', trim((string) $s['notes']));
@@ -341,7 +360,7 @@ if ($staff) {
         <div class="sv-grid">
             <section class="gp-card uv-card">
                 <div class="gp-card-head">
-                    <div><h3>Last 7 days</h3><p>Sales attributed to <?= $e($firstName ?: 'this staff member') ?> per day.</p></div>
+                    <div><h3>Last 7 days</h3><p>Sales <?= $e($firstName ?: 'this staff member') ?> rang up per day.</p></div>
                 </div>
                 <div class="sv-week">
                     <?php foreach ($week as $day => $amt): ?>
@@ -356,7 +375,7 @@ if ($staff) {
 
             <section class="gp-card uv-card">
                 <div class="gp-card-head">
-                    <div><h3>Top items sold</h3><p>By quantity across all attributed sales.</p></div>
+                    <div><h3>Top items sold</h3><p>By quantity across sales this staff member rang up.</p></div>
                 </div>
                 <?php if (!$topItems): ?>
                 <p class="uv-muted">No item data yet.</p>
@@ -420,7 +439,7 @@ if ($staff) {
             </div>
             <?php if ($remitOvercount): ?>
             <p class="sv-foot" style="margin-top:12px"><i class="fa-solid fa-circle-info"></i>
-                Remitted totals (<?= gjc_gc_amount($remitTotal) ?> GC &asymp; <?= gjc_money($remitTotal) ?>) are higher than the matched sales (<?= gjc_gc_amount($salesTotal) ?> GC &asymp; <?= gjc_money($salesTotal) ?>).
+                Remitted totals (<?= gjc_gc_amount($remitTotal) ?> GC &asymp; <?= gjc_money($remitTotal) ?>) are higher than the matched sales (<?= gjc_gc_amount($matchedTotal) ?> GC &asymp; <?= gjc_money($matchedTotal) ?>).
                 Some earlier remittances counted sales a previous remit had already covered.</p>
             <?php endif; ?>
             <div class="sv-table-wrap">
@@ -452,7 +471,7 @@ if ($staff) {
         <section class="gp-card uv-card">
             <div class="sv-head-row">
                 <div class="gp-card-head" style="margin:0">
-                    <div><h3>Sales</h3><p>Sales they rang up or remitted, newest first.</p></div>
+                    <div><h3>Sales</h3><p>Sales they rang up, newest first.</p></div>
                 </div>
                 <?php if ($sales): ?>
                 <div class="sv-search">
@@ -468,7 +487,7 @@ if ($staff) {
                     </thead>
                     <tbody id="salesBody">
                     <?php if (!$sales): ?>
-                        <tr><td colspan="5" class="sv-empty">No sales attributed to this staff member yet.</td></tr>
+                        <tr><td colspan="5" class="sv-empty">No sales rung up by this staff member yet.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($salesShown as $s):
                         $buyer = trim(($s['buyer_first'] ?? '') . ' ' . ($s['buyer_last'] ?? ''));

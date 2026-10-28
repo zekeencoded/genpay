@@ -34,9 +34,7 @@ if (!$user) {
     http_response_code(404);
 }
 
-// Local escaper — the shared gjc_e() only casts to string and does not
-// HTML-escape, and this page renders user-supplied fields (name, email, etc.).
-$esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$esc = gjc_e(...);
 
 if ($user) {
     $roleId = (int) ($user['roleID'] ?? 0);

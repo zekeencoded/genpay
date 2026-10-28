@@ -1087,6 +1087,9 @@ function gjc_stall_application_upload_rules(): array
     ];
 }
 
+/** Upload attempts allowed per network address per hour on the public apply form. */
+const GJC_APPLY_UPLOADS_PER_HOUR = 60;
+
 /**
  * A not-yet-submitted stall application has no id to key an upload folder on,
  * so each visitor gets a random per-session token (not the raw PHP session
@@ -1123,8 +1126,17 @@ function gjc_stall_application_draft_files(): array
  *
  * @return array{success:bool,message?:string,name?:string}
  */
-function gjc_stage_stall_application_upload(string $field, ?array $file, array $rule): array
+function gjc_stage_stall_application_upload(PDO $db, string $field, ?array $file, array $rule): array
 {
+    // The form is public, so a script could start a new session per request and
+    // fill the disk. Every upload attempt counts; a full application needs 5, so
+    // this also caps applications at about 12 per hour from one network.
+    $throttleKey = gjc_throttle_key('apply', (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if (gjc_login_throttled($db, $throttleKey, GJC_APPLY_UPLOADS_PER_HOUR, 60)) {
+        return ["success" => false, "message" => "Too many uploads from your network. Please try again later."];
+    }
+    gjc_record_login_failure($db, $throttleKey);
+
     if (!$file || ($file["error"] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($file["tmp_name"])) {
         return ["success" => false, "message" => $rule["label"] . " is required."];
     }
@@ -1203,17 +1215,7 @@ function gjc_cleanup_stale_stall_application_drafts(): void
     }
 }
 
-/**
- * Archive table for applications declined during Step 1 (Review) or
- * Step 2 (Meeting). Kept separate from the live pipeline so finance staff
- * can reference or reactivate a declined application later.
- */
-function gjc_ensure_archived_rejections_schema(PDO $db): void
-{
-    if (!gjc_table_exists($db,'stall_application_rejections')) {
-        throw new RuntimeException('Normalized rejection history is missing.');
-    }
-}
+
 
 /** Fixed bookable times for stall application Step 2 meetings - one applicant per slot. */
 function gjc_meeting_time_slots(): array

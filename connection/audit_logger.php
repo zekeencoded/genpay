@@ -317,6 +317,12 @@ const AUDIT_ACTION_TYPES = [
     'DOCUMENT_VIEW',
     'DATA_EXPORT',
 
+    // Backup & restore (admin/backup.php, database/backup_cron.php)
+    'BACKUP_CREATE',
+    'BACKUP_DOWNLOAD',
+    'BACKUP_RESTORE',
+    'BACKUP_DELETE',
+
     // Written only by database/migrations/audit_hardening.php
     'MIGRATION_REDACTION',
     'MIGRATION_ROLE_RELABEL',
@@ -514,7 +520,7 @@ function gjc_audit_role_from_user(PDO $pdo, int $userId): string
         return match ((int) ($user['roleID'] ?? 0)) {
             1 => 'Student',
             2, 5 => 'Merchant',
-            3, 4 => 'Finance',
+            3, 4, 8 => 'Finance',
             6 => 'Vendor/Staff',
             7 => 'Parent',
             // Falling back to 'student' here was the same guess by another

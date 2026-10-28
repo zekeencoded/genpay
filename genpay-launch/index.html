@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ink: #0e1a14;
+        --muted: #5b6b63;
+        --green: #1e7b3c;
+        --green-deep: #0f5b2a;
+        --gold: #f2a900;
+        --font-display: "Outfit", sans-serif;
+        --font-ui: "Inter", sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #eef4f1;
+        color: var(--ink);
+        font-family: var(--font-ui);
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #f7faf8 0%, #e8f0ec 48%, #fbf6ec 100%);
+      }
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+      }
+      #blob-a {
+        left: -220px;
+        top: -260px;
+        width: 760px;
+        height: 760px;
+        background: radial-gradient(circle, rgba(30, 123, 60, 0.16), rgba(30, 123, 60, 0) 70%);
+      }
+      #blob-b {
+        right: -240px;
+        bottom: -300px;
+        width: 820px;
+        height: 820px;
+        background: radial-gradient(circle, rgba(242, 169, 0, 0.16), rgba(242, 169, 0, 0) 70%);
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+      }
+      .inner {
+        position: absolute;
+        inset: 0;
+      }
+      .glass {
+        background: rgba(255, 255, 255, 0.66);
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        border-radius: 32px;
+        box-shadow:
+          0 40px 90px rgba(14, 60, 38, 0.14),
+          inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(24px) saturate(1.2);
+        -webkit-backdrop-filter: blur(24px) saturate(1.2);
+      }
+      .seal {
+        background: url("assets/gp_logo.png") center / contain no-repeat;
+      }
+      .wordmark {
+        font-family: var(--font-display);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+      }
+      .wordmark .pay {
+        color: var(--green);
+      }
+
+      /* Scene 1: logo reveal */
+      #logo-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #logo-lockup {
+        position: relative;
+        width: 860px;
+        height: 340px;
+      }
+      #logo-seal {
+        position: absolute;
+        left: 260px;
+        top: 0;
+        width: 340px;
+        height: 340px;
+      }
+      #logo-word {
+        position: absolute;
+        left: 380px;
+        top: 50%;
+        margin-top: -92px;
+        font-size: 184px;
+        line-height: 1;
+      }
+      #logo-tag {
+        margin-top: 28px;
+        font-size: 36px;
+        letter-spacing: 0.02em;
+        color: var(--muted);
+      }
+
+      /* Feature scenes */
+      .feature .inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 160px;
+      }
+      .copy {
+        width: 660px;
+      }
+      .eyebrow {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--green);
+        margin-bottom: 28px;
+      }
+      .headline {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 100px;
+        line-height: 1.02;
+        letter-spacing: -0.025em;
+      }
+      .sub {
+        margin-top: 32px;
+        font-size: 34px;
+        line-height: 1.4;
+        color: var(--muted);
+      }
+      .card {
+        position: relative;
+        width: 720px;
+        padding: 40px;
+      }
+      .card-head {
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        padding: 12px 26px;
+        border-radius: 999px;
+        font-size: 28px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill-wait {
+        background: #fff3cc;
+        color: #7a5200;
+      }
+      .pill-paid {
+        background: var(--green);
+        color: #fff;
+      }
+      .pill-refund {
+        background: #e4e9e6;
+        color: #4a5a52;
+      }
+      .stack {
+        position: relative;
+      }
+      .stack > * {
+        position: absolute;
+        left: 0;
+        top: 0;
+        white-space: nowrap;
+      }
+
+      /* F1: scan, pay, done */
+      #f1-card {
+        height: 520px;
+      }
+      #f1-qr {
+        position: absolute;
+        left: 40px;
+        top: 110px;
+        width: 240px;
+        height: 240px;
+        padding: 16px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid rgba(14, 26, 20, 0.08);
+      }
+      #f1-qr svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #f1-scan {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        top: 16px;
+        height: 4px;
+        border-radius: 4px;
+        background: var(--green);
+        box-shadow: 0 0 16px rgba(30, 123, 60, 0.6);
+      }
+      #f1-items {
+        position: absolute;
+        left: 320px;
+        top: 110px;
+        width: 360px;
+      }
+      .line {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 0;
+        border-bottom: 1px solid rgba(14, 26, 20, 0.08);
+        font-size: 30px;
+        opacity: 0;
+      }
+      .line .muted {
+        color: var(--muted);
+      }
+      #f1-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-top: 22px;
+        opacity: 0;
+      }
+      #f1-total .big {
+        font-family: var(--font-display);
+        font-size: 56px;
+        font-weight: 600;
+      }
+      #f1-total .sub-amt {
+        font-size: 28px;
+        color: var(--muted);
+      }
+      #f1-status {
+        position: absolute;
+        left: 40px;
+        top: 390px;
+        height: 60px;
+        width: 300px;
+      }
+      #f1-status .pill {
+        left: 0;
+        top: 0;
+      }
+      #f1-paid {
+        opacity: 0;
+      }
+
+      /* F2: refunds */
+      #f2-card {
+        padding: 48px 56px;
+      }
+      .ledger {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 26px 0;
+        border-bottom: 1px solid rgba(14, 26, 20, 0.08);
+        opacity: 0;
+      }
+      .ledger .name {
+        font-size: 38px;
+        font-weight: 600;
+      }
+      .ledger .meta {
+        margin-top: 6px;
+        font-size: 28px;
+        color: var(--muted);
+      }
+      .ledger .amt {
+        font-family: var(--font-display);
+        font-size: 48px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      #f2-sale .stack {
+        width: 210px;
+        height: 52px;
+        flex: none;
+      }
+      #f2-reason {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 26px 0;
+        border-bottom: 1px solid rgba(14, 26, 20, 0.08);
+        opacity: 0;
+        font-size: 30px;
+      }
+      #f2-reason .val {
+        padding: 12px 24px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid rgba(14, 26, 20, 0.12);
+        font-weight: 600;
+      }
+      #f2-btn {
+        margin-top: 28px;
+        height: 76px;
+        border-radius: 999px;
+        background: var(--green);
+        color: #fff;
+        font-size: 32px;
+        font-weight: 600;
+        display: grid;
+        place-items: center;
+        box-shadow: 0 20px 40px rgba(30, 123, 60, 0.25);
+      }
+      #f2-refund {
+        margin-top: 24px;
+        opacity: 0;
+      }
+      #f2-refund .amt {
+        color: var(--muted);
+      }
+      #f2-logged {
+        margin-top: 8px;
+        font-size: 28px;
+        color: var(--muted);
+      }
+
+      /* F3: dashboard */
+      #f3-card {
+        height: 780px;
+      }
+      .stat {
+        position: absolute;
+        top: 110px;
+        width: 300px;
+        height: 220px;
+        padding: 24px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(14, 26, 20, 0.06);
+      }
+      #f3-stat-a {
+        left: 40px;
+      }
+      #f3-stat-b {
+        left: 380px;
+      }
+      .stat .label {
+        font-size: 28px;
+        color: var(--muted);
+      }
+      #f3-today {
+        margin-top: 14px;
+        font-family: var(--font-display);
+        font-size: 72px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--green-deep);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat .sub-line {
+        margin-top: 14px;
+        font-size: 28px;
+        color: var(--green);
+        font-weight: 600;
+      }
+      #f3-remit-val {
+        margin-top: 14px;
+        font-family: var(--font-display);
+        font-size: 60px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      #f3-remit-btn {
+        position: absolute;
+        left: 24px;
+        bottom: 22px;
+        height: 60px;
+        padding: 0 30px;
+        border-radius: 999px;
+        background: var(--green);
+        color: #fff;
+        font-size: 28px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+      }
+      #f3-chart-label {
+        position: absolute;
+        left: 40px;
+        top: 360px;
+        font-size: 28px;
+        color: var(--muted);
+      }
+      #f3-bars {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        top: 410px;
+        height: 310px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      .col {
+        width: 60px;
+        height: 310px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+      }
+      .bar {
+        width: 60px;
+        border-radius: 14px 14px 6px 6px;
+        background: linear-gradient(180deg, #3aa35c, #1e7b3c);
+      }
+      .col .lbl {
+        margin-top: 12px;
+        font-size: 28px;
+        color: var(--muted);
+      }
+      .col.today .bar {
+        background: linear-gradient(180deg, #f5b824, #f2a900);
+      }
+
+      /* End card */
+      #end-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #end-seal {
+        width: 220px;
+        height: 220px;
+      }
+      #end-word {
+        margin-top: 18px;
+        font-size: 150px;
+        line-height: 1;
+      }
+      #end-line {
+        margin-top: 26px;
+        font-size: 40px;
+        color: var(--muted);
+      }
+      #end-cta-wrap {
+        position: relative;
+        margin-top: 56px;
+      }
+      #end-cta {
+        height: 104px;
+        padding: 0 84px;
+        display: flex;
+        align-items: center;
+        border-radius: 999px;
+        background: var(--green);
+        color: #fff;
+        font-size: 40px;
+        font-weight: 600;
+        box-shadow: 0 24px 50px rgba(30, 123, 60, 0.3);
+      }
+      #end-cursor {
+        position: absolute;
+        left: 74%;
+        top: 62%;
+        width: 56px;
+        height: 56px;
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="blob-a" class="blob"></div>
+      <div id="blob-b" class="blob"></div>
+
+      <!-- 0–2.9s: logo reveal -->
+      <section id="s-logo" class="clip scene" data-start="0" data-duration="2.9" data-track-index="1">
+        <div id="logo-inner" class="inner">
+          <div id="logo-lockup">
+            <div id="logo-seal" class="seal" role="img" aria-label="GenPay seal"></div>
+            <div id="logo-word" class="wordmark">Gen<span class="pay">Pay</span></div>
+          </div>
+          <div id="logo-tag">Closed-loop wallet and canteen management</div>
+        </div>
+      </section>
+
+      <!-- 2.6–5.0s: scan, pay, done (merchant POS) -->
+      <section id="s-f1" class="clip scene feature" data-start="2.6" data-duration="2.4" data-track-index="2">
+        <div id="f1-inner" class="inner">
+          <div id="f1-copy" class="copy">
+            <div class="eyebrow">01 · Pay at the stall</div>
+            <div class="headline">Scan a QR code. Pay at the stall.</div>
+            <div class="sub">Turns Paid when the wallet pays.</div>
+          </div>
+          <div id="f1-card" class="card glass">
+            <div class="card-head">New order · Stall POS</div>
+            <div id="f1-qr">
+              <svg viewBox="0 0 9 9" shape-rendering="crispEdges" id="f1-qr-svg"></svg>
+              <div id="f1-scan"></div>
+            </div>
+            <div id="f1-items">
+              <div class="line" id="f1-l1"><span>Siomai Rice × 1</span><span class="muted">6 GC</span></div>
+              <div class="line" id="f1-l2"><span>Iced Tea × 1</span><span class="muted">2 GC</span></div>
+              <div id="f1-total"><span class="big">8 GC</span><span class="sub-amt">≈ ₱80.00</span></div>
+            </div>
+            <div id="f1-status" class="stack" data-layout-allow-overlap>
+              <span class="pill pill-wait" id="f1-wait">Awaiting payment</span>
+              <span class="pill pill-paid" id="f1-paid">Paid ✓</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4.8–7.0s: refunds that keep the record -->
+      <section id="s-f2" class="clip scene feature" data-start="4.8" data-duration="2.2" data-track-index="3">
+        <div id="f2-inner" class="inner">
+          <div id="f2-copy" class="copy">
+            <div class="eyebrow">02 · Returns</div>
+            <div class="headline">Refunds without losing the record.</div>
+            <div class="sub">Reversed sales stay on record.</div>
+          </div>
+          <div id="f2-card" class="card glass">
+            <div class="card-head">Transaction · Siomai Rice</div>
+            <div class="ledger" id="f2-sale" style="margin-top: 24px">
+              <div>
+                <div class="name">Siomai Rice</div>
+                <div class="meta">Sale · 8 GC</div>
+              </div>
+              <div class="stack" data-layout-allow-overlap>
+                <span class="pill pill-paid" id="f2-chip-paid">Paid</span>
+                <span class="pill pill-refund" id="f2-chip-refund">Refunded</span>
+              </div>
+            </div>
+            <div id="f2-reason">
+              <span>Return reason</span>
+              <span class="val">Wrong item given</span>
+            </div>
+            <div id="f2-btn">Issue return</div>
+            <div id="f2-refund">
+              <div class="ledger" style="opacity: 1; border-bottom: none; padding: 0">
+                <div>
+                  <div class="name">Refund entry</div>
+                  <div id="f2-logged">Logged in the audit trail</div>
+                </div>
+                <div class="amt">+8 GC</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6.8–9.2s: today's sales, live -->
+      <section id="s-f3" class="clip scene feature" data-start="6.8" data-duration="2.4" data-track-index="4">
+        <div id="f3-inner" class="inner">
+          <div id="f3-copy" class="copy">
+            <div class="eyebrow">03 · Dashboard</div>
+            <div class="headline">Today's sales, live at the stall.</div>
+            <div class="sub">Refreshes every 5 seconds.</div>
+          </div>
+          <div id="f3-card" class="card glass">
+            <div class="card-head">Merchant dashboard</div>
+            <div id="f3-stat-a" class="stat">
+              <div class="label">Today's Sales</div>
+              <div id="f3-today">₱0</div>
+              <div class="sub-line">● Live</div>
+            </div>
+            <div id="f3-stat-b" class="stat">
+              <div class="label">To remit</div>
+              <div id="f3-remit-val">₱1,180</div>
+              <div id="f3-remit-btn">Remit Sales</div>
+            </div>
+            <div id="f3-chart-label">Daily sales, last 7 days</div>
+            <div id="f3-bars">
+              <div class="col"><div class="bar" style="height: 118px"></div><span class="lbl">Mon</span></div>
+              <div class="col"><div class="bar" style="height: 149px"></div><span class="lbl">Tue</span></div>
+              <div class="col"><div class="bar" style="height: 106px"></div><span class="lbl">Wed</span></div>
+              <div class="col"><div class="bar" style="height: 187px"></div><span class="lbl">Thu</span></div>
+              <div class="col"><div class="bar" style="height: 157px"></div><span class="lbl">Fri</span></div>
+              <div class="col"><div class="bar" style="height: 220px"></div><span class="lbl">Sat</span></div>
+              <div class="col today"><div class="bar" style="height: 240px"></div><span class="lbl">Today</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9.0–12.0s: end card -->
+      <section id="s-end" class="clip scene" data-start="9" data-duration="3" data-track-index="5">
+        <div id="end-inner" class="inner">
+          <div id="end-seal" class="seal" role="img" aria-label="GenPay seal"></div>
+          <div id="end-word" class="wordmark">Gen<span class="pay">Pay</span></div>
+          <div id="end-line">Cashless payments for your whole campus.</div>
+          <div id="end-cta-wrap">
+            <div id="end-cta">Join the waitlist</div>
+            <svg id="end-cursor" viewBox="0 0 24 24">
+              <path d="M4 2l15 9-6.5 1.6L16 20l-3 1.4-3.4-7.2L4 18z" fill="#fff" stroke="#0e1a14" stroke-width="1.4" stroke-linejoin="round" />
+            </svg>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const fmt = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const today = { n: 0 };
+
+      // QR placeholder pattern: a fixed, hand-written 9×9 grid, so every render is identical
+      const qrRows = [
+        "111010111",
+        "100010001",
+        "101110101",
+        "101000101",
+        "110111010",
+        "001010111",
+        "101101001",
+        "100010101",
+        "111011011",
+      ];
+      const qrSvg = document.getElementById("f1-qr-svg");
+      qrRows.forEach((row, y) => {
+        [...row].forEach((c, x) => {
+          if (c === "1") {
+            qrSvg.insertAdjacentHTML("beforeend", `<rect x="${x}" y="${y}" width="1" height="1" fill="#0e1a14"/>`);
+          }
+        });
+      });
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Scene 1: logo reveal (0–2.9s)
+      tl.fromTo("#logo-seal", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 0);
+      tl.to("#logo-seal", { x: -260, duration: 0.7, ease: "power3.inOut" }, 1.0);
+      tl.fromTo("#logo-word", { clipPath: "inset(0 100% 0 0)", x: 30 }, { clipPath: "inset(0 0% 0 0)", x: 0, duration: 0.7, ease: "power3.out" }, 1.55);
+      tl.fromTo("#logo-tag", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 2.0);
+      tl.to("#logo-inner", { opacity: 0, duration: 0.3, ease: "none" }, 2.6);
+
+      // Scene 2: scan, pay, done (2.6–5.0s)
+      tl.fromTo("#f1-inner", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.out" }, 2.6);
+      tl.fromTo("#f1-copy", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 2.75);
+      tl.fromTo("#f1-card", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" }, 2.8);
+      tl.fromTo("#f1-wait", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3.0);
+      tl.fromTo("#f1-l1", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 3.05);
+      tl.fromTo("#f1-l2", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 3.2);
+      tl.fromTo("#f1-total", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, 3.35);
+      tl.fromTo("#f1-scan", { y: 0 }, { y: 220, duration: 0.5, ease: "power1.inOut" }, 3.4);
+      tl.to("#f1-wait", { opacity: 0, duration: 0.2 }, 3.9);
+      tl.fromTo("#f1-paid", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 3.9);
+      tl.to("#f1-inner", { opacity: 0, duration: 0.3, ease: "none" }, 4.7);
+
+      // Scene 3: refunds keep the record (4.8–7.0s)
+      tl.fromTo("#f2-inner", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.out" }, 4.8);
+      tl.fromTo("#f2-copy", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 4.95);
+      tl.fromTo("#f2-card", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" }, 5.0);
+      tl.fromTo("#f2-sale", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 5.2);
+      tl.fromTo("#f2-reason", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 5.4);
+      tl.to("#f2-btn", { scale: 0.94, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.inOut" }, 5.7);
+      tl.to("#f2-chip-paid", { opacity: 0, duration: 0.2 }, 5.85);
+      tl.fromTo("#f2-chip-refund", { opacity: 0 }, { opacity: 1, duration: 0.25 }, 5.85);
+      tl.to("#f2-btn", { opacity: 0, duration: 0.25 }, 5.95);
+      tl.fromTo("#f2-refund", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, 6.1);
+      tl.to("#f2-inner", { opacity: 0, duration: 0.3, ease: "none" }, 6.7);
+
+      // Scene 4: today's sales, live (6.8–9.2s)
+      tl.fromTo("#f3-inner", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.out" }, 6.8);
+      tl.fromTo("#f3-copy", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 6.95);
+      tl.fromTo("#f3-card", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" }, 7.0);
+      tl.fromTo("#f3-stat-b", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 7.15);
+      tl.to(today, { n: 4260, duration: 1.0, ease: "power2.out", onUpdate: () => { document.getElementById("f3-today").textContent = "₱" + fmt(today.n); } }, 7.15);
+      tl.fromTo(".bar", { scaleY: 0 }, { scaleY: 1, duration: 0.4, ease: "power2.out", stagger: 0.06, transformOrigin: "50% 100%" }, 7.3);
+      tl.to("#f3-inner", { opacity: 0, duration: 0.3, ease: "none" }, 8.9);
+
+      // Scene 5: end card (9.0–12.0s)
+      tl.fromTo("#end-inner", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 9.0);
+      tl.fromTo("#end-seal", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.4)" }, 9.1);
+      tl.fromTo("#end-word", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 9.4);
+      tl.fromTo("#end-line", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 9.8);
+      tl.fromTo("#end-cta", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.3)" }, 9.9);
+      tl.fromTo("#end-cursor", { x: 300, y: 260, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 10.0);
+      tl.to("#end-cursor", { scale: 0.85, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.inOut" }, 10.6);
+      tl.to("#end-cta", { scale: 0.95, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.inOut" }, 10.6);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

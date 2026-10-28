@@ -104,7 +104,11 @@ function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
     ];
 }
 
-/** Identify the register operator separately from the student/parent payer. */
+/**
+ * Counter sales that must be remitted: app pre-orders (CART-) and any sale
+ * rung up by a staff account. Pre-orders have no operator on the ledger, so
+ * they are always treated as counter sales.
+ */
 function gjc_merchant_staff_sale_sql(PDO $db): string
 {
     $operator = 't.initiated_by';
@@ -114,11 +118,11 @@ function gjc_merchant_staff_sale_sql(PDO $db): string
             WHERE q.merchant_wallet_id = t.merchant_wallet_id AND q.paid_ref = t.reference_no
             LIMIT 1), t.initiated_by)";
     }
-    return "EXISTS (SELECT 1 FROM users operator_user
+    return "(t.reference_no LIKE 'CART-%' OR EXISTS (SELECT 1 FROM users operator_user
         JOIN merchant_wallets operator_wallet ON operator_wallet.id = t.merchant_wallet_id
         WHERE operator_user.userID = {$operator}
           AND operator_user.userID <> operator_wallet.user_id
-          AND operator_user.merchant_owner_id = operator_wallet.user_id)";
+          AND operator_user.merchant_owner_id = operator_wallet.user_id))";
 }
 
 /** Direct sales count immediately; staff sales count after remittance, once each. */

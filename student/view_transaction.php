@@ -140,9 +140,7 @@ $maintFee = ($record && $source === 'ledger')
     ? gjc_maintenance_fee_for_reference($db, (string) $record['ref'], (int) $currentUser['id'])
     : null;
 
-// Local escaper — the shared gjc_e() only casts to string, and this page
-// renders merchant names and free-text notes.
-$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$e = gjc_e(...);
 
 if ($record) {
     $statusClass = gjc_transaction_is_success($record['status'])

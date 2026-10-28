@@ -23,7 +23,8 @@ define('UNIFIED_DASHBOARD', true);
 
 switch ($subRole) {
     case 'super_admin':
-        // Finance role (roleID=3 or 4)
+    case 'finance_staff':
+        // Finance role (roleID=3 or 4; 8 = limited finance staff)
         require_once ADMIN_PATH . '/dashboard.php';
         break;
 

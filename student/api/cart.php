@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['student']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_inventory_sku_index($db);
 gjc_ensure_cart_orders_schema($db);
 gjc_ensure_order_items_schema($db);

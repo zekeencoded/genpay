@@ -154,6 +154,11 @@ function gjc_current_user(PDO $db): array
 
 function gjc_user_label(PDO $db, int $userId): string
 {
+    // Lists label the same few users on every row; names don't change mid-request.
+    static $labels = [];
+    if (isset($labels[$userId])) {
+        return $labels[$userId];
+    }
     if (!$userId || !gjc_table_exists($db, "users")) {
         return "Unknown User";
     }
@@ -177,7 +182,7 @@ function gjc_user_label(PDO $db, int $userId): string
     if ($name === "") {
         $name = $user["email"] ?? "User #" . $userId;
     }
-    return $name;
+    return $labels[$userId] = $name;
 }
 
 // ── Remember me: persistent login via single-use rotating tokens ───────────
@@ -222,7 +227,37 @@ function gjc_sub_role_map(): array
         5 => 'merchant_admin',
         6 => 'merchant_staff',
         7 => 'parent',
+        8 => 'finance_staff',
     ];
+}
+
+/**
+ * Finance staff (roleID 8) share the coarse 'finance' role, so every
+ * gjc_require_role(['finance']) page lets them in — this allowlist is what
+ * narrows them down. Paths are relative to admin/. Anything not listed
+ * (economy/minting, admin wallet, school years, maintenance, settings, audit,
+ * backup, user-account actions) stays super-admin only.
+ */
+const GJC_FINANCE_STAFF_PAGES = [
+    'dashboard.php', 'users.php', 'view_user.php',
+    'transactions.php', 'view_transaction.php', 'export_transactions.php',
+    'cash_management.php', 'encashments.php', 'topups.php', 'release_encashment.php', 'api/economy.php',
+    'leases.php', 'lease_details.php', 'api/leases.php', 'merchant_details.php',
+    'stall_applications.php', 'api/stall_applications.php', 'api/archived_rejections.php',
+    'api/get_stall_details.php', 'doc.php',
+];
+
+/** Whether a finance-staff session may run this script. Non-admin scripts are not this gate's business. */
+function gjc_finance_staff_may_open(string $script): bool
+{
+    $pos = strrpos($script, '/admin/');
+    return $pos === false || in_array(substr($script, $pos + 7), GJC_FINANCE_STAFF_PAGES, true);
+}
+
+/** The role row users.roleID 8 points at (users.roleID has a foreign key to role). */
+function gjc_ensure_finance_staff_role(PDO $db): void
+{
+    $db->exec("INSERT IGNORE INTO role (roleID, role_name) VALUES (8, 'finance_staff')");
 }
 
 /** SQL expression deriving sub_role from a roleID column, for SELECT lists. */
@@ -241,6 +276,11 @@ function gjc_establish_login_session(array $user): void
     $userId = (int) ($user['id'] ?? $user['userID'] ?? 0);
     $roleId = (int) ($user['roleID'] ?? 0);
 
+    // A new id at sign-in means a session fixated before login is no longer valid.
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
+
     $_SESSION['userID'] = $userId;
     $_SESSION['user_id'] = $userId;
     $_SESSION['roleID'] = $roleId;
@@ -249,7 +289,7 @@ function gjc_establish_login_session(array $user): void
     // roleID is the single source of truth; sub_role is derived (3NF).
     $_SESSION['sub_role'] = gjc_sub_role_for_role_id($roleId);
     $_SESSION['merchant_owner_id'] = (int) ($user['merchant_owner_id'] ?? 0);
-    $_SESSION['role'] = [1 => 'student', 2 => 'merchant', 3 => 'finance', 4 => 'finance', 5 => 'merchant', 6 => 'merchant', 7 => 'parent'][$roleId] ?? 'user';
+    $_SESSION['role'] = [1 => 'student', 2 => 'merchant', 3 => 'finance', 4 => 'finance', 5 => 'merchant', 6 => 'merchant', 7 => 'parent', 8 => 'finance'][$roleId] ?? 'user';
 }
 
 function gjc_issue_remember_token(PDO $db, int $userId, int $days = 30): void
@@ -346,6 +386,62 @@ function gjc_attempt_remember_login(PDO $db): void
     gjc_establish_login_session($user);
     session_regenerate_id(true);
     gjc_issue_remember_token($db, (int) $token['user_id']);
+}
+
+// ── Failed-attempt throttle ───────────────────────────────────────────────────
+// One table (login_attempts) counts failed attempts under a key. Sign-in uses it
+// per identifier (5 per 15 minutes) and per network address; the Mint PIN and the
+// public apply form use it too. Keys are HMAC hashes (gjc_throttle_key), so no
+// typed email or PIN is stored. Per-identifier, not per-IP only: a whole campus
+// can share one IP, so an IP lock alone would lock every student on it out.
+// shortcut: the table name still says "login"; rename it if a fifth use appears.
+
+function gjc_ensure_login_attempts_schema(PDO $db): void
+{
+    // DDL commits any open transaction, so it runs once per request and never mid-transaction.
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS login_attempts (
+            id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            login_key   CHAR(64) NOT NULL,
+            failed_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_la_key_time (login_key, failed_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+    );
+    $ready = true;
+}
+
+/** Key for one scope (sign-in identifier, ip, mint, apply). Separate HMAC secrets keep scopes from colliding. */
+function gjc_throttle_key(string $scope, string $value): string
+{
+    return hash_hmac('sha256', $value, 'gjc-throttle-' . $scope);
+}
+
+function gjc_login_throttled(PDO $db, string $key, int $limit = 5, int $minutes = 15): bool
+{
+    gjc_ensure_login_attempts_schema($db);
+    $stmt = $db->prepare(
+        "SELECT COUNT(*) FROM login_attempts WHERE login_key = ? AND failed_at > NOW() - INTERVAL {$minutes} MINUTE"
+    );
+    $stmt->execute([$key]);
+    return (int) $stmt->fetchColumn() >= $limit;
+}
+
+function gjc_record_login_failure(PDO $db, string $key): void
+{
+    gjc_ensure_login_attempts_schema($db);
+    $db->prepare("INSERT INTO login_attempts (login_key) VALUES (?)")->execute([$key]);
+    // Drop old rows so the table stays small. Only the last 15 minutes matter.
+    $db->exec("DELETE FROM login_attempts WHERE failed_at < NOW() - INTERVAL 1 DAY");
+}
+
+function gjc_clear_login_failures(PDO $db, string $key): void
+{
+    $db->prepare("DELETE FROM login_attempts WHERE login_key = ?")->execute([$key]);
 }
 
 /** Reject sessions authenticated before a credential change, including older sessions. */
@@ -462,6 +558,23 @@ function gjc_require_role(array $roles): void
     $script = str_replace("\\", "/", $_SERVER["SCRIPT_NAME"] ?? "");
     if (!empty($_SESSION["force_change"]) && !str_ends_with($script, "/change_password.php")) {
         header("Location: " . BASE_URL . "/change_password.php");
+        exit();
+    }
+
+    if (gjc_sub_role() === 'finance_staff' && !gjc_finance_staff_may_open($script)) {
+        if ($db instanceof PDO && function_exists('logAudit')) {
+            logAudit($db, gjc_user_id(), $role, 'ACCESS_DENIED', 'users', null,
+                ['actual_sub_role' => 'finance_staff', 'script' => $script], null,
+                ['target_id' => gjc_user_id(), 'outcome' => 'denied',
+                 'reason' => 'Finance staff cannot open ' . basename($script) . '.']);
+        }
+        if (str_contains($script, '/admin/api/') || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Finance staff accounts cannot do this.', 'error' => 'ACCESS_DENIED']);
+            exit();
+        }
+        header("Location: " . DASHBOARD_URL);
         exit();
     }
 }
@@ -949,6 +1062,18 @@ function gjc_csrf_verify(?string $token = null): bool
         ?? "";
 
     return is_string($given) && $given !== "" && hash_equals($known, $given);
+}
+
+/** Refuse a state-changing request that lacks the session's CSRF token (JSON endpoints). */
+function gjc_csrf_require_json(): void
+{
+    if (gjc_csrf_verify()) {
+        return;
+    }
+    http_response_code(403);
+    header("Content-Type: application/json");
+    echo json_encode(["success" => false, "code" => "csrf", "message" => "Security check failed. Please refresh the page and try again."]);
+    exit;
 }
 
 // ─── Phase 2: Role & Auth Layer helpers ──────────────────────────────────────

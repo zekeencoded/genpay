@@ -918,6 +918,7 @@ $studentWaiverRows = $db->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
     $action = (string) ($_POST['student_import_action'] ?? '');
     $merchantAction = (string) ($_POST['merchant_bypass_action'] ?? '');
     $feeWaiverAction = (string) ($_POST['fee_waiver_import_action'] ?? '');

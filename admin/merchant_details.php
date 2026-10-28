@@ -901,6 +901,7 @@ if ($summary) {
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<?php require __DIR__ . '/../includes/partials/csrf_bootstrap.php'; ?>
 <script>
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('collapsed');

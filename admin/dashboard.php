@@ -3,8 +3,23 @@ require_once __DIR__ . "/../connection/config.php";
 require_once __DIR__ . "/../connection/pdo.php";
 require_once __DIR__ . "/../connection/app.php";
 require_once __DIR__ . "/../connection/MerchantTenantDirectory.php";
+require_once __DIR__ . "/../connection/audit_logger.php";
 
 gjc_require_role(['finance']);
+gjc_ensure_maintenance_fees_schema($db);
+gjc_backfill_student_ids($db);
+
+// Fees settle themselves per student (one receipt each) — no manual step needed.
+foreach (gjc_auto_collect_maintenance_fees($db) as $sid => $receipt) {
+    logAudit(
+        $db, gjc_user_id(), gjc_current_role(), 'MAINTENANCE_FEE_COLLECTED', 'maintenance_fees',
+        ['student_user_id' => $sid, 'status' => 'accrued'],
+        ['student_user_id' => $sid, 'status' => 'collected', 'receipt_no' => $receipt['receipt_no'],
+         'entries' => $receipt['entries'], 'total' => $receipt['total']],
+        null,
+        ['target_id' => $receipt['receipt_no'], 'reason' => 'Auto-collected.']
+    );
+}
 
 $dashboard = gjc_admin_dashboard_data($db);
 $demographics = $dashboard["user_demographics"];

@@ -16,5 +16,6 @@
 // Styles live in assets/css/theme.css ("FEEDBACK — toast + confirm dialog"),
 // which every page reaches through its role stylesheet's @import chain.
 ?>
-<script src="<?= JS_URL ?>/gp_feedback.js?v=1"></script>
+<?php require __DIR__ . '/csrf_bootstrap.php'; ?>
+<script src="<?= JS_URL ?>/gp_feedback.js?v=2"></script>
 <script src="<?= JS_URL ?>/gp_form_busy.js?v=1"></script>

@@ -321,14 +321,14 @@ body {
 /* TEXT */
 .modal-desc {
   font-size: 13px;
-  color: #ccc;
+  color: var(--gjc-muted);
   margin-bottom: 15px;
 }
 
 /* STEPS */
 .modal-steps {
   font-size: 13px;
-  color: #ddd;
+  color: var(--gjc-ink);
   margin-bottom: 20px;
 }
 

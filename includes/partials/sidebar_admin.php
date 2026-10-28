@@ -52,19 +52,20 @@ $__badge = static function (int $count, string $noun): string {
             <i class="fa-solid fa-receipt nav-icon"></i>
             <span class="nav-text">Transactions</span>
         </a>
+        <?php // Finance staff only get the tabs in GJC_FINANCE_STAFF_PAGES; the server gate is gjc_require_role().
+        $__fullFinance = !(function_exists('gjc_sub_role') && gjc_sub_role() === 'finance_staff'); ?>
+        <?php if ($__fullFinance): ?>
         <a href="<?= ADMIN_URL ?>/economy.php" class="<?= $currentPage === 'economy' ? 'active' : '' ?>">
             <i class="fa-solid fa-coins nav-icon"></i>
             <span class="nav-text">Economy</span>
         </a>
-        <a href="<?= ADMIN_URL ?>/wallet.php" class="<?= $currentPage === 'wallet' ? 'active' : '' ?>">
-            <i class="fa-solid fa-wallet nav-icon"></i>
-            <span class="nav-text">Admin Wallet</span>
-        </a>
+        <?php endif; ?>
         <a href="<?= ADMIN_URL ?>/stall_applications.php" class="<?= $currentPage === 'stall_applications' ? 'active' : '' ?>">
             <i class="fa-solid fa-store nav-icon"></i>
             <span class="nav-text">Stall Applications</span>
             <?= $__badge($__queues['stall_applications'], 'application') ?>
         </a>
+        <?php if ($__fullFinance): ?>
         <a href="<?= ADMIN_URL ?>/school_years.php" class="<?= $currentPage === 'school_years' ? 'active' : '' ?>">
             <i class="fa-solid fa-graduation-cap nav-icon"></i>
             <span class="nav-text">School Years</span>
@@ -75,6 +76,10 @@ $__badge = static function (int $count, string $noun): string {
         <a href="<?= ADMIN_URL ?>/audit_log.php" class="<?= $currentPage === 'audit_log' ? 'active' : '' ?>">
             <i class="fa-solid fa-clipboard-list nav-icon"></i>
             <span class="nav-text">Audit Log</span>
+        </a>
+        <a href="<?= ADMIN_URL ?>/backup.php" class="<?= $currentPage === 'backup' ? 'active' : '' ?>">
+            <i class="fa-solid fa-box-archive nav-icon"></i>
+            <span class="nav-text">Backup &amp; Restore</span>
         </a>
         <?php endif; ?>
         <?php if (function_exists('gjc_current_role') && gjc_current_role() === 'finance'): ?>
@@ -87,6 +92,7 @@ $__badge = static function (int $count, string $noun): string {
             <i class="fa-solid fa-gear nav-icon"></i>
             <span class="nav-text">Settings</span>
         </a>
+        <?php endif; ?>
     </nav>
     <a href="<?= BASE_URL ?>/logout.php" class="logout-btn"
        onclick="openLogoutModal(event);">

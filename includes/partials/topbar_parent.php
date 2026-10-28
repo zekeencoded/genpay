@@ -14,6 +14,7 @@
 $topbarSubtitleMobile = $topbarSubtitleMobile ?? false;
 $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>
+<?php require __DIR__ . '/csrf_bootstrap.php'; ?>
 <!-- The title and subtitle are DIRECT children of the header, not wrapped in
      a div: parent_shell.css lays the bar out as a named grid, and on a phone
      the subtitle drops onto its own full-width row under the title/avatar

@@ -44,6 +44,7 @@ require_once __DIR__ . "/app/restrictions.php";
 require_once __DIR__ . "/app/violations.php";
 require_once __DIR__ . "/app/suspensions.php";
 require_once __DIR__ . "/app/stall_applications.php";
+require_once __DIR__ . "/app/recaptcha.php";
 require_once __DIR__ . "/app/stalls.php";
 require_once __DIR__ . "/app/users.php";
 require_once __DIR__ . "/app/settings.php";
@@ -57,3 +58,6 @@ require_once __DIR__ . "/app/parent.php";
 require_once __DIR__ . "/app/fees.php";
 require_once __DIR__ . "/app/notifications.php";
 require_once __DIR__ . "/app/school_year.php";
+require_once __DIR__ . "/app/backup.php";
+
+gjc_backup_block_during_restore();

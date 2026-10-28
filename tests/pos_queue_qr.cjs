@@ -16,8 +16,8 @@ const context = vm.createContext({
     queueOrders: [{ uid: 'pos-41', id: 41, queue_no: 41, source: 'pos', stage: 'awaiting_payment' }],
     QUEUE_SOURCES: { pos: { label: 'Walk-in', icon: 'fa-cash-register' } },
     QUEUE_BADGES: {}, LIVE_QUEUE_API: 'api/pos.php',
-    document: { getElementById: () => ({}) },
-    fetch: async () => ({ json: async () => response }), renderQueue() {},
+    document: { getElementById: () => ({ dataset: {} }) },
+    fetch: async () => ({ json: async () => response }), renderQueue() {}, closeQrFullscreen() {},
     escapeHtml: String, gcPriceHtml: String, gcAmount: String, queueTime: String,
 });
 vm.runInContext(code, context);

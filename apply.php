@@ -110,6 +110,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (empty($_POST["terms_accepted"])) {
         $formErrors["terms"] = "You must scroll through and accept the Terms & Conditions.";
     }
+    if (($recaptchaError = gjc_verify_recaptcha($_POST["g-recaptcha-response"] ?? "")) !== null) {
+        $formErrors["recaptcha"] = $recaptchaError;
+    }
 
     // ── Duplicate handling: the same email, contact number, business name, or
     // proprietor name can only sit on ONE live application at a time. "Live"
@@ -176,7 +179,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $hasUpload = $file && $file["error"] !== UPLOAD_ERR_NO_FILE && !empty($file["tmp_name"]);
 
         if ($hasUpload) {
-            $result = gjc_stage_stall_application_upload($field, $file, $rule);
+            $result = gjc_stage_stall_application_upload($db, $field, $file, $rule);
             if ($result["success"]) {
                 $stagedFiles = gjc_stall_application_draft_files(); // refreshed by the stage call
                 $fileData[$field] = $stagedFiles[$field];
@@ -376,7 +379,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/apply.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/apply.css?v=21">
 </head>
 <body>
 
@@ -775,7 +778,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
                            <?= !empty($_POST['terms_accepted']) ? 'checked' : '' ?>>
                     <label for="terms_accepted">
                         I have read and agree to the
-                        <button type="button" class="terms-btn" data-bs-toggle="modal" data-bs-target="#termsModal">GJC Campus Stall Rental Terms &amp; Conditions</button>.
+                        <a href="#termsModal" role="button" class="terms-btn" data-bs-toggle="modal" data-bs-target="#termsModal">GJC Campus Stall Rental Terms &amp; Conditions</a>.
                         <span class="terms-lock-note">Open and scroll to the bottom to unlock this checkbox.</span>
                     </label>
                 </div>
@@ -787,6 +790,14 @@ function apply_photo_preview_data_uri(array $attached): ?string
 
         <!-- ── Submit ────────────────────────────────────────────────── -->
         <div class="form-submit-wrap">
+            <!-- Hidden until the rest of the form is complete (see checkSubmitReady) -->
+            <div class="recaptcha-wrap" id="recaptchaWrap" style="display:none">
+                <div class="g-recaptcha" data-sitekey="<?= GJC_RECAPTCHA_SITE_KEY ?>"
+                     data-callback="gjcRecaptchaSet" data-expired-callback="gjcRecaptchaUnset" data-error-callback="gjcRecaptchaUnset"></div>
+            </div>
+            <?php if (isset($formErrors['recaptcha'])): ?>
+            <div class="field-error mb-3"><i class="fa-solid fa-circle-exclamation"></i><?= htmlspecialchars($formErrors['recaptcha']) ?></div>
+            <?php endif; ?>
             <button type="submit" class="btn-apply" id="submitBtn" disabled>
                 Submit Application
             </button>
@@ -842,7 +853,14 @@ function apply_photo_preview_data_uri(array $attached): ?string
 </footer>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <script>
+// reCAPTCHA state: the Submit button stays locked until the checkbox is ticked
+// and its token is still fresh (Google expires it after two minutes).
+let recaptchaDone = false;
+function gjcRecaptchaSet()   { recaptchaDone = true;  checkSubmitReady(); }
+function gjcRecaptchaUnset() { recaptchaDone = false; checkSubmitReady(); }
+
 // ── Draft documents: keep on a refresh, wipe on a fresh arrival ─────────────
 // This render's request method tells us whether we're redisplaying the form
 // after a POST (e.g. a validation error on some OTHER field) — the draft
@@ -1000,7 +1018,11 @@ function checkSubmitReady() {
     if (!submitBtn) return; // not on the form view (e.g. the post-submit success page)
     const allFiles = ['profile_picture','business_permit','sanitary_permit','gjc_requirements','clearance']
         .every(f => document.getElementById('drop-' + f)?.classList.contains('has-file'));
-    submitBtn.disabled = !(termsChk?.checked && allFiles && uploadingCount === 0);
+    // The reCAPTCHA appears only once everything else is done, so it isn't asked for up front.
+    const formReady = !!(termsChk?.checked && allFiles && uploadingCount === 0);
+    const rcWrap = document.getElementById('recaptchaWrap');
+    if (rcWrap) rcWrap.style.display = formReady ? '' : 'none';
+    submitBtn.disabled = !(formReady && recaptchaDone);
 }
 
 // ── Contact number: digits only ───────────────────────────────

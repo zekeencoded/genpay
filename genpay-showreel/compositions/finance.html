@@ -1,0 +1,130 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #0d2418;
+      overflow: hidden;
+    }
+    /* The camera holds the real 1920x1080 capture; GSAP scales and pans it from the top-left origin */
+    #finance-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: 0 0;
+    }
+    #finance-cam > img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+    }
+    .ring {
+      position: absolute;
+      border: 4px solid #f0a500;
+      border-radius: 6px;
+      opacity: 0;
+    }
+    .chip {
+      position: absolute;
+      padding: 8px 16px;
+      background: #f0a500;
+      color: #0d2418;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 700;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      border-radius: 2px;
+      white-space: nowrap;
+      opacity: 0;
+    }
+    /* A light sweep runs along the wallet-pool bar */
+    #finance-sweep {
+      position: absolute;
+      left: 307px;
+      top: 300px;
+      width: 150px;
+      height: 26px;
+      background: linear-gradient(90deg, rgba(240, 165, 0, 0), rgba(240, 165, 0, 0.75), rgba(240, 165, 0, 0));
+      opacity: 0;
+    }
+      .band {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 140px;
+      padding: 20px 110px 0 100px;
+      box-sizing: border-box;
+      background: linear-gradient(0deg, rgba(13, 36, 24, 0.97) 0%, rgba(13, 36, 24, 0.92) 72%, rgba(13, 36, 24, 0) 100%);
+    }
+    .band::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 40px;
+      bottom: 40px;
+      width: 8px;
+      background: #f0a500;
+    }
+    .band-kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.08em;
+      color: #f0a500;
+      text-transform: uppercase;
+    }
+    .band-title {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-weight: 800;
+      font-size: 52px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #eef4ef;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="finance" data-width="1920" data-height="1080">
+    <div id="finance-cam" data-layout-allow-overflow>
+      <img src="assets/screens/finance_economy.png" alt="GenPay system economy: money in system and wallet pools" />
+      <div class="ring" id="finance-ring-badge" style="left: 1647px; top: 189px; width: 221px; height: 53px"></div>
+      <div class="chip" id="finance-chip" style="left: 1130px; top: 250px">32,000.0 GC total</div>
+      <div id="finance-sweep"></div>
+    </div>
+    <div class="band" data-layout-allow-overflow id="finance-band">
+      <div class="band-kicker">FINANCE · SYSTEM ECONOMY</div>
+      <div class="band-title">Every GenCoin, accounted for</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // Push in on the "All money accounted for" badge
+    tl.fromTo("#finance-cam", { x: 0, y: 0, scale: 1 }, { x: -1152, y: 0, scale: 1.6, duration: 0.6, ease: "expo.inOut" }, 0.4);
+    tl.fromTo("#finance-ring-badge", { opacity: 0, scale: 1.2 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 0.95);
+    tl.fromTo("#finance-chip", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.8)" }, 1.2);
+
+    // Pull back to the full screen, then sweep across the wallet pools
+    tl.to("#finance-cam", { x: 0, y: 0, scale: 1, duration: 0.5, ease: "expo.inOut" }, 1.9);
+    tl.fromTo("#finance-sweep", { opacity: 1, x: 0 }, { opacity: 1, x: 1560, duration: 0.9, ease: "power1.inOut" }, 2.0);
+
+    tl.fromTo("#finance-band", { y: 140, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, 0.2);
+
+    window.__timelines["finance"] = tl;
+  </script>
+</template>

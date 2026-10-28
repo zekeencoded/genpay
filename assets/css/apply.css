@@ -312,7 +312,9 @@ body {
     font-size: 13px; font-weight: 600; color: var(--gray-7);
     line-height: 1.5; cursor: pointer;
 }
+/* An <a>, not a <button>: buttons stay inline-block and centre wrapped text, which splits the "." off. */
 .terms-btn {
+    display: inline;
     background: none; border: none; padding: 0; font-family: inherit;
     font-size: inherit; font-weight: 700; color: var(--green-7);
     text-decoration: underline; text-decoration-color: var(--green-4);
@@ -396,7 +398,23 @@ body {
     .frow-3 { grid-template-columns: 1fr 1fr; }
     .frow-2 { grid-template-columns: 1fr; }
     .app-body { padding: 20px 12px 40px; }
+    .terms-gate label { font-size: 12px; }
 }
 @media (max-width: 400px) {
     .frow-3 { grid-template-columns: 1fr; }
+}
+
+/* ── reCAPTCHA ──────────────────────────────────────────────── */
+/* Just the widget, centred above the button: no card or background around it. */
+.recaptcha-wrap {
+    display: flex; justify-content: center;
+    margin: 0 0 14px;
+}
+.form-submit-wrap > .field-error { justify-content: center; margin: 0 0 12px; }
+/* The v2 widget is 304px wide; zoom it down on narrow phones so it fits inside the gutters. */
+@media (max-width: 400px) {
+    .g-recaptcha { zoom: .9; }
+}
+@media (max-width: 340px) {
+    .g-recaptcha { zoom: .75; }
 }

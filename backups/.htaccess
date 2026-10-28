@@ -1,0 +1,4 @@
+# Block direct browser access to all uploaded files.
+# Files are served through PHP only (admin preview, etc.).
+Order Allow,Deny
+Deny from all

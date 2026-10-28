@@ -95,10 +95,10 @@ class MintingGuard
             ));
         }
 
+        // The PIN gates every mint, not only ones past the soft limit: a stolen
+        // session alone must not be able to create money.
         $softLimitExceeded = ($projectedTotal > self::SOFT_LIMIT);
-        if ($softLimitExceeded) {
-            $this->verifyMintPin($superAdminId, $pin, $mintedSoFar, $amount);
-        }
+        $this->verifyMintPin($superAdminId, $pin, $mintedSoFar, $amount);
 
         $result = $this->engine->increaseCirculationCap($amount, $superAdminId, $reason);
 
@@ -127,6 +127,8 @@ class MintingGuard
     public function setMintPin(int $superAdminId, string $newPin, string $currentPassword): bool
     {
         $this->assertSuperAdmin($superAdminId);
+        // Without this, a stolen session could guess the password here and set a new PIN.
+        $lockKey = $this->assertPinNotLocked($superAdminId, 0.0, 0.0);
 
         $stmt = $this->db->prepare("SELECT password FROM users WHERE userID = ?");
         $stmt->execute([$superAdminId]);
@@ -139,8 +141,10 @@ class MintingGuard
         $passwordValid = is_string($hash) && $hash !== ''
             && password_verify($currentPassword, $hash);
         if (!$passwordValid) {
+            gjc_record_login_failure($this->db, $lockKey);
             throw new RuntimeException('INVALID_PASSWORD: Current account password is incorrect.');
         }
+        gjc_clear_login_failures($this->db, $lockKey);
 
         if (strlen($newPin) < 4 || strlen($newPin) > 12) {
             throw new RuntimeException('PIN must be between 4 and 12 characters.');
@@ -228,23 +232,40 @@ class MintingGuard
         return (int)$stmt->fetchColumn();
     }
 
+    /** Wrong Mint PINs and wrong passwords on setMintPin share one lock per admin. */
+    private function assertPinNotLocked(int $adminId, float $minted, float $requested): string
+    {
+        $key = gjc_throttle_key('mint', (string) $adminId);
+        if (gjc_login_throttled($this->db, $key)) {
+            $this->logMintAttempt($adminId, 'denied',
+                'Mint PIN locked after repeated incorrect attempts.',
+                [
+                    'event'             => 'pin_locked',
+                    'requested_amount'  => $requested,
+                    'minted_this_month' => $minted,
+                ]);
+            throw new RuntimeException('PIN_LOCKED: Too many incorrect Mint PIN attempts. Try again in 15 minutes.');
+        }
+        return $key;
+    }
+
     private function verifyMintPin(int $adminId, ?string $pin, float $minted, float $requested): void
     {
+        $lockKey = $this->assertPinNotLocked($adminId, $minted, $requested);
+
         if ($pin === null || trim($pin) === '') {
             $this->logMintAttempt($adminId, 'denied',
-                'Soft monthly limit crossed and no Mint PIN was supplied.',
+                'No Mint PIN was supplied.',
                 [
                     'event'             => 'pin_required',
                     'requested_amount'  => $requested,
                     'minted_this_month' => $minted,
                 ]);
             throw new RuntimeException(sprintf(
-                'PIN_REQUIRED: Monthly minting has reached Php %s. ' .
-                'Your requested Php %s would exceed the soft limit of Php %s/month. ' .
-                'Provide your Mint PIN to authorize this exceptional increase.',
+                'PIN_REQUIRED: Php %s has already been minted this month. ' .
+                'Provide your Mint PIN to authorize minting Php %s.',
                 number_format($minted, 2),
-                number_format($requested, 2),
-                number_format(self::SOFT_LIMIT, 2)
+                number_format($requested, 2)
             ));
         }
 
@@ -262,7 +283,7 @@ class MintingGuard
                 ]);
             throw new RuntimeException(
                 'NO_MINT_PIN_SET: You have not configured a Mint PIN yet. ' .
-                'Set one in Super-Admin Settings before minting above the monthly limit.'
+                'Set one in Super-Admin Settings before minting.'
             );
         }
 
@@ -278,8 +299,10 @@ class MintingGuard
                     'minted_this_month' => $minted,
                 ]);
             error_log("[MintingGuard] Failed PIN attempt by admin #{$adminId} at " . date('Y-m-d H:i:s'));
+            gjc_record_login_failure($this->db, $lockKey);
             throw new RuntimeException('MINT_PIN_INVALID: The Mint PIN you entered is incorrect.');
         }
+        gjc_clear_login_failures($this->db, $lockKey);
     }
 }
 

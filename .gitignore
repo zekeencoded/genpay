@@ -1,5 +1,7 @@
-# Local database backups / dumps — keep these out of version control
-/backups/
+# Local database backups / dumps — keep these out of version control.
+# backups/.htaccess (Deny from all) stays tracked, same reason as uploads/.htaccess.
+/backups/*
+!/backups/.htaccess
 
 # Async mail spool — queued emails can contain temp passwords
 /storage/mail_spool/
@@ -40,6 +42,9 @@ screenshots/
 # Gmail SMTP credentials. connection/mail_config.example.php is the tracked
 # template; the real file holds the Google App Password.
 /connection/mail_config.php
+
+# Student roster exports (names and school IDs). Generated per school year, never committed.
+/roster_*.csv
 
 # Application database login + view-token signing key. connection/local_config.example.php
 # is the tracked template; the real file holds the live root password.

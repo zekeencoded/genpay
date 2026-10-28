@@ -169,15 +169,6 @@ function gjc_transaction_line_items(PDO $db, string $referenceNo): array
     return $items;
 }
 
-function gjc_user_label_cached(PDO $db, int $userId): string
-{
-    static $cache = [];
-    if (!isset($cache[$userId])) {
-        $cache[$userId] = gjc_user_label($db, $userId);
-    }
-    return $cache[$userId];
-}
-
 function gjc_student_wallet_owner_label(PDO $db, int $walletId): string
 {
     static $cache = [];
@@ -195,7 +186,7 @@ function gjc_student_wallet_owner_label(PDO $db, int $walletId): string
     $userId = (int) $stmt->fetchColumn();
 
     return $cache[$walletId] = $userId
-        ? gjc_user_label_cached($db, $userId)
+        ? gjc_user_label($db, $userId)
         : "Student Wallet #" . $walletId;
 }
 
@@ -216,7 +207,7 @@ function gjc_merchant_wallet_owner_label(PDO $db, int $walletId): string
     $userId = (int) $stmt->fetchColumn();
 
     return $cache[$walletId] = $userId
-        ? gjc_user_label_cached($db, $userId)
+        ? gjc_user_label($db, $userId)
         : "Merchant Wallet #" . $walletId;
 }
 
@@ -257,7 +248,7 @@ function gjc_transaction_sender_receiver(PDO $db, array $row): array
 
         case "cap_increase":
             return [
-                "sender" => gjc_user_label_cached(
+                "sender" => gjc_user_label(
                     $db,
                     (int) ($row["initiated_by"] ?? 0),
                 ),
@@ -380,7 +371,7 @@ function gjc_fetch_admin_transactions(
                 "status" => $row["status"],
                 "notes" => "Payment method: " . $row["payment_method"],
                 "created_at" => $row["created_at"],
-                "sender" => gjc_user_label_cached($db, (int) $row["user_id"]),
+                "sender" => gjc_user_label($db, (int) $row["user_id"]),
                 "receiver" => "Cashier Review",
                 "payment_method" => $row["payment_method"],
                 "user_id" => $row["user_id"],
@@ -413,7 +404,7 @@ function gjc_fetch_admin_transactions(
                 "status" => $row["status"],
                 "notes" => "Method: " . $row["method"],
                 "created_at" => $row["created_at"],
-                "sender" => gjc_user_label_cached($db, (int) $row["user_id"]),
+                "sender" => gjc_user_label($db, (int) $row["user_id"]),
                 "receiver" => "Cashier Release",
                 "method" => $row["method"],
                 "user_id" => $row["user_id"],

@@ -24,7 +24,7 @@ $stmt = $db->prepare("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?)");
 $day = date('Y-m-d');
 foreach ([['ADMIN',7,10,100,'payment','completed'], ['STAFF',7,11,40,'payment','completed'],
     ['ADMIN-QR',7,12,50,'payment','completed'], ['STAFF-QR',7,12,30,'payment','completed'],
-    ['DIRECT',7,12,20,'payment','completed'],
+    ['DIRECT',7,12,20,'payment','completed'], ['CART-PREORDER',7,12,40,'payment','completed'],
     ['FAILED',7,10,999,'payment','failed'], ['OTHER',8,21,999,'payment','completed']] as $row) {
     $stmt->execute([...$row, "$day 09:00:00"]);
 }
@@ -42,9 +42,9 @@ function checkSales(PDO $db, float $credited, float $pending, int $count): void 
         AND DATE(t.created_at) = CURDATE() AND {$predicate}")->fetchColumn();
     if ((float) $total !== $credited) throw new RuntimeException('Sales list and summary differ');
 }
-checkSales($db, 170.0, 70.0, 3);
+checkSales($db, 170.0, 110.0, 3);
 $db->exec("INSERT INTO sales_remittances VALUES (7, '$day 00:00:00', '$day 10:00:00')");
-checkSales($db, 240.0, 0.0, 5);
+checkSales($db, 280.0, 0.0, 6);
 $db->exec("INSERT INTO sales_remittances VALUES (7, '$day 00:00:00', '$day 11:00:00')");
-checkSales($db, 240.0, 0.0, 5);
-echo "PASS: admin and direct sales credit immediately; staff sales require remittance; overlapping remittances do not double count.\n";
+checkSales($db, 280.0, 0.0, 6);
+echo "PASS: admin and direct sales credit immediately; staff sales and app pre-orders require remittance; overlapping remittances do not double count.\n";

@@ -5,6 +5,20 @@
 // Philippine time. Set once, globally, rather than per-page.
 date_default_timezone_set('Asia/Manila');
 
+// Session cookie hardening. Pages that call session_start() before loading this
+// file are covered by the php.ini / .htaccess settings instead.
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_samesite', 'Lax');
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? '1' : '0');
+}
+
+// Production default. Errors go to the server log, not the page. Turn display
+// back on in a local php.ini if you need it while developing.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 define('BASE_PATH', dirname(__DIR__));
 define('GJC_APP_VERSION', '1.0.0');
 
@@ -12,8 +26,10 @@ $projectFolder = basename(BASE_PATH);
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 
 
-if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-    $protocol = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+// Only a reverse proxy on this machine may say the request was HTTPS. Any other
+// client could send this header and change the scheme in BASE_URL.
+if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)) {
+    $protocol = $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https' ? 'https' : 'http';
 }
 
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';

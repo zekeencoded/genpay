@@ -44,6 +44,7 @@ try {
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
                 gjc_json_fail('POST is required for compliance updates.');
             }
+            gjc_csrf_require_json();
 
             $itemId = (int) ($_POST['item_id'] ?? 0);
             $restricted = (int) ($_POST['restricted'] ?? 0) === 1;

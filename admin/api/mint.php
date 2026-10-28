@@ -45,13 +45,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$body = [];
+gjc_csrf_require_json();
+
+// JSON only. A form post from another site cannot set this content type
+// without a CORS preflight, so it cannot reach the minting code.
 $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-if (str_contains($contentType, 'application/json')) {
-    $body = json_decode(file_get_contents('php://input'), true) ?? [];
-} else {
-    $body = $_POST;
+if (!str_contains($contentType, 'application/json')) {
+    http_response_code(415);
+    echo json_encode(['success' => false, 'error' => 'Mint requests must be JSON.']);
+    exit;
 }
+$body = json_decode(file_get_contents('php://input'), true) ?? [];
 
 $amount  = isset($body['amount'])  ? (float)$body['amount']    : 0.0;
 $reason  = isset($body['reason'])  ? trim((string)$body['reason']) : '';

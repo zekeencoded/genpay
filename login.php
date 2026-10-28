@@ -68,7 +68,7 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=23">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=24">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
 </head>
 
@@ -94,7 +94,7 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
             <form method="POST">
 
                 <div class="input-group-box">
-                    <input type="text" name="email" required placeholder=" ">
+                    <input type="text" name="email" required placeholder=" " value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                     <label>Email or Student ID</label>
                 </div>
 

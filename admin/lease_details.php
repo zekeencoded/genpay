@@ -570,6 +570,7 @@ window.leaseDetailConfig = {
     leaseId: <?= $lease ? (int) $lease['id'] : 0 ?>,
 };
 </script>
+<?php require __DIR__ . '/../includes/partials/csrf_bootstrap.php'; ?>
 <script src="<?= JS_URL ?>/admin_lease_details.js?v=1"></script>
 </body>
 </html>

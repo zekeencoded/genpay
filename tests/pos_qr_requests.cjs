@@ -12,7 +12,7 @@ let failNext = false;
 const context = vm.createContext({
     crypto: webcrypto, FormData,
     document: { getElementById: id => {
-        if (!elements.has(id)) elements.set(id, { style: {} });
+        if (!elements.has(id)) elements.set(id, { style: {}, dataset: {} });
         return elements.get(id);
     } },
     merchantWalletId: 1, POS_CSRF: 'test',

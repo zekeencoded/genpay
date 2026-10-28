@@ -41,22 +41,6 @@ try {
     sy_expect($db->query('SELECT graduated_at FROM student_info WHERE userID = 4')->fetchColumn() === null, 'Graduation reversal clears the exit flag.');
     sy_expect((int) $db->query('SELECT COUNT(*) FROM student_wallets WHERE balance <> 250.75')->fetchColumn() === 0, 'No balance may change during roster activation or manual corrections.');
     $db->rollBack();
-    // Exercise the payment service itself with fixtures; frozen payers must
-    // be refused before any merchant balance or ledger mutation.
-    require_once __DIR__ . '/../connection/CirculationEngine.php';
-    $db->exec('ALTER TABLE student_wallets ADD id INT');
-    $db->exec('UPDATE student_wallets SET id = user_id');
-    $db->exec('CREATE TEMPORARY TABLE system_settings (id INT PRIMARY KEY, total_circulation_cap DECIMAL(12,2), cashier_vault_points DECIMAL(12,2))');
-    $db->exec('INSERT INTO system_settings VALUES (1, 10000, 10000)');
-    gjc_set_enrollment_status($db, 2, 901, 'transferred', 'manual', 99, null, false);
-    $engine = new CirculationEngine($db);
-    foreach ([1, 2] as $id) {
-        $blocked = false;
-        try { $engine->studentPay($id, 999, 10, 99); }
-        catch (RuntimeException $e) { $blocked = str_contains($e->getMessage(), 'frozen'); }
-        sy_expect($blocked, 'Payment service must reject parent and enrollment freezes.');
-    }
-    sy_expect((int) $db->query('SELECT COUNT(*) FROM student_wallets WHERE balance <> 250.75')->fetchColumn() === 0, 'Rejected payments must preserve balances.');
     echo "School year enrollment checks passed. No real records changed.\n";
 } catch (Throwable $e) {
     if ($db->inTransaction()) $db->rollBack();

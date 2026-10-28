@@ -17,6 +17,7 @@ $notice      = '';
 $error       = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $idCol) {
+    if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
     $action = (string) ($_POST['profile_action'] ?? '');
 
     if ($action === 'profile') {
@@ -76,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $idCol) {
             $error = 'Password column not found.';
         } elseif (!$valid) {
             $error = 'Current password is incorrect.';
-        } elseif (strlen($new) < 6) {
-            $error = 'New password must be at least 6 characters.';
+        } elseif (strlen($new) < 8) {
+            $error = 'New password must be at least 8 characters.';
         } elseif ($new !== $confirm) {
             $error = 'New passwords do not match.';
         } else {
@@ -283,11 +284,11 @@ $currentPage = 'profile';
                             <div class="pgrid">
                                 <div class="pfield">
                                     <label>New Password</label>
-                                    <input type="password" name="new_password" minlength="6" required autocomplete="new-password">
+                                    <input type="password" name="new_password" minlength="8" required autocomplete="new-password">
                                 </div>
                                 <div class="pfield">
                                     <label>Confirm New Password</label>
-                                    <input type="password" name="confirm_password" minlength="6" required autocomplete="new-password">
+                                    <input type="password" name="confirm_password" minlength="8" required autocomplete="new-password">
                                 </div>
                             </div>
                             <button type="submit" class="btn-primary-save"><i class="fa-solid fa-key me-1"></i>Update Password</button>

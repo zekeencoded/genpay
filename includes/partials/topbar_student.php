@@ -68,6 +68,7 @@ $__topbar_schoolYear = (isset($db) && $db instanceof PDO && function_exists('gjc
         </a>
     </div>
 </header>
+<?php require __DIR__ . '/csrf_bootstrap.php'; ?>
 <?php if ($topbarShowBell): ?>
 <script>
 (function () {

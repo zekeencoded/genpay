@@ -67,7 +67,7 @@ $byStaff = [];
 foreach ($rows as $r) {
     $staffId = (int) $r['initiated_by'];
     if (!isset($byStaff[$staffId])) {
-        $byStaff[$staffId] = ['name' => gjc_user_label_cached($db, $staffId), 'amount' => 0.0, 'count' => 0];
+        $byStaff[$staffId] = ['name' => gjc_user_label($db, $staffId), 'amount' => 0.0, 'count' => 0];
     }
     $byStaff[$staffId]['amount'] += (float) $r['amount'];
     $byStaff[$staffId]['count']++;

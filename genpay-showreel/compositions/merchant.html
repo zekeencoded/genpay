@@ -1,0 +1,139 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #0d2418;
+      overflow: hidden;
+    }
+    /* The camera holds the real 1920x1080 capture; GSAP scales and pans it from the top-left origin */
+    #merchant-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: 0 0;
+    }
+    #merchant-cam > img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+    }
+    .ring {
+      position: absolute;
+      border: 4px solid #f0a500;
+      border-radius: 6px;
+      opacity: 0;
+    }
+    .chip {
+      position: absolute;
+      padding: 8px 16px;
+      background: #f0a500;
+      color: #0d2418;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 700;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      border-radius: 2px;
+      white-space: nowrap;
+      opacity: 0;
+    }
+    .ripple {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      margin: -32px 0 0 -32px;
+      border-radius: 50%;
+      border: 3px solid #f0a500;
+      opacity: 0;
+    }
+    #merchant-cursor {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 44px;
+      height: 54px;
+    }
+      .band {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 140px;
+      padding: 20px 110px 0 100px;
+      box-sizing: border-box;
+      background: linear-gradient(0deg, rgba(13, 36, 24, 0.97) 0%, rgba(13, 36, 24, 0.92) 72%, rgba(13, 36, 24, 0) 100%);
+    }
+    .band::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 40px;
+      bottom: 40px;
+      width: 8px;
+      background: #f0a500;
+    }
+    .band-kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.08em;
+      color: #f0a500;
+      text-transform: uppercase;
+    }
+    .band-title {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-weight: 800;
+      font-size: 52px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #eef4ef;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="merchant" data-width="1920" data-height="1080">
+    <div id="merchant-cam" data-layout-allow-overflow>
+      <img src="assets/screens/merchant_pos.png" alt="GenPay POS terminal with a walk-in order" />
+      <div class="ring" id="merchant-ring-total" style="left: 1812px; top: 414px; width: 72px; height: 42px"></div>
+      <div class="chip" id="merchant-chip" style="left: 1513px; top: 326px">Student scans to pay</div>
+      <div class="ripple" id="merchant-ripple" style="left: 1690px; top: 503px"></div>
+      <svg id="merchant-cursor" viewBox="0 0 24 30">
+        <path d="M2 2 L2 24 L8 18 L12 27 L15 25.5 L11 17 L19 17 Z" fill="#ffffff" stroke="#0d2418" stroke-width="1.6" stroke-linejoin="round" />
+      </svg>
+    </div>
+    <div class="band" data-layout-allow-overflow id="merchant-band">
+      <div class="band-kicker">MERCHANT · POINT OF SALE</div>
+      <div class="band-title">Ring up a walk-in order</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // Push onto the walk-in order and its running total
+    tl.fromTo("#merchant-cam", { x: 0, y: 0, scale: 1 }, { x: -672, y: 0, scale: 1.35, duration: 0.5, ease: "expo.inOut" }, 0);
+    tl.fromTo("#merchant-ring-total", { opacity: 0, scale: 1.25 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 0.5);
+    tl.fromTo("#merchant-chip", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.8)" }, 0.6);
+
+    // The cursor moves to Generate Payment QR and clicks
+    tl.fromTo("#merchant-cursor", { x: 1900, y: 820 }, { x: 1690, y: 503, duration: 0.5, ease: "power2.inOut" }, 0.9);
+    tl.fromTo("#merchant-ripple", { opacity: 0.9, scale: 0.3 }, { opacity: 0, scale: 2.2, duration: 0.45, ease: "power2.out" }, 1.4);
+
+    tl.fromTo("#merchant-band", { y: 140, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, 0.2);
+
+    window.__timelines["merchant"] = tl;
+  </script>
+</template>

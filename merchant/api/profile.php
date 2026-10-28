@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 gjc_require_role(['merchant']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 if (gjc_is_merchant_staff()) {
     echo json_encode(['success' => false, 'message' => 'Only the merchant admin can edit the business profile.']);

@@ -19,6 +19,7 @@ $notice = '';
 $error = '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
     $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
 
     if (!$amount || $amount <= 0) {

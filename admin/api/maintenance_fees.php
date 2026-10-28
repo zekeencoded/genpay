@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 gjc_require_role(['finance']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_audit_table($db);
 gjc_ensure_maintenance_fees_schema($db);
 

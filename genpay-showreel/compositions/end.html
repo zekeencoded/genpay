@@ -1,0 +1,241 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #0d2418;
+      overflow: hidden;
+      font-family: "Plus Jakarta Sans", sans-serif;
+    }
+    #end-bg {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      object-fit: cover;
+      opacity: 0.16;
+    }
+    #end-veil {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(13, 36, 24, 0.96) 0%, rgba(13, 36, 24, 0.7) 55%, rgba(13, 36, 24, 0.9) 100%);
+    }
+    #end-cover {
+      position: absolute;
+      inset: 0;
+      background: #f0a500;
+    }
+
+    /* Phase A: the three verbs */
+    #end-a {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 380px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 170px;
+      line-height: 1;
+      letter-spacing: -0.035em;
+      color: #eef4ef;
+      white-space: nowrap;
+    }
+    #end-done {
+      color: #f0a500;
+    }
+
+    /* Phase B: vendors apply online, with the real stall directory */
+    #end-b-head {
+      position: absolute;
+      left: 150px;
+      top: 300px;
+      width: 720px;
+      font-weight: 800;
+      font-size: 96px;
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      color: #eef4ef;
+    }
+    #end-b-head span {
+      color: #f0a500;
+    }
+    #end-b-sub {
+      position: absolute;
+      left: 150px;
+      top: 640px;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.06em;
+      color: #f0a500;
+      text-transform: uppercase;
+    }
+    #end-frame {
+      position: absolute;
+      left: 1000px;
+      top: 270px;
+      width: 800px;
+      height: 520px;
+      border-radius: 4px;
+      background: #ffffff;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    #end-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 800px;
+      height: 40px;
+      background: #eef4ef;
+      border-bottom: 1px solid #e2eae3;
+    }
+    #end-url {
+      position: absolute;
+      left: 150px;
+      top: 9px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 16px;
+      color: #6b7a70;
+    }
+    #end-shot {
+      position: absolute;
+      left: 0;
+      top: 40px;
+      width: 800px;
+      height: 480px;
+      object-fit: cover;
+      object-position: 50% 0%;
+    }
+
+    /* Phase C: the lockup */
+    #end-seal {
+      position: absolute;
+      left: 520px;
+      top: 290px;
+      width: 420px;
+      height: 420px;
+      object-fit: contain;
+      filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.45));
+    }
+    #end-word {
+      position: absolute;
+      left: 990px;
+      top: 330px;
+      font-weight: 800;
+      font-size: 220px;
+      line-height: 1;
+      letter-spacing: -0.035em;
+      color: #eef4ef;
+      white-space: nowrap;
+    }
+    #end-word-pay {
+      color: #f0a500;
+    }
+    #end-tag {
+      position: absolute;
+      left: 996px;
+      top: 580px;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.06em;
+      color: #cfe0d4;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="end" data-width="1920" data-height="1080">
+    <img id="end-bg" src="assets/screens/public_landing.png" alt="" />
+    <div id="end-veil"></div>
+
+    <div id="end-a">
+      <span id="end-scan">Scan.</span>
+      <span id="end-pay">Pay.</span>
+      <span id="end-done">Done.</span>
+    </div>
+
+    <div id="end-b-head">Browse <span>live stalls.</span></div>
+    <div id="end-b-sub">Stall directory · live occupancy</div>
+    <div id="end-frame">
+      <div id="end-bar" data-layout-ignore><span id="end-url">genpay · stalls</span></div>
+      <img id="end-shot" src="assets/screens/public_stalls.png" alt="GenPay stall directory" />
+    </div>
+
+    <img id="end-seal" src="assets/brand/gp_logo.png" alt="General de Jesus College seal" />
+    <div id="end-word"><span id="end-word-gen">Gen</span><span id="end-word-pay">Pay</span></div>
+    <div id="end-tag">General de Jesus College · School e-wallet</div>
+
+    <div id="end-cover"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // The landing backdrop drifts slowly for the whole card
+    tl.fromTo("#end-bg", { scale: 1.08 }, { scale: 1, duration: 8.5, ease: "none" }, 0);
+
+    // Gold wipe left over from the cut clears in the first frames
+    tl.fromTo("#end-cover", { opacity: 1 }, { opacity: 0, duration: 0.3, ease: "power2.out" }, 0);
+
+    // Phase A: Scan. / Pay. / Done. land on the voiceover
+    tl.fromTo("#end-scan", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, 0.05);
+    tl.fromTo("#end-pay", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, 0.8);
+    tl.fromTo("#end-done", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, 1.55);
+    tl.to("#end-a", { opacity: 0, y: -30, duration: 0.3, ease: "power2.in" }, 2.0);
+
+    // Phase B: the stall directory slides in as a browser window
+    tl.fromTo(
+      "#end-b-head",
+      { opacity: 0, x: -60 },
+      { opacity: 1, x: 0, duration: 0.6, ease: "expo.out" },
+      2.3,
+    );
+    tl.fromTo("#end-b-sub", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 2.7);
+    tl.fromTo(
+      "#end-frame",
+      { opacity: 0, x: 140 },
+      { opacity: 1, x: 0, duration: 0.7, ease: "expo.out" },
+      2.35,
+    );
+    tl.fromTo(
+      "#end-shot",
+      { y: -60 },
+      { y: 0, duration: 1.8, ease: "power1.out" },
+      2.35,
+    );
+    tl.to(["#end-b-head", "#end-b-sub", "#end-frame"], { opacity: 0, duration: 0.3, ease: "power2.in" }, 4.0);
+
+    // Phase C: the lockup holds to the last frame
+    tl.fromTo(
+      "#end-seal",
+      { scale: 0.7, rotation: -10, opacity: 0 },
+      { scale: 1, rotation: 0, opacity: 1, duration: 0.9, ease: "back.out(1.5)" },
+      4.2,
+    );
+    tl.fromTo(
+      "#end-word-gen",
+      { clipPath: "inset(0 100% 0 0)" },
+      { clipPath: "inset(0 0% 0 0)", duration: 0.55, ease: "expo.out" },
+      4.6,
+    );
+    tl.fromTo(
+      "#end-word-pay",
+      { clipPath: "inset(0 100% 0 0)" },
+      { clipPath: "inset(0 0% 0 0)", duration: 0.55, ease: "expo.out" },
+      4.8,
+    );
+    tl.fromTo("#end-tag", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out" }, 4.8);
+
+    window.__timelines["end"] = tl;
+  </script>
+</template>

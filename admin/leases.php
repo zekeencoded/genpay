@@ -173,6 +173,37 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
 $page       = min($page, $totalPages);
 $leases     = array_slice($rows, ($page - 1) * $perPage, $perPage);
 
+// Data for the Record payment dialog: each active lease's billable months and
+// what each one still owes, so the amount fills in without leaving this page.
+$quickPay = [];
+foreach ($leases as $l) {
+    if ($l['status'] !== 'active') {
+        continue;
+    }
+    $owed = [];
+    $pick = null;
+    foreach ($directory->rentSchedule($l) as $row) {
+        if ($row['state'] === 'off_contract') {
+            continue;
+        }
+        $owed[$row['period']] = max(0.0, round($row['charged'] - $row['paid'], 2));
+        if ($pick === null && $owed[$row['period']] > 0) {
+            $pick = $row['period'];
+        }
+    }
+    if (!$owed) {
+        continue;
+    }
+    $quickPay[(int) $l['id']] = [
+        'owed'   => $owed,
+        'pick'   => $pick ?? array_key_first($owed),
+        'start'  => array_key_first($owed),
+        'end'    => array_key_last($owed),
+        'tenant' => trim(($l['first_name'] ?? '') . ' ' . ($l['last_name'] ?? '')) ?: ($l['email'] ?? 'Unassigned'),
+        'stall'  => (string) $l['stall_name'],
+    ];
+}
+
 function gjc_lease_qs(array $overrides = []): string
 {
     return htmlspecialchars(gjc_lease_qs_raw($overrides), ENT_QUOTES);
@@ -418,12 +449,12 @@ $stateBadge = [
                             </td>
                             <td class="text-end">
                                 <div class="gp-row-actions">
-                                    <?php if ($l['status'] === 'active'): ?>
-                                        <a class="btn btn-sm btn-success" href="<?= gjc_lease_link((int) $l['id'], 'collect') ?>">
+                                    <?php if (isset($quickPay[(int) $l['id']])): ?>
+                                        <button type="button" class="btn btn-sm btn-success js-quick-pay" data-lease-id="<?= (int) $l['id'] ?>">
                                             Record payment
-                                        </a>
+                                        </button>
                                     <?php endif; ?>
-                                    <a class="btn btn-sm btn-outline-secondary" href="<?= gjc_lease_link((int) $l['id'], 'receipts') ?>">
+                                    <a class="btn btn-sm btn-outline-secondary" href="<?= gjc_lease_link((int) $l['id'], 'contract') ?>">
                                         Details
                                     </a>
                                 </div>
@@ -481,9 +512,9 @@ $stateBadge = [
                     </li>
                     <li>
                         <strong>When a tenant pays, record it against the month it covers.</strong>
-                        Open the lease, hit <em>Record payment</em>, and pick the month in
-                        <em>Period covered</em>. That is what marks a month settled — not the date you
-                        typed it in.
+                        Hit <em>Record payment</em> on the lease's row, then pick the month it covers.
+                        That is what marks a month settled — not the date you typed it in.
+                        <em>Details</em> opens the contract and its payment history.
                     </li>
                     <li>
                         <strong>The rent roll above is your collection list.</strong>
@@ -582,14 +613,70 @@ $stateBadge = [
     </div>
 </div>
 
+<!-- ── Quick Record payment ────────────────────────────────────────────── -->
+<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content custom-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Record payment</h5>
+                    <small class="text-muted" id="payTenant"></small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="payForm" novalidate>
+                    <input type="hidden" name="action" value="record_payment">
+                    <input type="hidden" name="lease_id" id="payLeaseId">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Month this pays for</label>
+                            <input type="month" class="form-control" name="period_covered" id="payPeriod" required>
+                            <small class="form-text" id="payHint"></small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Amount (&#8369;)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control" name="amount_paid" id="payAmount" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Date received</label>
+                            <input type="date" class="form-control" name="payment_date" value="<?= date('Y-m-d') ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Method</label>
+                            <select class="form-select" name="payment_method">
+                                <option value="cash">Cash</option>
+                                <option value="bank_transfer">Bank transfer</option>
+                                <option value="check">Check</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Notes (optional)</label>
+                            <input type="text" class="form-control" name="notes" placeholder="Receipt no., remarks…">
+                        </div>
+                    </div>
+                    <div id="payMsg" class="mt-3"></div>
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="login-btn" style="flex:1" id="paySubmitBtn">Record payment</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script>
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('collapsed');
 }
 window.leaseApiConfig = { endpoint: '<?= ADMIN_URL ?>/api/leases.php' };
+window.leaseQuickPay = <?= json_encode($quickPay, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
-<script src="<?= JS_URL ?>/admin_leases.js?v=5"></script>
+<?php require __DIR__ . '/../includes/partials/csrf_bootstrap.php'; ?>
+<script src="<?= JS_URL ?>/admin_leases.js?v=6"></script>
 <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
 </body>
 </html>

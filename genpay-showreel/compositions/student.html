@@ -1,0 +1,118 @@
+<template>
+  <style>
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        src: url("assets/fonts/PlusJakartaSans-400.woff2") format("woff2");
+        font-weight: 200 800;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+        font-weight: 500 700;
+      }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #0d2418;
+      overflow: hidden;
+    }
+    /* The camera holds the real 1920x1080 capture; GSAP scales and pans it from the top-left origin */
+    #student-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: 0 0;
+    }
+    #student-cam img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+    }
+    .ring {
+      position: absolute;
+      border: 4px solid #f0a500;
+      border-radius: 6px;
+      opacity: 0;
+    }
+    .chip {
+      position: absolute;
+      padding: 8px 16px;
+      background: #f0a500;
+      color: #0d2418;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 700;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      border-radius: 2px;
+      white-space: nowrap;
+      opacity: 0;
+    }
+      .band {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 140px;
+      padding: 20px 110px 0 100px;
+      box-sizing: border-box;
+      background: linear-gradient(0deg, rgba(13, 36, 24, 0.97) 0%, rgba(13, 36, 24, 0.92) 72%, rgba(13, 36, 24, 0) 100%);
+    }
+    .band::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 40px;
+      bottom: 40px;
+      width: 8px;
+      background: #f0a500;
+    }
+    .band-kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.08em;
+      color: #f0a500;
+      text-transform: uppercase;
+    }
+    .band-title {
+      font-family: "Plus Jakarta Sans", sans-serif;
+      font-weight: 800;
+      font-size: 52px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #eef4ef;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+  </style>
+  <div id="root" data-composition-id="student" data-width="1920" data-height="1080">
+    <div id="student-cam" data-layout-allow-overflow>
+      <img src="assets/screens/student_dashboard.png" alt="GenPay student dashboard" />
+      <div class="ring" id="student-ring-balance" style="left: 296px; top: 150px; width: 196px; height: 74px"></div>
+      <div class="ring" id="student-ring-amount" style="left: 1796px; top: 522px; width: 96px; height: 60px"></div>
+      <div class="chip" id="student-chip" style="left: 1420px; top: 470px">Payment recorded</div>
+    </div>
+    <div class="band" data-layout-allow-overflow id="student-band">
+      <div class="band-kicker">STUDENT · WALLET</div>
+      <div class="band-title">Pay any stall from one balance</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // Push in on the balance, then pan down the ledger to the latest payment
+    tl.fromTo("#student-cam", { x: 0, y: 0, scale: 1 }, { x: 306, y: 217, scale: 1.7, duration: 0.7, ease: "expo.inOut" }, 0.1);
+    tl.fromTo("#student-ring-balance", { opacity: 0, scale: 1.2 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, 0.8);
+    tl.to("#student-cam", { x: -1344, y: -412, scale: 1.7, duration: 0.6, ease: "expo.inOut" }, 1.2);
+    tl.fromTo("#student-ring-amount", { opacity: 0, scale: 1.25 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 1.85);
+    tl.fromTo("#student-chip", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.8)" }, 2.0);
+
+    tl.fromTo("#student-band", { y: 140, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, 0.2);
+
+    window.__timelines["student"] = tl;
+  </script>
+</template>
