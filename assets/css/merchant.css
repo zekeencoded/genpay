@@ -1,4 +1,4 @@
-@import url("gjc-clear.css?v=23");
+@import url("gjc-clear.css?v=24");
 @import url("theme.css?v=14");
 
 :root {
@@ -582,7 +582,30 @@ html {
   font-weight: 800;
 }
 
+/* Tablet: undo responsive.css's 992px "stack every column" so col-md-* grids keep their columns. */
+@media (min-width: 768px) and (max-width: 992px) {
+  body .row > [class*="col-md-"] {
+    flex: 0 0 auto !important;
+    max-width: none !important;
+  }
+
+  /* Business Profile hero: buttons drop under the name instead of squeezing it. */
+  .ph-hero-top { flex-wrap: wrap; }
+  .ph-hero-actions { width: 100%; order: 3; }
+}
+
+/* Tablet: balance on its own row, the three counts side by side under it. */
 @media (max-width: 1200px) {
+  .history-summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .history-summary-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 575.98px) {
   .history-summary-grid {
     grid-template-columns: 1fr;
   }
@@ -860,7 +883,7 @@ html {
 /* MERCHANT NATIVE-LIKE MOBILE APP */
 /* ============================== */
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   html {
     min-height: 100%;
     background: #f8fbf7;

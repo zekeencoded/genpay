@@ -50,7 +50,7 @@ video {
 
 /* ═══ NAVBAR & SIDEBAR FIX ═══ */
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .sidebar {
     position: fixed !important;
     left: -250px;
@@ -74,7 +74,7 @@ video {
 
 /* ═══ TEXT & SPACING FIX ═══ */
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   h1 {
     font-size: 20px;
   }
@@ -96,7 +96,7 @@ video {
 
 /* ═══ BUTTON & INPUT FIX ═══ */
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   button,
   .btn {
     width: 100%;
@@ -130,7 +130,7 @@ html {
 }
 
 /* Mobile */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .login-wrapper {
     padding: 20px;
     height: auto;

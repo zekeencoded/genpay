@@ -266,7 +266,7 @@ $currentPage = 'activity';
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
-<script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+<script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
 <script>
 function toggleParentSidebar() {
     document.getElementById('parentSidebar').classList.toggle('collapsed');

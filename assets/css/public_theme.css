@@ -1,0 +1,267 @@
+@import url("theme.css?v=14");
+
+/* ===== PUBLIC THEME (landing and stalls pages; add class="landing" to <body>)
+   Takes its look from the official GJC website (gendejesus.edu.ph): deep green,
+   school gold, Oswald headings, Poppins text, pill buttons and the pointed green
+   banner, set larger and cleaner. Text stays large and high-contrast for older
+   visitors. ===== */
+
+:root {
+    --gjc-green: #003000;      /* the site's header, banner and footer green */
+    --gjc-green-2: #0b3612;    /* its card green */
+    --gjc-leaf: #138a36;       /* brighter green for icons on white */
+    --gjc-gold: #f0a000;       /* its announcement bar and buttons */
+    --gjc-gold-hover: #ffb81f;
+    --gjc-mist: #f3f6f2;       /* soft section ground */
+    --gjc-ink: #102010;
+    --pad: clamp(20px, 4vw, 48px);
+    --radius: 16px;
+    --text: 18px;
+    --display: "Oswald", "Arial Narrow", Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body.landing {
+    margin: 0;
+    background: #fff;
+    color: var(--gjc-ink);
+    font-family: "Poppins", Arial, sans-serif;
+    font-size: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Zero-specificity reset so each component's own margins win. */
+:where(.landing) :where(h1, h2, h3, p, ul, ol) {
+    margin: 0;
+}
+
+.landing a:focus-visible,
+.landing summary:focus-visible,
+.landing button:focus-visible,
+.landing [tabindex]:focus-visible {
+    outline: 3px solid var(--gjc-gold);
+    outline-offset: 3px;
+}
+
+.wrap {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 var(--pad);
+}
+
+.wrap-narrow {
+    max-width: 880px;
+}
+
+/* ===== NAVIGATION (overrides the shared public bar) ===== */
+.landing .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px var(--pad);
+    background: #fff;
+    border-bottom: 3px solid var(--gjc-gold);
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
+.landing .navbar-brand {
+    color: var(--gjc-green) !important;
+    font-family: "Montserrat", "Poppins", Arial, sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.landing .nav-actions i {
+    display: none;
+}
+
+.landing .nav-actions .btn-primary-custom {
+    display: inline-flex;
+    align-items: center;
+    min-height: 46px;
+    padding: 0 20px;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-size: 17px;
+    font-weight: 600;
+    box-shadow: none !important;
+    text-decoration: none;
+}
+
+.landing .nav-actions .btn-outline-custom {
+    color: var(--gjc-green) !important;
+}
+
+.landing .nav-actions .btn-outline-custom:hover,
+.landing .nav-actions .btn-outline-custom[aria-current="page"] {
+    background: var(--gjc-mist) !important;
+}
+
+.landing .nav-actions .btn-login {
+    margin-left: 8px;
+    padding: 0 28px;
+    background: var(--gjc-green) !important;
+    color: #fff !important;
+}
+
+.landing .nav-actions .btn-login:hover {
+    background: var(--gjc-green-2) !important;
+    transform: none !important;
+}
+
+/* ===== BUTTONS AND LINKS ===== */
+.cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    padding: 0 36px;
+    border-radius: 999px;
+    background: var(--gjc-gold);
+    color: var(--gjc-green);
+    font-size: 18px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 150ms ease, transform 150ms ease;
+}
+
+.cta:hover {
+    background: var(--gjc-gold-hover);
+    color: var(--gjc-green);
+    transform: translateY(-1px);
+}
+
+.text-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    color: var(--gjc-green);
+    font-weight: 600;
+    text-underline-offset: 4px;
+}
+
+.text-link i {
+    font-size: 15px;
+    transition: transform 150ms ease;
+}
+
+.text-link:hover i {
+    transform: translateX(4px);
+}
+
+/* ===== BANNER: the site's pointed green banner ===== */
+.hero-simple {
+    position: relative;
+    padding: 80px 0 140px;
+    background: var(--gjc-green);
+    color: #fff;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 56px), 50% 100%, 0 calc(100% - 56px));
+}
+
+.hero-text h1 {
+    margin-bottom: 24px;
+    color: #fff;
+    font-family: var(--display);
+    font-size: clamp(40px, 3.9vw, 56px);
+    font-weight: 700;
+    line-height: 1.05;
+    text-transform: uppercase;
+}
+
+/* Two-tone title, as on the school's own banners. */
+.hero-text h1 span {
+    color: var(--gjc-gold);
+}
+
+.hero-text p {
+    max-width: 42ch;
+    margin-bottom: 36px;
+    color: #e6efe6;
+    font-size: 19px;
+}
+
+/* ===== SECTION TITLES ===== */
+.block {
+    padding: 96px 0;
+}
+
+.block h2 {
+    color: var(--gjc-green);
+    font-family: var(--display);
+    font-size: clamp(34px, 4vw, 50px);
+    font-weight: 700;
+    line-height: 1.1;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* The gold bar under section titles, from the school site. */
+.block h2::after {
+    content: "";
+    display: block;
+    width: 72px;
+    height: 5px;
+    margin: 18px auto 0;
+    border-radius: 999px;
+    background: var(--gjc-gold);
+}
+
+.block-sub {
+    max-width: 60ch;
+    margin: 20px auto 0;
+    text-align: center;
+}
+
+/* ===== FOOTER ===== */
+.landing footer {
+    padding: 36px var(--pad);
+    background: var(--gjc-green);
+    border-top: 5px solid var(--gjc-gold);
+    color: #fff;
+    font-size: 16px;
+    text-align: center;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cta,
+    .text-link i {
+        transition: none;
+    }
+
+    .cta:hover {
+        transform: none;
+    }
+}
+
+/* ===== PHONE ===== */
+@media (max-width: 767px) {
+    :root { --text: 17px; --radius: 14px; }
+
+    .landing .navbar { padding: 10px 16px; }
+    .landing .nav-actions .btn-primary-custom { justify-content: center; }
+    .landing .nav-actions .btn-login { margin-left: 0; }
+
+    .hero-simple {
+        padding: 48px 0 96px;
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), 50% 100%, 0 calc(100% - 32px));
+    }
+
+    .hero-text h1 { font-size: clamp(28px, 8.6vw, 40px); }
+    .hero-text p { font-size: 17px; }
+    .hero-text .cta { width: 100%; }
+
+    .block { padding: 64px 0; }
+}

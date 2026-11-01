@@ -147,7 +147,7 @@
 .pos-search-input:focus { border-color:var(--gp-focus-border); box-shadow: var(--gp-focus-ring); }
 .pos-empty-filter { display:none; text-align:center; padding:36px 20px; color:var(--gp-muted); font-size:13px; }
 
-@media (max-width: 768px) {
+@media (max-width: 991.98px) {
     .pos-layout { grid-template-columns:1fr; }
     .pos-cart-panel { position:static; max-height:none; }
 
@@ -157,10 +157,6 @@
         overflow-x: auto;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
-        margin-left: calc(var(--main-pad, 12px) * -1);
-        margin-right: calc(var(--main-pad, 12px) * -1);
-        padding-left: var(--main-pad, 12px);
-        padding-right: var(--main-pad, 12px);
     }
     .cat-filter::-webkit-scrollbar { display: none; }
 
@@ -177,6 +173,16 @@
 
     /* Search and the icon button share one row rather than stacking. */
     .pos-product-toolbar { flex-wrap: nowrap; }
+}
+
+/* Phones: chips scroll edge to edge. Tablets keep them inside the panel. */
+@media (max-width: 767.98px) {
+    .cat-filter {
+        margin-left: calc(var(--main-pad, 12px) * -1);
+        margin-right: calc(var(--main-pad, 12px) * -1);
+        padding-left: var(--main-pad, 12px);
+        padding-right: var(--main-pad, 12px);
+    }
 }
 
 /* POS modal/secondary styles (moved from a second inline <style> block) */

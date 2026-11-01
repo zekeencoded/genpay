@@ -1,324 +1,293 @@
-@import url("gjc-clear.css?v=23");
-@import url("theme.css?v=14");
+/* ===== SIGN-IN page only. Shared look (tokens, fonts, buttons) lives in
+   public_theme.css: brand panel on the left, the form on the right. ===== */
 
-/* ===== GLOBAL: photo background with glass card (login only) ===== */
-body {
-  font-family: var(--gjc-font-body);
-  background: linear-gradient(rgba(13, 36, 24, 0.85), rgba(13, 36, 24, 0.85)), url('../images/GenSimeon-Bldg.jpg') center/cover no-repeat !important;
-  margin: 0;
-  min-height: 100vh;
+body.signin-body {
+  background: #fff;
 }
 
-/* ===== CENTER WRAPPER ===== */
-.login-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  padding: 24px 16px;
+/* Brand on the left, the form on the right. */
+.signin-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh; /* fallback for browsers without svh */
+  min-height: 100svh;
 }
 
-/* ===== CARD ===== */
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  padding: 35px;
-  border-radius: var(--gp-radius);
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(25px);
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
-
+/* The school site's pointed green banner, turned to point at the form. */
+.signin-brand {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 80px 48px 32px;
+  background: var(--gjc-green);
+  color: #fff;
+  text-align: center;
+  clip-path: polygon(0 0, calc(100% - 56px) 0, 100% 50%, calc(100% - 56px) 100%, 0 100%);
 }
 
-/* ===== TOP BADGE ===== */
-.badge-top {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 6px 16px;
-  border-radius: var(--gp-radius);
-  font-size: 11px;
-  color: #fff;
+/* The campus building, faded into the green so the logo stays the focus. */
+.signin-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url("../images/GenSimeon-Bldg.jpg") center / cover no-repeat;
+  filter: grayscale(1) contrast(1.1);
+  opacity: 0.16;
+}
 
-  text-align: center;
+.signin-seal {
   display: block;
-  margin: 0 auto 18px auto;
-  width: fit-content;
-}
-
-/* ===== TITLE ===== */
-.brand-title {
-  color: #fff;
-  font-weight: 700;
-  font-size: 34px;
-  letter-spacing: -0.5px;
-  margin-bottom: 5px;
-  text-align: center;
-}
-
-.sub-text {
-  color: #cfcfcf;
-  font-size: 13px;
   margin-bottom: 24px;
-  text-align: center;
 }
 
-/* ===== INPUT FIELDS ===== */
-.input-group-box {
-  position: relative;
-  margin-bottom: 18px;
+.signin-seal img {
+  display: block;
+  width: 168px;
+  height: 168px;
 }
 
-.input-group-box input {
+.signin-brand-name {
+  color: #fff;
+  font-family: "Montserrat", "Poppins", Arial, sans-serif;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Gold bar between the name and the line, like the section titles. */
+.signin-brand-name::after {
+  content: "";
+  display: block;
+  width: 64px;
+  height: 5px;
+  margin: 16px auto 0;
+  border-radius: 999px;
+  background: var(--gjc-gold);
+}
+
+.signin-brand-line {
+  max-width: 28ch;
+  margin-top: 16px;
+  color: #e6efe6;
+  font-size: 18px;
+}
+
+/* ===== FORM ===== */
+.signin {
   width: 100%;
-  padding: 15px 40px 15px 15px;
-  border-radius: var(--gp-radius);
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  outline: none;
-  font-size: 14px;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.input-group-box label {
+.signin h1 {
+  color: var(--gjc-green);
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.signin h1::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 5px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--gjc-gold);
+}
+
+.signin-lede {
+  margin: 16px 0 32px;
+  color: #4a5a4a;
+}
+
+.signin-error {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-left: 6px solid var(--gp-danger);
+  border-radius: 12px;
+  background: var(--gp-danger-bg);
+  color: var(--gp-danger);
+  font-size: 16px;
+}
+
+/* Change-password screen: a notice above the title, and a success box. */
+.signin-badge {
+  align-self: flex-start;
+  margin-bottom: 18px;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: var(--gjc-gold);
+  color: var(--gjc-green);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.signin-success {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-left: 6px solid var(--gjc-leaf);
+  border-radius: 12px;
+  background: #e6f4ea;
+  color: #0e5a26;
+  font-size: 16px;
+}
+
+.signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.signin-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--gjc-green);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.signin-field input {
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border: 2px solid #c9d6cd;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--gjc-ink);
+  font: inherit;
+  transition: border-color 150ms ease;
+}
+
+.signin-field input:hover {
+  border-color: #9fb3a5;
+}
+
+.signin-field input:focus-visible {
+  border-color: var(--gjc-green);
+  outline: 3px solid var(--gjc-gold);
+  outline-offset: 2px;
+}
+
+.signin-pass {
+  position: relative;
+}
+
+.signin-pass input {
+  padding-right: 60px;
+}
+
+.signin-eye {
   position: absolute;
   top: 50%;
-  left: 15px;
+  right: 6px;
   transform: translateY(-50%);
-  font-size: 12px;
-  color: #ccc;
-  transition: 0.2s;
-}
-
-.input-group-box input:focus + label,
-.input-group-box input:not(:placeholder-shown) + label {
-  top: -8px;
-  font-size: 11px;
-  color: #fff;
-}
-
-/* ===== PASSWORD EYE ===== */
-.eye {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-radius: var(--gp-radius);
-  background: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  font-size: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #4a5a4a;
+  cursor: pointer;
 }
 
-/* ===== ERROR BOX (tinted from --gp-red, 220 38 38, for a dark ground) ===== */
-.error-box {
-  background: rgba(220, 38, 38, 0.2);
-  border: 1px solid rgba(220, 38, 38, 0.5);
-  padding: 12px;
-  border-radius: var(--gp-radius);
-  color: #ffb3b3;
-  text-align: center;
-  margin-bottom: 20px;
+.signin-eye:hover {
+  background: var(--gjc-mist);
+  color: var(--gjc-green);
 }
 
-/* ===== OPTIONS ===== */
-.options {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #ccc;
-}
+.signin-eye-slash { opacity: 0; }
+.signin-eye.is-visible .signin-eye-slash { opacity: 1; }
 
-.options label {
+.signin-remember {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin: 0;
+  gap: 10px;
+  width: fit-content;
+  font-size: 17px;
   cursor: pointer;
 }
 
-.options input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
+.signin-remember input {
+  width: 20px;
+  height: 20px;
   margin: 0;
-  flex-shrink: 0;
-  accent-color: var(--gp-green-700);
+  accent-color: var(--gjc-green);
   cursor: pointer;
 }
 
-.options a {
-  color: #fff;
-  text-decoration: none;
-}
-
-/* ===== BUTTON ===== */
-.login-btn {
-  width: 100%;
-  padding: 15px;
-  margin-top: 20px;
-  border: none;
-  border-radius: var(--gp-radius-pill);
-  background: var(--gp-green-700);
-  color: #fff;
+/* The gold pill used for every main action on the public pages. */
+.signin-submit {
+  height: 58px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gjc-gold);
+  color: var(--gjc-green);
+  font: inherit;
+  font-size: 19px;
   font-weight: 600;
-  letter-spacing: 1px;
-  transition: 0.2s;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
 }
 
-.login-btn:hover {
-  transform: scale(1.02);
+.signin-submit:hover {
+  background: var(--gjc-gold-hover);
+  transform: translateY(-1px);
 }
 
-.eye img {
-  width: 13px;
-  height: 13px;
-  opacity: 0.95;
-  filter: brightness(0) saturate(100%) invert(18%) sepia(36%) saturate(802%) hue-rotate(91deg) brightness(88%) contrast(92%);
-}
-
-.eye img:hover {
-  opacity: 1;
-}
-
-.eye.is-visible {
-  background: var(--gp-success-bg);
-}
-
-@media (max-width: 576px) {
-  body {
-    background:
-      linear-gradient(rgba(13, 36, 24, 0.78), rgba(13, 36, 24, 0.78)),
-      url('../images/GenSimeon-Bldg.jpg') center/cover no-repeat fixed !important;
-  }
-
-  .login-wrapper {
-    min-height: 100svh;
-    align-items: flex-start;
-    padding: 18px 14px;
-    overflow-y: auto;
-  }
-
-  .login-card {
-    max-width: 100%;
-    padding: 22px 18px;
-    border-radius: var(--gp-radius);
-    margin: 0 auto;
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(18px);
-  }
-
-  .login-card .text-center img {
-    width: 104px !important;
-    height: 104px !important;
-  }
-
-  .badge-top {
-    margin-bottom: 14px;
-    max-width: 100%;
-    line-height: 1.25;
-  }
-
-  .brand-title {
-    font-size: 28px;
-    line-height: 1.1;
-  }
-
-  .sub-text {
-    margin-bottom: 20px;
-  }
-
-  .input-group-box {
-    margin-bottom: 16px;
-  }
-
-  .input-group-box input {
-    min-height: 52px;
-    padding-right: 44px;
-    border-radius: var(--gp-radius);
-    font-size: 15px;
-  }
-
-  .options {
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    line-height: 1.3;
-  }
-
-  .options a {
-    margin-left: auto;
-  }
-
-  .login-btn {
-    min-height: 52px;
-    border-radius: var(--gp-radius-pill);
-    margin-top: 18px;
-  }
-
-  .custom-modal {
-    margin: 0 10px;
-    padding: 14px;
-    border-radius: var(--gp-radius);
-  }
-}
-
-/* MODAL CUSTOM (background tinted from --gp-green-950, 13 36 24) */
-.custom-modal {
-  border-radius: var(--gp-radius);
-  background: rgba(13, 36, 24, 0.95);
-  backdrop-filter: blur(20px);
-  color: #fff;
-  padding: 20px;
-}
-
-/* ICON */
-.modal-icon {
-  font-size: 35px;
-  margin-bottom: 10px;
-}
-
-/* TITLE */
-.modal-title {
-  font-weight: 700;
-}
-
-/* STEPS */
-.modal-steps {
-  font-size: 13px;
+.signin-help {
+  margin-top: 28px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--gjc-mist);
   color: var(--gjc-ink);
-  margin-bottom: 20px;
+  font-size: 16px;
 }
 
-.modal-steps li {
-  margin-bottom: 6px;
+@media (prefers-reduced-motion: reduce) {
+  .signin-submit,
+  .signin-field input { transition: none; }
+  .signin-submit:hover { transform: none; }
 }
 
-/* BUTTON */
-.btn-close-modal {
-  background: var(--gp-green-700);
-  border: none;
-  padding: 10px 20px;
-  border-radius: var(--gp-radius-pill);
-  color: #fff;
-}
+/* ===== PHONE: the brand becomes a pointed bar above the form ===== */
+@media (max-width: 767px) {
+  .signin-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
 
-.modal-icon img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  margin-bottom: 10px;
-}
+  .signin-brand {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 18px 20px 34px;
+    text-align: left;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), 50% 100%, 0 calc(100% - 16px));
+  }
 
-.modal-title {
-  margin-bottom: 18px; /* dagdag space */
+  .signin-seal { margin: 0; }
+  .signin-seal img { width: 52px; height: 52px; }
+  .signin-brand-name { font-size: 26px; }
+  .signin-brand-name::after,
+  .signin-brand-line { display: none; }
+
+  .signin { justify-content: flex-start; padding: 28px 20px 40px; }
+  .signin h1 { font-size: 36px; }
 }

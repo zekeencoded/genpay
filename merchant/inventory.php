@@ -37,9 +37,9 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -86,7 +86,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
             <?php endif; ?>
 
             <div class="table-responsive">
-                <table class="table merchant-premium-table align-middle js-datatable" id="inventoryTable" data-page-length="10" data-empty-message="No products found.">
+                <table class="table merchant-premium-table align-middle js-datatable" id="inventoryTable" data-page-length="10" data-cards-query="(max-width: 1199.98px)" data-empty-message="No products found.">
                     <thead>
                         <tr>
                             <th data-card="hide">SKU</th>
@@ -382,7 +382,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
-<script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+<script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
 <script>
 const INV_API = '<?= MERCHANT_URL ?>/api/inventory.php';
 

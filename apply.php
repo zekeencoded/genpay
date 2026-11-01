@@ -337,15 +337,24 @@ function apply_photo_preview_data_uri(array $attached): ?string
     <title>Apply for a Stall | GenPay</title>
     <meta name="description" content="Submit your stall application at General de Jesus College.">
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Oswald:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/apply.css?v=21">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=6">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/apply.css?v=25">
 </head>
-<body>
+<body class="landing">
 
-<a href="<?= BASE_URL ?>/stalls" class="app-close" title="Back to stall map">
-    <i class="fa-solid fa-xmark"></i>
-</a>
+<?php include __DIR__ . '/includes/partials/public_navbar.php'; ?>
+
+<header class="hero-simple apply-hero">
+    <div class="wrap hero-text">
+        <h1>Stall <span>Application</span></h1>
+        <?php if (!$success): ?>
+        <p>Complete all sections and upload the required documents. A specific stall will be assigned during the review process.</p>
+        <?php endif; ?>
+    </div>
+</header>
 
 <div class="app-body">
 
@@ -407,12 +416,6 @@ function apply_photo_preview_data_uri(array $attached): ?string
     </div>
 
 <?php else: ?>
-
-    <!-- Form heading -->
-    <div class="form-intro">
-        <h1>Stall Application</h1>
-        <p>Complete all sections and upload the required documents. A specific stall will be assigned during the review process.</p>
-    </div>
 
     <?php if (!empty($formErrors["general"])): ?>
     <div class="alert-error">
@@ -483,15 +486,18 @@ function apply_photo_preview_data_uri(array $attached): ?string
                         <?php endif; ?>
                     </div>
                     <div>
-                        <label class="field-label" for="sex">Sex <span class="req">*</span></label>
-                        <div class="field-select-wrap">
-                            <select id="sex" name="sex"
-                                    class="field-select <?= isset($formErrors['sex']) ? 'err' : '' ?>">
-                                <option value="" disabled <?= ($old['sex'] ?? '') === '' ? 'selected' : '' ?>>Select</option>
-                                <option value="male"   <?= ($old['sex'] ?? '') === 'male'   ? 'selected' : '' ?>>Male</option>
-                                <option value="female" <?= ($old['sex'] ?? '') === 'female' ? 'selected' : '' ?>>Female</option>
-                            </select>
-                        </div>
+                        <fieldset class="field-radios">
+                            <legend class="field-label">Sex <span class="req">*</span></legend>
+                            <div class="radio-row <?= isset($formErrors['sex']) ? 'err' : '' ?>">
+                                <?php foreach (['male' => 'Male', 'female' => 'Female'] as $sexValue => $sexLabel): ?>
+                                <label class="radio-pill">
+                                    <input type="radio" name="sex" value="<?= $sexValue ?>"
+                                           <?= ($old['sex'] ?? '') === $sexValue ? 'checked' : '' ?>>
+                                    <span><?= $sexLabel ?></span>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </fieldset>
                         <?php if (isset($formErrors['sex'])): ?>
                         <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i><?= htmlspecialchars($formErrors['sex']) ?></div>
                         <?php endif; ?>
@@ -769,12 +775,12 @@ function apply_photo_preview_data_uri(array $attached): ?string
     <!-- Terms modal -->
     <div class="modal fade" id="termsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius:14px;border:none">
-                <div class="modal-header border-0 pb-0" style="padding:20px 24px 12px">
-                    <h5 class="modal-title fw-bold" style="font-size:16px">GJC Campus Stall Rental — Terms &amp; Conditions</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-content terms-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title">GJC Campus Stall Rental — Terms &amp; Conditions</h5>
+                    <button type="button" class="terms-x" data-bs-dismiss="modal" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                 </div>
-                <div class="modal-body" style="padding:8px 24px 20px">
+                <div class="modal-body">
                     <div class="terms-scroll" id="termsBox">
                         <p>By submitting this application, you agree to the following terms set forth by the administration of General de Jesus College (GJC):</p>
                         <p><strong>1. Eligibility.</strong> Applicants must be of legal age (18+) and must not have any outstanding financial obligations to GJC. Applications from individuals with existing violations of school policy may be rejected at the institution's discretion.</p>
@@ -798,8 +804,8 @@ function apply_photo_preview_data_uri(array $attached): ?string
                     </div>
                     <div class="scroll-hint" id="scrollHint"><i class="fa-solid fa-circle-chevron-down"></i> Scroll to the bottom to unlock the checkbox</div>
                 </div>
-                <div class="modal-footer border-0" style="padding:0 24px 20px">
-                    <button type="button" class="btn btn-success rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                <div class="modal-footer">
+                    <button type="button" class="cta terms-close" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -808,9 +814,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
 <?php endif; ?>
 </div><!-- /.app-body -->
 
-<footer style="background:var(--forest,#0d2818);color:rgba(255,255,255,.45);text-align:center;padding:18px;font-size:11px;letter-spacing:0.03em;">
-    &copy; <?= date("Y") ?> General de Jesus College &mdash; GenPay
-</footer>
+<?php include __DIR__ . '/includes/partials/public_footer.php'; ?>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>

@@ -60,108 +60,83 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | GenPay</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    <title>Sign in | GenPay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Oswald:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=24">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=32">
 </head>
 
-<body>
+<body class="landing signin-body">
 
-    <div class="login-wrapper">
-        <div class="login-card">
+    <div class="signin-split">
 
-            <div class="badge-top">Secure Campus Wallet Access</div>
+        <aside class="signin-brand">
+            <a href="<?= BASE_URL ?>/" class="signin-seal"><img src="<?= ICONS_URL ?>/gp_logo_clear.png" alt="GenPay home" width="160" height="160"></a>
+            <p class="signin-brand-name">GenPay</p>
+            <p class="signin-brand-line">Cashless Payment System of Gen. De Jesus College</p>
+        </aside>
 
-            <div class="text-center mb-3">
-                <img src="<?= ICONS_URL ?>/GenDeJesusFavicon.png" alt="GJC Seal"
-                    style="width: 150px; height: 150px; object-fit: contain;">
-            </div>
+    <main class="signin">
 
-            <h1 class="brand-title">GenPay</h1>
-            <p class="sub-text">Cashless Payment System</p>
+            <h1>Sign in</h1>
+            <p class="signin-lede">Use your email or student ID.</p>
 
-            <?php if ($error): ?>
-                <div class="error-box"><?php echo $error; ?></div>
-            <?php endif; ?>
+                <?php if ($error): ?>
+                    <div class="signin-error" role="alert"><?php echo $error; ?></div>
+                <?php endif; ?>
 
-            <form method="POST">
+                <form method="POST" class="signin-form">
 
-                <div class="input-group-box">
-                    <input type="text" name="email" required placeholder=" " value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
-                    <label>Email or Student ID</label>
-                </div>
-
-                <div class="input-group-box">
-                    <input type="password" name="password" id="pass" required placeholder=" ">
-                    <label>Password</label>
-
-                    <button type="button" class="eye" onclick="togglePass()" aria-label="Show password">
-                        <img src="<?= ICONS_URL ?>/eye.png" alt="">
-                    </button>
-                </div>
-
-                <div class="options">
-                    <label><input type="checkbox" name="remember" value="1" <?= !empty($_POST['remember']) ? 'checked' : '' ?>> Remember me</label>
-
-                    <a href="#" data-bs-toggle="modal" data-bs-target="#forgotModal">
-                        Forgot Password?
-                    </a>
-                </div>
-
-                <button class="login-btn" name="login">SIGN IN</button>
-
-            </form>
-
-        </div>
-    </div>
-
-
-
-    <div class="modal fade" id="forgotModal">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content custom-modal">
-
-                <div class="modal-body text-center">
-
-                    <div class="modal-icon">
-                        <img src="<?= ICONS_URL ?>/lock.png">
+                    <div class="signin-field">
+                        <label for="signin-email">Email or Student ID</label>
+                        <input id="signin-email" type="text" name="email" required autocomplete="username"
+                            value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                     </div>
 
-                    <h5 class="modal-title">Forgot Password?</h5>
+                    <div class="signin-field">
+                        <label for="signin-pass">Password</label>
+                        <div class="signin-pass">
+                            <input id="signin-pass" type="password" name="password" required autocomplete="current-password">
+                            <button type="button" class="signin-eye" onclick="togglePass()" aria-label="Show password" aria-controls="signin-pass">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path class="signin-eye-slash" d="M3 3l18 18"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
 
-                    <ul class="modal-steps text-start">
-                        <li>Go to Finance Office</li>
-                        <li>Bring ID</li>
-                        <li>Request reset</li>
-                        <li>Wait for verification</li>
-                    </ul>
+                    <label class="signin-remember">
+                        <input type="checkbox" name="remember" value="1" <?= !empty($_POST['remember']) ? 'checked' : '' ?>>
+                        Remember me
+                    </label>
 
-                    <button class="btn-close-modal" data-bs-dismiss="modal">Got it</button>
+                    <button class="signin-submit" name="login">Sign in</button>
 
-                </div>
+                </form>
 
-            </div>
-        </div>
+            <p class="signin-help">Forgot your password? Bring your ID to the Finance Office to request a reset.</p>
+
+    </main>
+
     </div>
 
     <script>
         function togglePass() {
-            const password = document.getElementById("pass");
-            const button = document.querySelector(".eye");
+            const password = document.getElementById("signin-pass");
+            const button = document.querySelector(".signin-eye");
             const shouldShow = password.type === "password";
 
             password.type = shouldShow ? "text" : "password";
             button.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
+            button.setAttribute("aria-pressed", String(shouldShow));
             button.classList.toggle("is-visible", shouldShow);
         }
     </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 

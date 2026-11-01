@@ -627,6 +627,11 @@ footer {
     padding: 16px !important;
   }
 
+  /* merchant.css bleeds the topbar by --main-pad; keep it equal to this padding. */
+  .merchant-main {
+    --main-pad: 16px !important;
+  }
+
   .topbar {
     align-items: flex-start !important;
   }
@@ -636,6 +641,10 @@ footer {
   .admin-main,
   .merchant-main {
     padding: 12px !important;
+  }
+
+  .merchant-main {
+    --main-pad: 12px !important;
   }
 
   .topbar h1 {

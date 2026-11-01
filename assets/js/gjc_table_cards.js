@@ -1,7 +1,8 @@
 /* ═══ Responsive table cards (pairs with gjc-table-cards.css).
    On narrow screens rows become cards; columns are declared via data-card on <th>.
    Tapping a card follows the row's link, clicks its View button, or expands it.
-   A MutationObserver re-applies after DataTables redraws. Opt out with data-cards="false". ═══ */
+   A MutationObserver re-applies after DataTables redraws. Opt out with data-cards="false";
+   data-cards-query="(max-width: …)" overrides when a table stacks. ═══ */
 (function () {
   "use strict";
 
@@ -330,7 +331,7 @@
     bindBreakpoint(
       table,
       table.closest(".table-responsive"),
-      wide ? TABLET_QUERY : PHONE_QUERY
+      table.getAttribute("data-cards-query") || (wide ? TABLET_QUERY : PHONE_QUERY)
     );
   }
 

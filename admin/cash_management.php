@@ -66,14 +66,14 @@ $currentPage = 'cash';
     <link rel="stylesheet" href="<?= CSS_URL ?>/topups.css?v=10">
     <link rel="stylesheet" href="<?= CSS_URL ?>/encashments.css?v=9">
     <link rel="stylesheet" href="<?= CSS_URL ?>/cash_management.css?v=1">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=24">
     <style>
         .sgc-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
     </style>
@@ -546,7 +546,7 @@ $currentPage = 'cash';
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
     <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
-    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
 
     <script>
     function toggleSidebar() {

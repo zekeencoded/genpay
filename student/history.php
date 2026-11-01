@@ -235,7 +235,7 @@ $currentPage = 'history';
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
-    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
     <script>
     // ── Live wallet stats (table refreshes on reload; DataTables owns its rows) ──
     const historyBalanceValue = document.getElementById("historyBalanceValue");

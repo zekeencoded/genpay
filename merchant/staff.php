@@ -72,9 +72,9 @@ $currentPage = "staff";
     <title>Staff Management | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=63">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -134,7 +134,7 @@ $currentPage = "staff";
             </div>
 
             <div class="table-responsive">
-                <table class="table merchant-premium-table align-middle" id="staffTable">
+                <table class="table merchant-premium-table align-middle" id="staffTable" data-cards-query="(max-width: 1199.98px)">
                     <thead>
                         <tr>
                             <th data-card="title">Name</th>
@@ -516,7 +516,7 @@ $currentPage = "staff";
 </style>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
-<script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+<script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
 <script>
 const STAFF_API = '<?= MERCHANT_URL ?>/api/staff.php';
 

@@ -1,264 +1,366 @@
-@import url("theme.css?v=14");
+/* ===== LANDING page only. Shared look (tokens, nav, banner, buttons,
+   section titles, footer) lives in public_theme.css. ===== */
 
-body {
-    font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif;
-    background-color: #f8fbf7;
-    color: #102018;
-    margin: 0;
-    padding: 0;
-    min-height: 100vh;
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 40px;
+    align-items: center;
+}
+
+/* ===== HERO SCENE: scan -> confirmed -> GenCoin flies to the stall, every 6s ===== */
+.pay-scene {
+    display: block;
+    width: 100%;
+    max-width: 560px;
+    height: auto;
+    margin-left: auto;
+    overflow: visible;
+}
+
+.ps-glow { fill: #0e4a1c; }
+
+.ps-ring {
+    fill: none;
+    stroke: var(--gjc-gold);
+    stroke-width: 3;
+    stroke-dasharray: 4 14;
+    stroke-linecap: round;
+    opacity: 0.55;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ps-spin 40s linear infinite;
+}
+
+.ps-float { animation: ps-float 3s ease-in-out infinite alternate; }
+
+.ps-scan,
+.ps-check,
+.ps-btn,
+.ps-paid,
+.ps-coin {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation-duration: 6s;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+}
+
+.ps-scan { animation-name: ps-scan; }
+.ps-check { animation-name: ps-check; }
+.ps-btn { animation-name: ps-btn; }
+.ps-paid { animation-name: ps-paid; }
+.ps-coin { opacity: 0; animation-name: ps-coin; }
+.ps-coin.c2 { animation-delay: 0.2s; }
+.ps-coin.c3 { animation-delay: 0.4s; }
+
+.ps-spark path {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ps-twinkle 2.4s ease-in-out infinite;
+}
+
+.ps-spark path:nth-child(2) { animation-delay: 0.8s; }
+.ps-spark path:nth-child(3) { animation-delay: 1.6s; }
+
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+
+@keyframes ps-float {
+    from { transform: translateY(0); }
+    to { transform: translateY(-10px); }
+}
+
+@keyframes ps-scan {
+    0% { transform: translateY(0); opacity: 1; }
+    28% { transform: translateY(100px); opacity: 1; }
+    32%, 100% { transform: translateY(100px); opacity: 0; }
+}
+
+@keyframes ps-check {
+    0%, 32% { transform: scale(0); }
+    40% { transform: scale(1.15); }
+    45%, 88% { transform: scale(1); }
+    95%, 100% { transform: scale(0); }
+}
+
+@keyframes ps-btn {
+    0%, 44%, 54%, 100% { transform: scale(1); }
+    49% { transform: scale(0.9); }
+}
+
+@keyframes ps-coin {
+    0%, 50% { transform: translate(0, 0); opacity: 0; }
+    53% { opacity: 1; }
+    62% { transform: translate(-130px, -170px); }
+    72% { transform: translate(-268px, -100px); opacity: 1; }
+    76%, 100% { transform: translate(-268px, -100px); opacity: 0; }
+}
+
+@keyframes ps-paid {
+    0%, 72% { transform: scale(0); }
+    79% { transform: scale(1.2); }
+    84%, 94% { transform: scale(1); }
+    100% { transform: scale(0); }
+}
+
+@keyframes ps-twinkle {
+    0%, 100% { transform: scale(0.6); opacity: 0.4; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Without motion: show the finished payment, still. */
+@media (prefers-reduced-motion: reduce) {
+    .ps-ring, .ps-float, .ps-scan, .ps-check, .ps-btn,
+    .ps-paid, .ps-coin, .ps-spark path { animation: none; }
+    .ps-scan, .ps-coin { opacity: 0; }
+}
+
+/* ----- Features ----- */
+.features {
+    padding-top: 72px;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+}
+
+.feature {
     display: flex;
     flex-direction: column;
+    padding: 32px 28px;
+    border-radius: var(--radius);
+    background: var(--gjc-mist);
+    border-top: 6px solid var(--gjc-gold);
+    transition: transform 150ms ease, background 150ms ease;
 }
-.hero {
-    flex: 1;
-    padding: 140px 20px 80px 20px;
+
+.feature:hover {
+    transform: translateY(-4px);
+    background: #eaf1e8;
 }
-.hero-content {
-    max-width: 800px;
-}
-.hero h1 {
-    font-size: 56px;
-    margin-bottom: 24px;
-}
-.hero p {
-    font-size: 20px;
-    margin-bottom: 40px;
-}
-.features {
-    padding: 80px 20px;
-    background: #ffffff;
-}
-.feature-card {
-    padding: 40px 30px;
-    border-radius: var(--gp-radius);
-    background: #f9fcf8;
-    border: 1px solid rgba(14, 99, 50, 0.05);
-    text-align: center;
-    transition: transform 0.3s ease;
-    height: 100%;
-}
-.feature-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.05);
-}
+
 .feature-icon {
-    width: 80px;
-    height: 80px;
-    background: var(--gp-cream) !important;
-    border: 1px solid var(--gp-line);
+    display: grid;
+    place-items: center;
+    width: 68px;
+    height: 68px;
+    margin-bottom: 22px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 20px;
-    font-size: 32px;
-    flex: 0 0 auto;
-    overflow: hidden;
+    background: var(--gjc-green);
+    color: var(--gjc-gold);
+    font-size: 28px;
 }
-.feature-icon i {
-    font-size: 34px;
-    color: var(--gp-green-700);
-}
-.feature-card h3 {
+
+.feature h3,
+.step h3,
+.requirements h3 {
+    margin-bottom: 10px;
+    color: var(--gjc-green);
     font-size: 22px;
     font-weight: 700;
-    margin-bottom: 15px;
-    color: #052916;
+    line-height: 1.3;
 }
-.feature-card p {
-    color: #66756c;
-    line-height: 1.6;
+
+.feature p {
+    font-size: 17px;
 }
-.how-to-apply {
-    padding: 80px 20px;
-    background: #f9fcf8;
+
+/* ----- How to apply ----- */
+.apply {
+    background: var(--gjc-mist);
 }
-.how-to-apply .section-title,
-.faq .section-title {
-    text-align: center;
-    font-size: 36px;
-    font-weight: 800;
-    color: #052916;
-    margin-bottom: 12px;
+
+.steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin: 56px 0 0;
+    padding: 0;
+    list-style: none;
 }
-.how-to-apply .section-sub,
-.faq .section-sub {
-    text-align: center;
-    color: #66756c;
-    font-size: 16px;
-    max-width: 600px;
-    margin: 0 auto 50px;
-    line-height: 1.6;
+
+.step {
+    padding: 32px;
+    border-radius: var(--radius);
+    background: #fff;
 }
-.step-card {
-    background: #ffffff;
-    border-radius: var(--gp-radius);
-    padding: 30px 26px;
-    height: 100%;
-    border: 1px solid rgba(14, 99, 50, 0.05);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-}
-.step-number {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: var(--gp-cream);
-    border: 1px solid var(--gp-line);
-    color: var(--gp-green-700);
-    font-weight: 800;
-    font-size: 18px;
+
+.step-head {
     display: flex;
     align-items: center;
-    justify-content: center;
-    margin-bottom: 16px;
-}
-.step-card h4 {
-    font-size: 18px;
-    font-weight: 700;
-    color: #052916;
-    margin-bottom: 10px;
-}
-.step-card p {
-    color: #66756c;
-    font-size: 14px;
-    line-height: 1.6;
-    margin-bottom: 0;
-}
-.requirements-box {
-    background: #ffffff;
-    border-radius: var(--gp-radius);
-    padding: 36px 36px;
-    margin-top: 40px;
-    border: 1px solid rgba(14, 99, 50, 0.05);
-}
-.requirements-box h4 {
-    font-size: 20px;
-    font-weight: 800;
-    color: var(--gp-green-700);
-    margin-bottom: 20px;
-}
-.requirements-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px 24px;
-}
-.requirements-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    color: #102018;
-    font-size: 14px;
-    line-height: 1.5;
-}
-.requirements-list li i {
-    color: var(--gp-success);
-    flex-shrink: 0;
-    margin-top: 3px;
-}
-.requirements-note {
-    margin-top: 22px;
-    padding-top: 18px;
-    border-top: 1px solid rgba(14, 99, 50, 0.08);
-    font-size: 13px;
-    color: #66756c;
-    line-height: 1.6;
-}
-.how-to-apply-cta {
-    text-align: center;
-    margin-top: 40px;
-}
-@media (max-width: 768px) {
-    .requirements-list { grid-template-columns: 1fr; }
-    .how-to-apply { padding: 56px 8px; } /* + Bootstrap .container 12px gutter = 20px, like the navbar */
-    .how-to-apply .section-title { font-size: 26px; }
-    .requirements-box { padding: 26px 22px; }
-}
-@media (max-width: 768px) {
-    .hero {
-        padding: 100px 20px 60px 20px;
-    }
-    .hero h1 { font-size: 40px; }
-    .hero p { font-size: 16px; }
-    /* gjc-clear.css adds a 20px side margin at <=576px on top of the 20px hero padding */
-    .hero-content {
-        margin-left: 0;
-        margin-right: 0;
-    }
-    .features {
-        width: 100%;
-        max-width: 100%;
-        padding: 48px 20px;
-        overflow: hidden;
-    }
-    .features .row {
-        margin-left: 0;
-        margin-right: 0;
-    }
-    .features .row > [class*="col-"] {
-        width: 100%;
-        max-width: 100%;
-        padding-left: 0;
-        padding-right: 0;
-    }
-    .feature-card {
-        width: 100%;
-        max-width: 100%;
-        padding: 28px 22px;
-        text-align: left;
-    }
-    .feature-icon {
-        width: 72px;
-        height: 72px;
-        margin: 0 0 18px;
-    }
-    .feature-icon i {
-        font-size: 30px;
-    }
-}
-.faq {
-    padding: 80px 20px;
-    background: #ffffff;
-}
-.faq-list {
-    max-width: 760px;
-    margin: 0 auto;
-}
-.faq details {
-    background: #f9fcf8;
-    border: 1px solid rgba(14, 99, 50, 0.08);
-    border-radius: var(--gp-radius);
-    margin-bottom: 12px;
-}
-.faq summary {
-    cursor: pointer;
-    padding: 18px 22px;
-    font-weight: 700;
-    color: #052916;
-    list-style: none;
-    display: flex;
     justify-content: space-between;
-    gap: 12px;
+    margin-bottom: 18px;
 }
-.faq summary::-webkit-details-marker { display: none; }
-.faq summary::after {
-    content: "+";
-    color: var(--gp-green-700);
-    font-size: 20px;
+
+.step-number {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--gjc-gold);
+    color: var(--gjc-green);
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
     line-height: 1;
 }
-.faq details[open] summary::after { content: "\2212"; }
+
+.step-head i {
+    color: var(--gjc-leaf);
+    font-size: 34px;
+}
+
+.requirements {
+    margin: 32px 0 40px;
+    padding: 40px;
+    border-radius: var(--radius);
+    background: var(--gjc-green);
+    color: #fff;
+}
+
+.requirements h3 {
+    margin-bottom: 20px;
+    color: var(--gjc-gold);
+    font-family: var(--display);
+    font-size: 30px;
+    text-transform: uppercase;
+}
+
+.requirements ul {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 40px;
+    padding: 0;
+    list-style: none;
+}
+
+.requirements li {
+    position: relative;
+    padding-left: 34px;
+}
+
+/* A gold check before each requirement (Font Awesome circle-check). */
+.requirements li::before {
+    content: "\f058";
+    position: absolute;
+    left: 0;
+    top: 1px;
+    color: var(--gjc-gold);
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 21px;
+}
+
+.requirements-note {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    color: #d9e6d9;
+    font-size: 16px;
+}
+
+.apply .cta {
+    display: flex;
+    width: fit-content;
+    margin: 0 auto;
+}
+
+/* ----- FAQ ----- */
+.faq {
+    scroll-margin-top: 72px;
+}
+
+.faq-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 48px;
+}
+
+.faq details {
+    border-left: 6px solid transparent;
+    border-radius: 12px;
+    background: var(--gjc-mist);
+    transition: border-color 150ms ease;
+}
+
+.faq details[open] {
+    border-left-color: var(--gjc-gold);
+}
+
+.faq summary {
+    position: relative;
+    padding: 22px 72px 22px 24px;
+    color: var(--gjc-green);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.4;
+    list-style: none;
+    cursor: pointer;
+}
+
+.faq summary::-webkit-details-marker {
+    display: none;
+}
+
+/* A round plus that becomes a minus when the answer is open. */
+.faq summary::after {
+    content: "+";
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 50%;
+    background: var(--gjc-green);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1;
+}
+
+.faq details[open] summary::after {
+    content: "\2212";
+    background: var(--gjc-gold);
+    color: var(--gjc-green);
+}
+
 .faq details p {
-    padding: 0 22px 18px;
-    margin: 0;
-    color: #66756c;
-    line-height: 1.6;
+    max-width: 64ch;
+    padding: 0 24px 24px;
 }
-@media (max-width: 768px) {
-    .faq { padding: 56px 8px; }
-    .faq .section-title { font-size: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .feature { transition: none; }
+    .feature:hover { transform: none; }
 }
-.faq { scroll-margin-top: 80px; } /* keep the heading clear of the fixed navbar */
+
+/* ===== TABLET ===== */
+@media (max-width: 1023px) {
+    .feature-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 899px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 24px; }
+    .pay-scene { max-width: 480px; margin: 0 auto; }
+    .steps { grid-template-columns: 1fr; }
+    .requirements ul { grid-template-columns: 1fr; }
+}
+
+/* ===== PHONE ===== */
+@media (max-width: 767px) {
+    .feature-grid { grid-template-columns: 1fr; gap: 16px; }
+    .feature, .step { padding: 24px; }
+    .requirements { padding: 28px 24px; }
+    .apply .cta { width: 100%; }
+
+    .faq summary { padding: 20px 64px 20px 20px; font-size: 17px; }
+    .faq summary::after { right: 16px; }
+    .faq details p { padding: 0 20px 20px; }
+}

@@ -62,7 +62,9 @@ function toggleSdSidebar() {
     if (!el) return;
     var KEY = 'gjc.sdSidebarCollapsed';
     try {
-        if (localStorage.getItem(KEY) === '1') el.classList.add('collapsed');
+        var saved = localStorage.getItem(KEY);
+        // Tablets start on the icon rail so content gets the width; a toggle there is remembered.
+        if (saved === '1' || (saved === null && window.innerWidth < 1200)) el.classList.add('collapsed');
     } catch (e) {}
     new MutationObserver(function () {
         try {

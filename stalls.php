@@ -42,37 +42,65 @@ function statusLabel(string $status): string
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Available Stalls | GenPay</title>
     <meta name="description" content="Browse available stalls at General de Jesus College. View real-time occupancy and apply online for a stall slot.">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Oswald:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=6">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/stalls.css?v=17">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/stalls.css?v=18">
 </head>
-<body>
+<body class="landing">
 
 <?php $publicNavCurrent = 'stalls'; include __DIR__ . '/includes/partials/public_navbar.php'; ?>
 
 <!-- HERO -->
-<div class="hero">
-    <div class="hero-content">
-        <div class="hero-tag">Now Leasing &middot; Live Occupancy</div>
-        <h1>General De Jesus College <span>Stall Directory</span></h1>
-        <p>See what's open below. Apply once and we'll assign your stall during review &mdash; no need to pick one here.</p>
-        <a href="<?= BASE_URL ?>/apply" class="btn-primary-custom">Apply Now</a>
+<header class="hero-simple">
+    <div class="wrap stalls-hero">
+        <div class="hero-text">
+            <p class="hero-tag">Now Leasing &middot; Live Occupancy</p>
+            <h1>General De Jesus College <span>Stall Directory</span></h1>
+            <p>See what's open below. Apply once and we'll assign your stall during review &mdash; no need to pick one here.</p>
+            <a href="<?= BASE_URL ?>/apply" class="cta">Apply Now</a>
+        </div>
+
+        <!-- A campus stall, drawn in code, with a GenCoin sign that bobs gently. -->
+        <svg class="stall-art" viewBox="0 0 420 340" aria-hidden="true">
+            <circle cx="210" cy="190" r="150" fill="#0e4a1c"/>
+            <circle class="sa-ring" cx="210" cy="190" r="172"/>
+            <rect x="80" y="128" width="260" height="176" rx="12" fill="#fff"/>
+            <rect x="60" y="82" width="300" height="50" rx="10" fill="#f0a000"/>
+            <g fill="#ffc94d">
+                <rect x="90" y="82" width="30" height="50"/><rect x="150" y="82" width="30" height="50"/>
+                <rect x="210" y="82" width="30" height="50"/><rect x="270" y="82" width="30" height="50"/>
+            </g>
+            <g fill="#f0a000">
+                <?php for ($cx = 75; $cx <= 345; $cx += 30): ?><circle cx="<?= $cx ?>" cy="132" r="15"/><?php endfor; ?>
+            </g>
+            <rect x="105" y="160" width="210" height="78" rx="8" fill="#eef4ef"/>
+            <rect x="124" y="196" width="34" height="42" rx="6" fill="#138a36"/>
+            <circle cx="193" cy="220" r="18" fill="#f0a000"/>
+            <rect x="228" y="186" width="26" height="52" rx="6" fill="#003000"/>
+            <rect x="266" y="204" width="32" height="34" rx="6" fill="#138a36"/>
+            <rect x="66" y="238" width="288" height="24" rx="6" fill="#138a36"/>
+            <rect x="120" y="276" width="180" height="14" rx="7" fill="#dfe8dd"/>
+            <g class="sa-sign">
+                <line x1="210" y1="44" x2="210" y2="82" stroke="#fff" stroke-width="4"/>
+                <circle cx="210" cy="38" r="30" fill="#f0a000" stroke="#fff" stroke-width="5"/>
+                <text x="210" y="49" text-anchor="middle" font-family="Oswald, Arial, sans-serif" font-size="32" font-weight="700" fill="#003000">G</text>
+            </g>
+        </svg>
     </div>
-</div>
+</header>
 
 <!-- LEGEND -->
-<div class="legend">
-    <div class="legend-item"><div class="legend-dot legend-dot--vacant"></div> Vacant</div>
-    <div class="legend-item"><div class="legend-dot legend-dot--occupied"></div> Occupied</div>
+<div class="legend wrap" aria-label="Legend">
+    <div class="legend-item"><span class="legend-dot legend-dot--vacant"></span> Vacant</div>
+    <div class="legend-item"><span class="legend-dot legend-dot--occupied"></span> Occupied</div>
 </div>
 
 <!-- STALL GRID -->
-<div class="content">
+<main class="content wrap">
     <?php foreach ($grid as $rowLabel => $cols): ?>
-        <p class="section-title">Row <?= htmlspecialchars($rowLabel) ?></p>
+        <h2 class="section-title">Row <?= htmlspecialchars($rowLabel) ?></h2>
         <div class="stall-row" role="list">
             <?php for ($col = 1; $col <= 5; $col++):
 
@@ -161,7 +189,7 @@ function statusLabel(string $status): string
             endfor; ?>
         </div>
     <?php endforeach; ?>
-</div>
+</main>
 
 <!-- PEEK MODAL -->
 <div class="modal-overlay" id="stallModal" role="dialog" aria-modal="true" aria-labelledby="modal-stall-id">
@@ -171,9 +199,9 @@ function statusLabel(string $status): string
                 <div class="modal-stall-id" id="modal-stall-id">--</div>
                 <div class="modal-stall-label" id="modal-stall-label">--</div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;">
+            <div class="modal-actions">
                 <span class="modal-status-chip" id="modal-status-chip">--</span>
-                <button type="button" class="btn-close" onclick="closeModal()" aria-label="Close"></button>
+                <button type="button" class="modal-close" onclick="closeModal()" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </div>
         </div>
 
@@ -208,7 +236,7 @@ function statusLabel(string $status): string
             <div class="modal-pending-block" id="modal-pending-block" style="display:none">
                 <div class="modal-pending-text">⏳ An application is being processed</div>
                 <div class="modal-pending-timer" id="modal-pending-timer">--:--</div>
-                <div style="font-size:11px;color:var(--gp-warning);margin-top:4px;">Stall will reopen if not submitted in time</div>
+                <div class="modal-pending-note">Stall will reopen if not submitted in time</div>
             </div>
 
         </div>

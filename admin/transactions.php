@@ -36,7 +36,7 @@ $currentPage = 'transactions';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/transactions.css?v=13">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
@@ -259,7 +259,7 @@ $currentPage = 'transactions';
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
     <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
-    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
+    <script src="<?= JS_URL ?>/gjc_table_cards.js?v=2"></script>
 
     <script>
     function toggleSidebar() {

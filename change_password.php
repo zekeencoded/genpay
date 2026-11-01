@@ -86,83 +86,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="icon" type="image/png" sizes="192x192" href="<?= ICONS_URL ?>/gp_logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Change Password | GenPay</title>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Oswald:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap"
         rel="stylesheet">
 
-    
-    <link rel="stylesheet" href="<?= CSS_URL ?>/change_password.css?v=21">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
+    <!-- Same layout as the sign-in page, which this screen follows. -->
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=32">
 
 </head>
 
-<body>
+<body class="landing signin-body">
 
-    <div class="wrapper">
+    <div class="signin-split">
 
-        <div class="card-box">
+        <aside class="signin-brand">
+            <a href="<?= BASE_URL ?>/" class="signin-seal"><img src="<?= ICONS_URL ?>/gp_logo_clear.png" alt="GenPay home" width="160" height="160"></a>
+            <p class="signin-brand-name">GenPay</p>
+            <p class="signin-brand-line">Cashless Payment System of Gen. De Jesus College</p>
+        </aside>
 
-            <div class="badge-top">Security Update Required</div>
+        <main class="signin">
 
-            <div class="title">Set Your New Password</div>
+            <p class="signin-badge">Security Update Required</p>
 
-            <div class="desc">
+            <h1>Set Your New Password</h1>
+            <p class="signin-lede">
                 For security reasons, you are required to change your temporary password before
                 accessing your account dashboard.
-            </div>
+            </p>
 
             <?php if ($error): ?>
-            <div class="alert alert-danger"><?php echo $error; ?></div>
+            <div class="signin-error" role="alert"><?php echo $error; ?></div>
             <?php endif; ?>
 
             <?php if ($success): ?>
-            <div class="alert alert-success"><?php echo $success; ?></div>
+            <div class="signin-success" role="status"><?php echo $success; ?></div>
             <?php endif; ?>
 
-            <form method="POST">
+            <form method="POST" class="signin-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(gjc_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 
-                <div class="input-group-box">
-                    <input type="password" name="new_pass" id="new_pass" required placeholder=" ">
-                    <label>New Password</label>
-
-                    <button type="button" class="eye" data-target="new_pass" aria-label="Show password">
-                        <img src="<?= ICONS_URL ?>/eye.png" alt="">
-                    </button>
+                <?php foreach (['new_pass' => 'New Password', 'confirm_pass' => 'Confirm Password'] as $id => $label): ?>
+                <div class="signin-field">
+                    <label for="<?= $id ?>"><?= $label ?></label>
+                    <div class="signin-pass">
+                        <input type="password" name="<?= $id ?>" id="<?= $id ?>" required autocomplete="new-password">
+                        <button type="button" class="signin-eye" data-target="<?= $id ?>" aria-label="Show password" aria-controls="<?= $id ?>">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path class="signin-eye-slash" d="M3 3l18 18"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
+                <?php endforeach; ?>
 
-                <div class="input-group-box">
-                    <input type="password" name="confirm_pass" id="confirm_pass" required placeholder=" ">
-                    <label>Confirm Password</label>
-
-                    <button type="button" class="eye" data-target="confirm_pass" aria-label="Show password">
-                        <img src="<?= ICONS_URL ?>/eye.png" alt="">
-                    </button>
-                </div>
-
-                <button type="submit">Update Password</button>
+                <button type="submit" class="signin-submit">Update Password</button>
 
             </form>
 
-        </div>
+        </main>
 
     </div>
 
     <script>
-        function togglePass(button) {
-            const target = document.getElementById(button.dataset.target);
-            if (!target) return;
+        document.querySelectorAll(".signin-eye").forEach((button) => {
+            button.addEventListener("click", () => {
+                const target = document.getElementById(button.dataset.target);
+                if (!target) return;
 
-            const shouldShow = target.type === "password";
-            target.type = shouldShow ? "text" : "password";
-            button.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
-            button.classList.toggle("is-visible", shouldShow);
-        }
-
-        document.querySelectorAll(".eye").forEach((button) => {
-            button.addEventListener("click", () => togglePass(button));
+                const shouldShow = target.type === "password";
+                target.type = shouldShow ? "text" : "password";
+                button.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
+                button.setAttribute("aria-pressed", String(shouldShow));
+                button.classList.toggle("is-visible", shouldShow);
+            });
         });
     </script>
 
