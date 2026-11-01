@@ -1,7 +1,6 @@
 <?php
 
-// Output escaping, money/GenCoin/date formatting, signed view tokens, references.
-// Loaded by connection/app.php; defines functions and constants only.
+// Escaping, money/GenCoin/date formatting, signed view tokens, references.
 
 function gjc_e($value): string
 {
@@ -13,33 +12,15 @@ function gjc_money($amount): string
     return '&#8369;' . number_format((float) $amount, 2);
 }
 
-/**
- * Same formatting as gjc_money(), but the real ₱ character instead of an
- * HTML entity — for contexts that don't render raw HTML (JSON payloads,
- * notification/SMS text, log messages). Using gjc_money() there stores the
- * literal "&#8369;" text, which then gets HTML-escaped a second time by
- * whatever renders it and shows up as visible entity text instead of ₱.
- */
+/** Like gjc_money() but with a literal ₱, for non-HTML output (JSON, notifications, logs). */
 function gjc_money_plain($amount): string
 {
     return '₱' . number_format((float) $amount, 2);
 }
 
 /**
- * The two date formats the UI is allowed to show.
- *
- * The admin side had eight display formats for the same kind of value, and six
- * of those printed no year at all — on Top-ups and Encashments specifically, so
- * a finance officer could not tell a 2024 record from a 2026 one. These two are
- * simply the formats that were already dominant (`M j, Y` appeared 17 times),
- * promoted to the only ones.
- *
- * Both are null-safe and return an em dash for an empty or unparseable value,
- * because a blank cell reads as a rendering bug while a dash reads as "none".
- *
- * Machine formats (`Y-m-d` in query strings, `Ymd-His` in filenames) are not
- * display and keep using date() directly. print_fee_waiver.php keeps its
- * `F j, Y` — it is a legal form, not a screen.
+ * The UI's date format (gjc_date / gjc_datetime). Returns an em dash for empty values.
+ * Machine formats (query strings, filenames) use date() directly.
  */
 function gjc_date($value): string
 {
@@ -69,16 +50,7 @@ function gjc_timestamp($value): ?int
     return $ts === false ? null : $ts;
 }
 
-/**
- * Mint an opaque, tamper-proof token for a read-only "view" URL.
- *
- * The token is base64url("<id>.<sig>") where <sig> is a truncated
- * HMAC-SHA256 of "<scope>:<id>" keyed by GJC_VIEW_TOKEN_SECRET. It carries a
- * row id in the URL without exposing it as a bare, enumerable ?id=1,2,3
- * integer, and any edit to the id breaks the signature. Stateless — no DB
- * column, nothing stored. The $scope namespaces tokens so a token minted for
- * one entity's view page can't be replayed against another's.
- */
+/** Signed, non-enumerable token for a view URL: base64url("<id>.<hmac>"), namespaced by $scope. */
 function gjc_make_view_token(int $id, string $scope = 'record'): string
 {
     $id = max(0, $id);
@@ -86,12 +58,7 @@ function gjc_make_view_token(int $id, string $scope = 'record'): string
     return rtrim(strtr(base64_encode($id . '.' . $sig), '+/', '-_'), '=');
 }
 
-/**
- * Verify a token from gjc_make_view_token() and return the row id it carries,
- * or null if the token is missing, malformed, or the signature does not match
- * (compared with hash_equals(), constant time). The $scope must match the one
- * the token was minted with.
- */
+/** Row id from a view token, or null if invalid. $scope must match. */
 function gjc_verify_view_token(?string $token, string $scope = 'record'): ?int
 {
     $token = (string) $token;
@@ -120,8 +87,7 @@ function gjc_gc_amount($pesos): string
     return rtrim(rtrim(number_format($gc, 2), '0'), '.');
 }
 
-// One-line GC value with its peso equivalent trailing it, for table-like rows
-// ("50 GC ≈ ₱500.00"). Style .gc-inline-peso where it is used.
+// "50 GC ≈ ₱500.00" for table rows.
 function gjc_gc_inline($pesos): string
 {
     return gjc_gc_amount($pesos) . ' GC <span class="gc-inline-peso">&asymp; ' . gjc_money($pesos) . '</span>';
@@ -159,14 +125,7 @@ function gjc_role_name($role): string
     return strtolower((string) $role);
 }
 
-/**
- * Message that is safe to show a client for a caught exception.
- *
- * Business rules in this app are thrown as RuntimeException / InvalidArgumentException
- * with text written for the user, so those pass through. Anything else — and
- * PDOException, which extends RuntimeException but carries SQLSTATE text with
- * table and column names — is logged in full and replaced by $generic.
- */
+/** Client-safe error message: business-rule exceptions pass through, others (incl. PDO) are logged and hidden. */
 function gjc_safe_error(Throwable $e, string $context, string $generic = 'Something went wrong. Please try again.'): string
 {
     if (($e instanceof RuntimeException || $e instanceof InvalidArgumentException) && !($e instanceof PDOException)) {

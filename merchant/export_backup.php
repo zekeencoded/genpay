@@ -1,7 +1,5 @@
 <?php
-// Full-stall backup for the merchant admin: one ZIP of CSVs holding the stall's
-// transactions, inventory, staff, encashments, lease/rent and audit trail — a
-// copy that survives the system going down. Owner only; staff never see it.
+// Owner-only stall backup: one ZIP of CSVs.
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';

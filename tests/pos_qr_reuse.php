@@ -33,7 +33,7 @@ function gjc_order_item_lines($db, $source, $id) { return $db->orders[$id]['line
 function checkQr($condition, $message) { if (!$condition) throw new RuntimeException($message); }
 $source = file_get_contents(__DIR__ . '/../merchant/api/pos.php');
 $start = strpos($source, '        // PHP holds the session lock');
-$end = strpos($source, '        // Token-only payload:', $start);
+$end = strpos($source, '        // Token only;', $start);
 checkQr($start !== false && $end !== false, 'Endpoint block missing');
 $block = substr($source, $start, $end - $start);
 $db = new QrTestDatabase();

@@ -1,14 +1,5 @@
 <?php
-// ============================================================
-//  parent/api/cart.php
-//  Session-backed shopping cart for the parent shop-cart flow — the
-//  parent-side twin of student/api/cart.php. Same scan-at-the-stall model:
-//  a parent on campus scans items, submits an order, then pays by scanning
-//  the stall Wallet QR (see parent/api/checkout.php).
-//  Each scanned item is looked up fresh against merchant_inventory
-//  on every request — the session only ever stores { item_id => qty }
-//  so price/stock/restriction can never go stale inside the cart.
-// ============================================================
+// Parent shop cart (session stores item_id => qty; details re-read every request).
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -134,10 +125,7 @@ try {
             break;
         }
 
-        // ── SUBMIT ORDER (kiosk-style) ───────────────────────────────────────
-        // Locks the cart into a pending order the merchant can see right away.
-        // No money moves yet — that happens later when the parent scans the
-        // merchant's static Wallet QR at the counter (see checkout.php pay_order).
+        // ── SUBMIT ORDER: creates a pending order; payment happens at the counter ──
         case 'submit_order': {
             $parentUserId = gjc_user_id();
 

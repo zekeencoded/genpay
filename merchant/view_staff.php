@@ -15,12 +15,7 @@ if (
     exit();
 }
 
-/**
- * CRUD "Read": one staff account, in the shared .uv-* record chrome
- * (assets/css/detail_view.css). The id travels as a signed HMAC token so the
- * URL can't be walked, and the lookup stays pinned to this owner's staff
- * (merchant_owner_id + roleID 6) so no other stall's roster is reachable.
- */
+/** View one staff account by signed token, scoped to this owner's staff. */
 $currentUser = gjc_current_user($db);
 $merchantUserId = (int) $currentUser['id'];
 
@@ -118,13 +113,8 @@ if ($staff) {
     ));
     $lastRemitAt = $remits[0]['created_at'] ?? null;
 
-    // ── Sales attributed to this staff member ─────────────────────────────────
-    // Direct POS sales record the cashier in initiated_by. QR bills record the
-    // buyer there instead, and the cashier who created the bill in
-    // merchant_qr_orders.created_by (linked by paid_ref). App pre-orders (CART-)
-    // have no operator, so they belong to the staff who remitted them: the
-    // remittance window they fall in (the same (period_start, period_end] rule
-    // gjc_merchant_unremitted_sales uses).
+    // ── Sales attributed to this staff member (direct POS, QR bills they created,
+    //    and pre-orders they remitted) ──
     $attributed = [];
     if ($walletId > 0) {
         $salesStmt = $db->prepare(
@@ -165,18 +155,13 @@ if ($staff) {
         ]);
         $attributed = $salesStmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    // Lists, tiles and charts show only what this profile rang up or remitted as
-    // pre-orders. The window-matched set stays in $attributed, only to reconcile
-    // against the remittances.
+    // Show only this staff member's sales.
     $sales = array_values(array_filter($attributed, static fn($s) =>
         (int) $s['initiated_by'] === $staffId
         || (int) $s['bill_by'] === $staffId
         || ((int) $s['in_my_remit'] === 1 && strpos((string) $s['reference_no'], 'CART-') === 0)));
 
-    // Sales figures come from the ledger; remitted figures from the remittance
-    // rows as recorded. The two can disagree on older data: before
-    // config.php pinned Asia/Manila some remittances were stamped in UTC, and
-    // their windows re-counted sales an earlier remit already covered.
+    // Older remittances may disagree with the ledger (UTC timestamps before the timezone fix).
     $salesCount = count($sales);
     $salesTotal = array_sum(array_map(static fn($s) => (float) $s['amount'], $sales));
     $avgSale = $salesCount > 0 ? $salesTotal / $salesCount : 0.0;

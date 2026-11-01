@@ -1,0 +1,3 @@
+# Block direct browser access to project docs (they include a security review).
+Order Allow,Deny
+Deny from all

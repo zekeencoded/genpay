@@ -7,24 +7,15 @@ gjc_require_role(['student']);
 gjc_enforce_student_lock($db);
 
 /**
- * CRUD "Read": one row from the student's own history, in the same shape as
- * the admin detail pages (assets/css/detail_view.css, the .uv-* chrome).
- *
- * Two things guard the record. The id travels as a signed HMAC token, so the
- * URL can't be walked by incrementing a number; and every lookup is still
- * filtered by this student's own wallet / user id, so even a valid token
- * minted elsewhere can't surface someone else's row.
- *
- * ?source= mirrors student/history.php's two feeds:
- *   ledger        -> transactions   (by student_wallet_id)
- *   topup_request -> topup_requests (by student_wallet_id, the not-yet-approved ones)
+ * View one of the student's own transactions by signed token, scoped to their wallet.
+ * ?source= ledger | topup_request | received_transfer
  */
 $currentUser = gjc_current_user($db);
 $wallet = gjc_student_wallet($db, (int) $currentUser['id']);
 $walletId = (int) $wallet['id'];
 
 $source = trim((string) ($_GET['source'] ?? 'ledger'));
-if (!in_array($source, ['ledger', 'topup_request'], true)) {
+if (!in_array($source, ['ledger', 'topup_request', 'received_transfer'], true)) {
     $source = 'ledger';
 }
 
@@ -82,6 +73,29 @@ if ($recordId !== null && $source === 'ledger' && $walletId > 0 && gjc_table_exi
         if ($record['ref'] !== 'N/A') {
             $items = gjc_transaction_line_items($db, $record['ref']);
         }
+    }
+}
+
+if ($recordId !== null && $source === 'received_transfer') {
+    // Only resolves when this student's wallet is the transfer's recipient.
+    $row = gjc_received_transfers($db, $walletId, $recordId, 1)[0] ?? null;
+    if ($row) {
+        $record = [
+            'type_raw' => 'transfer_in',
+            'eyebrow' => 'GenCoin received',
+            'icon' => 'fa-arrow-down',
+            'incoming' => true,
+            'type_label' => 'Transfer Received',
+            'amount' => (float) ($row['amount'] ?? 0),
+            'ref' => (string) ($row['reference_no'] ?: 'N/A'),
+            'status' => (string) ($row['status'] ?? 'completed'),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            // The ledger note is the sender's ("P2P Transfer to ..."); show their message instead.
+            'notes' => trim((string) ($row['transfer_message'] ?? '')),
+            'counter_label' => 'Sent By',
+            'counterparty' => gjc_user_label($db, (int) $row['initiated_by']),
+            'extra' => [],
+        ];
     }
 }
 
@@ -170,9 +184,7 @@ if ($record) {
 <body class="gp-theme transaction-detail-page">
     <div class="uv-wrap">
         <?php if (!$record): ?>
-        <!-- Generic not-available state, same wording as the admin views: a
-             record that isn't this student's reads the same as one that never
-             existed, so the page can't be used to probe for other wallets. -->
+        <!-- Same message for missing and not-yours records. -->
         <div class="uv-notfound">
             <div class="uv-nf-ic"><i class="fa-regular fa-circle-question"></i></div>
             <h1>This page isn't available</h1>

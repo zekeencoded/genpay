@@ -1,13 +1,6 @@
 <?php
-// ============================================================
-//  parent/api/checkout.php
-//  Pays the parent's pending Shop Cart order (see parent/api/cart.php's
-//  submit_order) against the merchant's static Wallet QR (merchant/settings.php).
-//  The parent-side twin of student/api/checkout.php.
-//  The QR only identifies the merchant — the order and its locked-in price
-//  always come from the cart_orders row the parent already submitted,
-//  never from the client.
-// ============================================================
+// Pay the parent's pending cart order against the merchant's Wallet QR.
+// Order and price come from cart_orders, never the client.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -105,11 +98,7 @@ try {
 
         $total = round((float) $order['amount'], 2);
 
-        // No graduated / frozen / daily-limit checks here, deliberately: those
-        // are controls a parent imposes on a STUDENT wallet
-        // (student_wallets.is_frozen, daily_spend_limit). A parent's own wallet
-        // has no supervisor above it, so the student version's guard block has
-        // no parent-side equivalent.
+        // No freeze/limit checks: those apply to student wallets only.
 
         $debitStmt = $db->prepare(
             "UPDATE parent_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?"
@@ -208,7 +197,8 @@ try {
             'Payment Successful',
             sprintf('You paid %s at %s.', gjc_money_plain($total), gjc_user_label($db, (int) $order['merchant_user_id'])),
             'cart-shopping',
-            PARENT_URL . '/activity.php'
+            PARENT_URL . '/activity.php',
+            $refNo
         );
 
         gjc_notify(

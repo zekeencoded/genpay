@@ -8,9 +8,7 @@ gjc_require_role(['finance']);
 $currentUser = gjc_current_user($db);
 $currentPage = 'restricted_products';
 
-// Retroactively enforce the current rules over already-listed inventory. Catches
-// items that slipped in before a rule existed or before matching was tightened
-// (e.g. an obfuscated "C0br4"). Idempotent: only newly-matching items are touched.
+// Disable listed items that match current bans.
 $autoDisabled = gjc_enforce_restrictions_on_inventory($db);
 gjc_ensure_product_violation_schema($db);
 

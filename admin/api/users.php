@@ -1,18 +1,7 @@
 <?php
 /**
- * admin/api/users.php — account-control actions behind the Manage dropdown in
- * admin/users.php. Multi-stage dispatcher shape (references/patterns.md):
- * $_POST + FormData, one `action` switch, JSON out.
- *
- * Suspend and Ban are the two finance-issued lockouts, distinct from the
- * merchant-staff Active/Inactive toggle and from the automatic
- * restricted-product suspension. A suspension is timed (or indefinite) and can
- * expire on its own; a ban is permanent and only ever ends when finance lifts
- * it here. The state lives on users.status ('Suspended' / 'Banned') plus the
- * shared suspension_* columns; everything that reads or reverses it lives in
- * connection/app.php (gjc_suspend_account / gjc_ban_account /
- * gjc_account_suspension / gjc_lift_account_suspension / gjc_lift_account_ban)
- * so the enforcement points and this endpoint can never disagree.
+ * Account actions for admin/users.php (Suspend, Ban, lifts, staff). JSON out.
+ * Lockout logic lives in connection/app/suspensions.php.
  */
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
@@ -37,12 +26,7 @@ function users_json(array $payload): void
     exit;
 }
 
-/**
- * The target account, or null. Reads roleID/sub_role directly rather than
- * joining `role` — that table only seeds roleIDs 1-3, so a join would report
- * finance (4), merchant staff (6) and parent (7) as unknown and the guard rail
- * below would wave through the very accounts it exists to protect.
- */
+/** Target account, or null. Reads roleID directly (the role table only has 1-3). */
 function users_fetch(PDO $db, int $userId): ?array
 {
     if ($userId <= 0) {
@@ -57,12 +41,7 @@ function users_fetch(PDO $db, int $userId): ?array
     return $user ? gjc_with_user_suspension($db, $user, $userId) : null;
 }
 
-/**
- * Why this account may not be locked out, or null when it may. Keeps an admin
- * from locking out themselves — or the finance team as a whole — which nobody
- * left inside the system would be able to undo. $verb names the action in the
- * message so the same guard can speak for both Suspend and Ban.
- */
+/** Why this account can't be locked out (self or finance staff), or null. */
 function users_suspend_guard(array $user, int $adminId, string $verb = 'suspend'): ?string
 {
     $past = $verb === 'ban' ? 'banned' : 'suspended';
@@ -78,12 +57,16 @@ function users_suspend_guard(array $user, int $adminId, string $verb = 'suspend'
     return null;
 }
 
-/**
- * Queues a new finance staff member's login credentials. Mirrors the guardian
- * credentials mail in admin/maintenance.php, with literal colours because
- * email clients ignore CSS variables. Returns true when queued.
- */
-function users_send_staff_credentials(string $email, string $name, string $tempPassword): bool
+/** Roles the super admin may create from Users → Add User: form value => [roleID, label]. */
+const USERS_CREATABLE_ROLES = [
+    'student'       => [1, 'Student'],
+    'merchant'      => [2, 'Merchant'],
+    'parent'        => [7, 'Parent'],
+    'finance_staff' => [8, 'Finance Staff'],
+];
+
+/** Queue a new account's credentials email. Returns true when queued. */
+function users_send_staff_credentials(string $email, string $name, string $tempPassword, string $roleLabel): bool
 {
     $loginUrl  = rtrim(BASE_URL, '/') . '/login';
     $safeName  = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
@@ -92,9 +75,9 @@ function users_send_staff_credentials(string $email, string $name, string $tempP
 
     $body = '
             <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f3faf6;padding:28px;border-radius:14px">
-                <h2 style="color:#0b4a28;margin-top:0">Your GenPay Finance Staff Account</h2>
+                <h2 style="color:#0b4a28;margin-top:0">Your GenPay ' . $roleLabel . ' Account</h2>
                 <p style="color:#334155;line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
-                <p style="color:#334155;line-height:1.7">A GenPay finance staff account has been created for you.</p>
+                <p style="color:#334155;line-height:1.7">A GenPay ' . $roleLabel . ' account has been created for you.</p>
                 <div style="background:#052e16;border-radius:10px;padding:16px;margin:16px 0;color:#dcfce7">
                     <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#86efb2;text-transform:uppercase">Login Credentials</p>
                     <p style="margin:0"><strong>Email:</strong> ' . $safeEmail . '</p>
@@ -104,10 +87,10 @@ function users_send_staff_credentials(string $email, string $name, string $tempP
                 <p style="color:#334155">Login page: <a href="' . $loginUrl . '" style="color:#147b3a">' . $loginUrl . '</a></p>
                 <p style="font-size:12px;color:#64748b">GenPay Team</p>
             </div>';
-    $altBody = "Dear {$name},\n\nA GenPay finance staff account has been created for you.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
+    $altBody = "Dear {$name},\n\nA GenPay {$roleLabel} account has been created for you.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
 
     try {
-        return gjc_queue_email($email, $name, 'GenPay - Finance Staff Account Credentials', $body, $altBody);
+        return gjc_queue_email($email, $name, "GenPay - {$roleLabel} Account Credentials", $body, $altBody);
     } catch (Throwable $e) {
         error_log('[admin/api/users.php] staff credentials email: ' . $e->getMessage());
         return false;
@@ -147,13 +130,13 @@ try {
             ]);
         }
 
-        case 'add_finance_staff': {
+        case 'add_user': {
             if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
                 http_response_code(403);
                 users_json(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
             }
             if (gjc_sub_role() !== 'super_admin') {
-                users_json(['success' => false, 'message' => 'Only the super admin can add finance staff.']);
+                users_json(['success' => false, 'message' => 'Only the super admin can add users.']);
             }
             $firstName  = trim((string) ($_POST['first_name'] ?? ''));
             $middleName = trim((string) ($_POST['middle_name'] ?? ''));
@@ -162,6 +145,12 @@ try {
             $email     = strtolower(trim((string) ($_POST['email'] ?? '')));
             $contact   = preg_replace('/\D/', '', (string) ($_POST['contact_number'] ?? ''));
             $password  = (string) ($_POST['password'] ?? '');
+            $roleKey   = (string) ($_POST['role'] ?? '');
+
+            if (!isset(USERS_CREATABLE_ROLES[$roleKey])) {
+                users_json(['success' => false, 'message' => 'Pick a role for the new account.']);
+            }
+            [$roleId, $roleLabel] = USERS_CREATABLE_ROLES[$roleKey];
 
             if ($firstName === '' || $lastName === '' || $email === '' || $password === '') {
                 users_json(['success' => false, 'message' => 'First name, last name, email and temporary password are required.']);
@@ -187,34 +176,112 @@ try {
                 users_json(['success' => false, 'message' => 'An account with that email already exists.']);
             }
 
+            // Role-specific fields, validated before anything is written.
+            $studentId     = trim((string) ($_POST['student_id_number'] ?? ''));
+            $courseId      = (int) ($_POST['course_id'] ?? 0);
+            $yearLevel     = (int) ($_POST['year_level'] ?? 0);
+            $businessName  = trim((string) ($_POST['business_name'] ?? ''));
+            $sex           = strtolower(trim((string) ($_POST['sex'] ?? '')));
+            $stallId       = trim((string) ($_POST['stall_id'] ?? ''));
+            $linkStudentId = trim((string) ($_POST['link_student_id'] ?? ''));
+            $linkStudentUserId = 0;
+
+            if ($roleKey === 'student') {
+                if ($studentId === '' || mb_strlen($studentId) > 80) {
+                    users_json(['success' => false, 'message' => 'Enter the Student ID (up to 80 characters).']);
+                }
+                $chk = $db->prepare("SELECT 1 FROM student_info WHERE studentID = ? LIMIT 1");
+                $chk->execute([$studentId]);
+                if ($chk->fetchColumn()) {
+                    users_json(['success' => false, 'message' => 'That Student ID already exists.']);
+                }
+                $chk = $db->prepare("SELECT 1 FROM course WHERE courseID = ? LIMIT 1");
+                $chk->execute([$courseId]);
+                if (!$chk->fetchColumn()) {
+                    users_json(['success' => false, 'message' => "Pick the student's course."]);
+                }
+                if ($yearLevel < 1 || $yearLevel > 12) {
+                    users_json(['success' => false, 'message' => 'Year level must be 1–12.']);
+                }
+            } elseif ($roleKey === 'merchant') {
+                if ($businessName === '' || mb_strlen($businessName) > 255) {
+                    users_json(['success' => false, 'message' => 'Enter the business name (up to 255 characters).']);
+                }
+                if (!in_array($sex, ['male', 'female'], true)) {
+                    users_json(['success' => false, 'message' => "Select the proprietor's sex."]);
+                }
+            } elseif ($roleKey === 'parent' && $linkStudentId !== '') {
+                $chk = $db->prepare("SELECT userID FROM student_info WHERE studentID = ? LIMIT 1");
+                $chk->execute([$linkStudentId]);
+                $linkStudentUserId = (int) $chk->fetchColumn();
+                if ($linkStudentUserId === 0) {
+                    users_json(['success' => false, 'message' => 'No student has that Student ID to link.']);
+                }
+            }
+
+            $fullName = implode(' ', array_filter([$firstName, $middleName, $lastName, $suffix], fn($part) => $part !== ''));
             gjc_ensure_finance_staff_role($db);
-            // force_password_change: the staff member must replace the temporary password at first sign-in.
+            if ($roleKey === 'parent') {
+                gjc_ensure_parent_schema($db);
+            }
+
+            // A failure anywhere below is rolled back by the outer catch.
+            $db->beginTransaction();
+            // force_password_change: the new user must replace the temporary password at first sign-in.
             $db->prepare(
                 "INSERT INTO users (last_name, first_name, middle_name, suffix, email, contact_number, roleID, password, profile_img, force_password_change)
-                 VALUES (?, ?, ?, ?, ?, ?, 8, ?, '', 1)"
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', 1)"
             )->execute([
                 $lastName, $firstName,
                 $middleName !== '' ? $middleName : null,
                 $suffix !== '' ? $suffix : null,
-                $email, $contact !== '' ? $contact : '0', password_hash($password, PASSWORD_BCRYPT),
+                $email, $contact !== '' ? $contact : '0', $roleId, password_hash($password, PASSWORD_BCRYPT),
             ]);
             $newId = (int) $db->lastInsertId();
-            $fullName = implode(' ', array_filter([$firstName, $middleName, $lastName, $suffix], fn($part) => $part !== ''));
+
+            // Same records Maintenance creates for an imported student, a bypass merchant or a guardian.
+            if ($roleKey === 'student') {
+                [$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns($db);
+                $db->prepare("INSERT INTO student_info (userID, studentID, {$yrCols}, courseID) VALUES (?, ?, {$yrMarks}, ?)")
+                   ->execute(array_merge([$newId, $studentId], array_fill(0, $yrCount, (string) $yearLevel), [$courseId]));
+                gjc_student_wallet($db, $newId);
+                $db->prepare("INSERT IGNORE INTO fee_waiver_credits (student_user_id, status) VALUES (?, 'empty')")->execute([$newId]);
+            } elseif ($roleKey === 'merchant') {
+                $merchantId = gjc_insert_merchant_record($db, $newId, $businessName, '', $stallId !== '' ? $stallId : null);
+                gjc_merchant_wallet($db, $newId);
+                if ($stallId !== '' && !gjc_claim_stall($db, $stallId, $merchantId)) {
+                    throw new RuntimeException('That stall is no longer available — pick another.');
+                }
+                gjc_insert_awarded_merchant_application($db, [
+                    'business_name' => $businessName, 'first_name' => $firstName, 'middle_name' => $middleName,
+                    'last_name' => $lastName, 'suffix' => $suffix, 'sex' => $sex, 'phone' => $contact,
+                    'email' => $email, 'stall_id' => $stallId,
+                ], $newId, $adminId);
+            } elseif ($roleKey === 'parent') {
+                $db->prepare("INSERT IGNORE INTO parents (user_id) VALUES (?)")->execute([$newId]);
+                if ($linkStudentUserId > 0) {
+                    $db->prepare(
+                        "INSERT IGNORE INTO parent_student_links (parent_id, student_user_id)
+                         SELECT id, ? FROM parents WHERE user_id = ?"
+                    )->execute([$linkStudentUserId, $newId]);
+                }
+            }
+            $db->commit();
 
             // Sent after the insert, so a mail failure never undoes the account.
-            $emailSent = users_send_staff_credentials($email, $fullName, $password);
+            $emailSent = users_send_staff_credentials($email, $fullName, $password, $roleLabel);
 
             logAudit(
                 $db, $adminId, gjc_current_role(), 'USER_ACCOUNT', 'users', null,
-                ['event' => 'created', 'user_id' => $newId, 'name' => $fullName, 'email' => $email, 'roleID' => 8, 'sub_role' => 'finance_staff', 'email_sent' => $emailSent],
+                ['event' => 'created', 'user_id' => $newId, 'name' => $fullName, 'email' => $email, 'roleID' => $roleId, 'sub_role' => gjc_sub_role_map()[$roleId], 'email_sent' => $emailSent],
                 null, ['target_id' => $newId]
             );
 
             users_json([
                 'success' => true,
                 'message' => $emailSent
-                    ? "Finance staff account created for {$fullName}. The login credentials were emailed to {$email}; they must change the password at first sign-in."
-                    : "Finance staff account created for {$fullName}, but the credentials email could not be sent. Give them the temporary password yourself; they must change it at first sign-in.",
+                    ? "{$roleLabel} account created for {$fullName}. The login credentials were emailed to {$email}; they must change the password at first sign-in."
+                    : "{$roleLabel} account created for {$fullName}, but the credentials email could not be sent. Give them the temporary password yourself; they must change it at first sign-in.",
             ]);
         }
 
@@ -234,8 +301,7 @@ try {
                 users_json(['success' => false, 'message' => 'Give a reason of at least 5 characters — the user sees it, and it goes into the audit trail.']);
             }
 
-            // NULL end date = indefinite. Anything else is a day count, which
-            // has to land inside the allowed window.
+            // NULL = indefinite; otherwise a day count within the allowed range.
             $until = null;
             if ($duration !== 'indefinite') {
                 $days = filter_var($duration, FILTER_VALIDATE_INT);
@@ -289,9 +355,7 @@ try {
                 users_json(['success' => false, 'message' => 'That user no longer exists.']);
             }
 
-            // gjc_lift_account_suspension() writes the audit entry and the
-            // notification itself — shared with the automatic expiry path, so a
-            // suspension is always undone the same way.
+            // Writes its own audit entry and notification.
             if (!gjc_lift_account_suspension($db, $userId, $adminId)) {
                 users_json(['success' => false, 'message' => 'That account is not currently suspended.']);
             }
@@ -316,10 +380,7 @@ try {
                 users_json(['success' => false, 'message' => 'Give a reason of at least 5 characters — the user sees it, and it goes into the audit trail.']);
             }
 
-            // A ban has no clock on it, so the only thing standing between a
-            // misclick and a permanent lockout is this typed confirmation. The
-            // modal collects it; checking it here too means the endpoint can't
-            // be driven straight past the warning.
+            // Server-side check of the typed BAN confirmation.
             if (strcasecmp($confirm, 'BAN') !== 0) {
                 users_json(['success' => false, 'message' => 'Type BAN in the confirmation box to continue.']);
             }
@@ -341,8 +402,6 @@ try {
                     'userID'    => $userId,
                     'status'    => 'Banned',
                     'permanent' => true,
-                    // Worth recording separately: a ban that replaced a live
-                    // suspension is an escalation, not a fresh lockout.
                     'escalated_from_suspension' => $wasSuspended,
                     'reason'    => $reason,
                     'banned_by' => $adminId,
@@ -371,9 +430,7 @@ try {
                 users_json(['success' => false, 'message' => 'That user no longer exists.']);
             }
 
-            // gjc_lift_account_ban() writes the audit entry and the
-            // notification itself, the same way the suspension lift does, so a
-            // lockout is always undone through one code path.
+            // Writes its own audit entry and notification.
             if (!gjc_lift_account_ban($db, $userId, $adminId)) {
                 users_json(['success' => false, 'message' => 'That account is not currently banned.']);
             }

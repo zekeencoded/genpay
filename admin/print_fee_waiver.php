@@ -6,10 +6,7 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
-// Finance prints/downloads this for any student (blank or with the pending
-// amount filled in). Parents may only reach their own linked student's form,
-// and only while it is 'pending' — the form exists to collect their signature
-// for an amount that is still awaiting one.
+// Finance: any student. Parents: own linked student, pending only (for signing).
 gjc_require_role(['finance', 'parent']);
 gjc_ensure_fee_waiver_credits_schema($db);
 

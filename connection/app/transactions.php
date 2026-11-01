@@ -1,7 +1,6 @@
 <?php
 
 // Transaction labels, rows and the admin transaction list.
-// Loaded by connection/app.php; defines functions and constants only.
 
 function gjc_transaction_type_options(): array
 {
@@ -59,9 +58,7 @@ function gjc_transaction_type_slug(string $type): string
     return $map[$type] ?? strtolower($type);
 }
 
-// Icon / colour-slug / direction metadata for a student-facing transaction
-// row. Shared by student/dashboard.php and student/api/wallet_summary.php so
-// the server-rendered list and the AJAX-refreshed list can't drift apart.
+// Icon, colour and direction for a student transaction row.
 function gjc_student_txn_meta(string $type): array
 {
     $slugs = [
@@ -92,6 +89,29 @@ function gjc_student_txn_meta(string $type): array
     ];
 }
 
+/**
+ * P2P transfers received by $walletId. The ledger row sits on the sender's wallet, so the
+ * recipient is found through p2p_transfers.to_wallet_id. Pass $transactionId for one row.
+ */
+function gjc_received_transfers(PDO $db, int $walletId, ?int $transactionId = null, int $limit = 200): array
+{
+    if ($walletId <= 0 || !gjc_table_exists($db, 'transactions') || !gjc_table_exists($db, 'p2p_transfers')) {
+        return [];
+    }
+    $limit = max(1, min(500, $limit));
+    $stmt = $db->prepare(
+        "SELECT t.*, p.message AS transfer_message
+           FROM transactions t
+           JOIN p2p_transfers p ON p.reference_no = t.reference_no
+          WHERE p.to_wallet_id = ? AND t.transaction_type = 'p2p_transfer'"
+        . ($transactionId !== null ? " AND t.id = ?" : "") . "
+          ORDER BY t.created_at DESC, t.id DESC
+          LIMIT {$limit}"
+    );
+    $stmt->execute($transactionId !== null ? [$walletId, $transactionId] : [$walletId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function gjc_transaction_status_label(string $status): string
 {
     return ucwords(str_replace("_", " ", $status));
@@ -116,15 +136,7 @@ function gjc_transaction_is_success(string $status): bool
     );
 }
 
-/**
- * Line items behind a paid order, keyed by the transaction's reference_no.
- *
- * Receipt rows are authoritative for paid items. Relational order rows are
- * the fallback for an order-linked payment; historical JSON is never read.
- *
- * Returns a normalised list of ['name', 'qty', 'price', 'line_total'], or []
- * for a transaction with no order behind it (top-ups, transfers, encashments).
- */
+/** Line items for a paid order by reference_no: ['name', 'qty', 'price', 'line_total'], or []. */
 function gjc_transaction_line_items(PDO $db, string $referenceNo): array
 {
     $referenceNo = trim($referenceNo);
@@ -306,11 +318,7 @@ function gjc_fetch_admin_transactions(
 ): array {
     gjc_ensure_operational_tables($db);
 
-    // How many rows each source SELECT may return. null keeps the historical
-    // 500/300/300, which is what every screen wants - they show at most 150.
-    // 0 means no cap: the CSV export is a reconciliation document and a
-    // silently short one is worse than a slow one. $limit alone could not
-    // express this, because it only ever controlled the array_slice below.
+    // Per-source row cap: null = 500/300/300, 0 = unlimited (CSV export).
     $ledgerCap = $sqlCap === null ? 500 : $sqlCap;
     $requestCap = $sqlCap === null ? 300 : $sqlCap;
     $ledgerLimit = $ledgerCap > 0 ? ' LIMIT ' . (int) $ledgerCap : '';
@@ -471,19 +479,7 @@ function gjc_fetch_admin_transactions(
     return $rows;
 }
 
-/**
- * The four Transactions stat cards, counted by SQL over the whole tables.
- *
- * gjc_admin_transaction_stats() counts an array that gjc_fetch_admin_transactions()
- * has already capped, so "Total Transactions - All wallet activities" stopped
- * being true at roughly 1,100 rows. These figures do not depend on how many
- * rows a page happens to have loaded.
- *
- * The source set mirrors the fetch exactly: the ledger, plus the top-up and
- * encashment requests that have not yet become ledger rows (same WHERE clauses,
- * so a request is never counted twice). Success and pending statuses match
- * gjc_transaction_is_success() / gjc_transaction_is_pending().
- */
+/** Transaction stat card counts computed in SQL over all rows. */
 function gjc_admin_transaction_counts(PDO $db): array
 {
     gjc_ensure_operational_tables($db);

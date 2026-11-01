@@ -1,13 +1,5 @@
 <?php
-// ============================================================
-//  merchant/profile.php
-//  My Profile for merchant STAFF — the same profile system as the student
-//  portal (student/profile.php) and the owner's Business Profile
-//  (settings.php), all styled by profile_hub.css: identity hero with key
-//  figures, a completeness nudge, details / merchant admin on the left,
-//  status / settings on the right, FAQs in a Help sheet.
-//  Merchant admins have the Business Profile (settings.php) instead.
-// ============================================================
+// My Profile for merchant staff (owners use settings.php).
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -111,7 +103,7 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
     <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=5">
 </head>
@@ -140,9 +132,7 @@ $currentPage = 'profile';
                 </div>
                 <?php endif; ?>
 
-                <!-- Hero: the staff member's GenPay card as an object (who you
-                     are), with the stall you work at beside it. Same design as
-                     student/profile.php. -->
+                <!-- Hero: staff GenPay card and their stall. -->
                 <section class="ph-id" aria-label="Account summary">
                     <div class="ph-id-card">
                         <div class="ph-id-brand">

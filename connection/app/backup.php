@@ -1,9 +1,7 @@
 <?php
 
-// Backup & restore: one zip per backup in backups/ holding database.sql (mysqldump),
-// database_report.pdf (readable copy, never used by restore), the uploaded files and
-// manifest.json. The zips themselves are the registry — a DB table would be rolled
-// back by the very restore it describes.
+// Backup & restore: one zip per backup in backups/ (database.sql, database_report.pdf,
+// uploads, manifest.json). The zips are the registry so a restore can't roll it back.
 
 const GJC_BACKUP_FILE_DIRS = ['uploads', 'assets/profile_photos', 'assets/merchant_logos'];
 const GJC_BACKUP_KEEP_AUTO = 14;
@@ -138,10 +136,7 @@ function gjc_backup_circulation(PDO $db): array
     }
 }
 
-/**
- * Creates a backup zip and returns its manifest.
- * $label: manual | auto | pre-restore. The PDF is skipped for pre-restore safety copies (speed).
- */
+/** Create a backup zip and return its manifest. $label: manual | auto | pre-restore (no PDF). */
 function gjc_backup_create(PDO $db, string $label, int $userId, string $userName): array
 {
     if (!in_array($label, ['manual', 'auto', 'pre-restore'], true)) {
@@ -304,11 +299,7 @@ function gjc_backup_prune(): array
     return $removed;
 }
 
-/**
- * Replaces the database and uploaded files with the contents of a backup.
- * Takes a pre-restore safety backup first; if the SQL import fails, that copy is
- * re-imported automatically so the database is never left empty.
- */
+/** Restore a backup. Takes a safety backup first and re-imports it if the SQL import fails. */
 function gjc_backup_restore(PDO $db, string $name, int $userId, string $userName): array
 {
     $path = gjc_backup_path($name);
@@ -361,8 +352,7 @@ function gjc_backup_restore(PDO $db, string $name, int $userId, string $userName
             throw new RuntimeException('Restore failed and the database was put back as it was. ' . $e->getMessage());
         }
 
-        // Live folders are parked outside $work and deleted only after a clean swap,
-        // so a failed swap can never take them down with the temp folder.
+        // Park live folders outside $work until the swap succeeds.
         $parked = $dir . '/.old_files_' . bin2hex(random_bytes(6));
         mkdir($parked, 0750);
         gjc_backup_swap_files($work . '/files', $parked);
@@ -389,10 +379,7 @@ function gjc_backup_import(PDO $db, string $sqlFile): void
     gjc_backup_run($db, 'mysql', [gjc_local_config('db_name', 'GJC_DB_NAME')], $sqlFile);
 }
 
-/**
- * Moves each live folder aside into $work and the backup's copy in. On any failure the
- * moved-aside folders are put back (anything that can't be is left in $work for manual recovery).
- */
+/** Swap live folders for the backup's copies; roll back on failure. */
 function gjc_backup_swap_files(string $from, string $work): void
 {
     $root = dirname(__DIR__, 2);

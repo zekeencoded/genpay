@@ -1,8 +1,5 @@
 <?php
-// CLI regression: every mint needs the super-admin's Mint PIN, including amounts
-// under the soft limit, and repeated wrong PINs lock the gate. Temporary tables
-// stand in for users, settings, the cap log and login_attempts. Each case runs
-// inside a transaction so audit entries are queued and discarded, not written.
+// CLI test: every mint needs the Mint PIN; repeated wrong PINs lock the gate.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';

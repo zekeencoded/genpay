@@ -49,3 +49,8 @@ screenshots/
 # Application database login + view-token signing key. connection/local_config.example.php
 # is the tracked template; the real file holds the live root password.
 /connection/local_config.php
+
+# Generated launch videos (Hyperframes renders and build projects). Not app code.
+/brag-output/
+/genpay-launch/
+/genpay-showreel/

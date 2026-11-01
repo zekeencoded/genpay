@@ -1,7 +1,6 @@
 <?php
 
-// Current user, login sessions, roles, CSRF, profiles, addresses and student ids.
-// Loaded by connection/app.php; defines functions and constants only.
+// Current user, sessions, roles, CSRF, profiles, addresses and student ids.
 
 function gjc_user_id(): int
 {
@@ -13,15 +12,7 @@ function gjc_current_role(): string
     return gjc_role_name($_SESSION['roleID'] ?? $_SESSION['role'] ?? 0);
 }
 
-/**
- * Optional job title for merchant staff accounts (e.g. "Cashier", "Cook").
- * Purely descriptive — has no effect on permissions, which stay keyed off
- * roleID/sub_role.
- *
- * Also widens middle_name/suffix to nullable: those columns predate this
- * feature as NOT NULL DEFAULT '', which rejects the NULL the staff form now
- * sends when an admin leaves them blank.
- */
+/** Optional staff job title (no effect on permissions); also makes middle_name/suffix nullable. */
 function gjc_ensure_staff_position_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, "users")) {
@@ -32,10 +23,7 @@ function gjc_ensure_staff_position_schema(PDO $db): void
     if (!in_array("position", $columns, true)) {
         $db->exec("ALTER TABLE users ADD COLUMN position VARCHAR(60) NULL DEFAULT NULL AFTER roleID");
     }
-    // "Remove" on merchant/staff.php is a soft delete: the audit trail keeps a
-    // foreign key to users.userID, so a staff login that ever signed in cannot
-    // be hard-deleted. A removed row is set Inactive (which blocks sign-in) and
-    // stamped here, and every roster query filters it out.
+    // Staff removal is a soft delete because audit rows reference users.userID.
     if (!in_array("staff_removed_at", $columns, true)) {
         $db->exec("ALTER TABLE users ADD COLUMN staff_removed_at DATETIME NULL DEFAULT NULL AFTER position");
     }
@@ -71,10 +59,7 @@ function gjc_ensure_first_login_schema(PDO $db): void
     }
 }
 
-/**
- * Supplies normalized address fields while retaining safe compatibility reads.
- * New accounts without an address read as blank after legacy columns are removed.
- */
+/** Merge the user's address fields into $row. */
 function gjc_with_user_address(PDO $db, array $row, int $userId): array
 {
     if (!$row || !gjc_table_exists($db, 'user_addresses') || !gjc_table_exists($db, 'address_locations')) {
@@ -185,10 +170,7 @@ function gjc_user_label(PDO $db, int $userId): string
     return $labels[$userId] = $name;
 }
 
-// ── Remember me: persistent login via single-use rotating tokens ───────────
-// Cookie 'gjc_remember' = "<selector>:<validator>"; only a SHA-256 hash of the
-// validator is stored, so a leaked table can't forge cookies. Tokens rotate on
-// every use and are deleted on logout.
+// ── Remember me: single-use rotating tokens; only the validator hash is stored ──
 
 function gjc_ensure_remember_token_schema(PDO $db): void
 {
@@ -207,10 +189,7 @@ function gjc_ensure_remember_token_schema(PDO $db): void
     );
 }
 
-/**
- * The granular role for a users.roleID. roleID is the single source of truth;
- * there is no stored sub_role (dropped by gjc_ensure_role_contract_schema).
- */
+/** Granular role for a roleID (roleID is the source of truth). */
 function gjc_sub_role_for_role_id(int $roleId): string
 {
     return gjc_sub_role_map()[$roleId] ?? 'student';
@@ -231,13 +210,7 @@ function gjc_sub_role_map(): array
     ];
 }
 
-/**
- * Finance staff (roleID 8) share the coarse 'finance' role, so every
- * gjc_require_role(['finance']) page lets them in — this allowlist is what
- * narrows them down. Paths are relative to admin/. Anything not listed
- * (economy/minting, admin wallet, school years, maintenance, settings, audit,
- * backup, user-account actions) stays super-admin only.
- */
+/** Admin pages finance staff (roleID 8) may open; everything else is super-admin only. */
 const GJC_FINANCE_STAFF_PAGES = [
     'dashboard.php', 'users.php', 'view_user.php',
     'transactions.php', 'view_transaction.php', 'export_transactions.php',
@@ -328,12 +301,7 @@ function gjc_clear_remember_token(PDO $db): void
     unset($_COOKIE['gjc_remember']);
 }
 
-/**
- * Silently restore a login from the remember-me cookie when no session exists.
- * Invalid/expired/foreign tokens are discarded. Deactivated accounts and
- * accounts still on a forced password change never auto-login. The used token
- * is rotated (deleted + reissued) so a stolen cookie only works once.
- */
+/** Restore a session from the remember-me cookie; the token rotates on use. */
 function gjc_attempt_remember_login(PDO $db): void
 {
     if (gjc_user_id() > 0) {
@@ -371,12 +339,7 @@ function gjc_attempt_remember_login(PDO $db): void
         return;
     }
 
-    // A suspended account must not be auto-logged-in either. Without this the
-    // cookie and the gjc_require_role() lockout fight each other: the cookie
-    // rebuilds the session on login.php, login.php forwards to the dashboard,
-    // the role check tears the session down again — a redirect loop. Reading it
-    // through gjc_account_suspension() also means a suspension that has already
-    // run out lifts itself here and the login goes through as normal.
+    // Suspended accounts can't auto-login (would cause a redirect loop).
     if (gjc_account_suspension($db, (int) $token['user_id']) !== null) {
         gjc_clear_remember_token($db);
         return;
@@ -388,12 +351,7 @@ function gjc_attempt_remember_login(PDO $db): void
     gjc_issue_remember_token($db, (int) $token['user_id']);
 }
 
-// ── Failed-attempt throttle ───────────────────────────────────────────────────
-// One table (login_attempts) counts failed attempts under a key. Sign-in uses it
-// per identifier (5 per 15 minutes) and per network address; the Mint PIN and the
-// public apply form use it too. Keys are HMAC hashes (gjc_throttle_key), so no
-// typed email or PIN is stored. Per-identifier, not per-IP only: a whole campus
-// can share one IP, so an IP lock alone would lock every student on it out.
+// ── Failed-attempt throttle (login, Mint PIN, apply form); keys are HMAC hashes ──
 // shortcut: the table name still says "login"; rename it if a fifth use appears.
 
 function gjc_ensure_login_attempts_schema(PDO $db): void
@@ -451,16 +409,17 @@ function gjc_password_session_valid(array $user): bool
     if ($fingerprint !== '') {
         return hash_equals($fingerprint, hash('sha256', (string) ($user['password'] ?? '')));
     }
-    // Older sessions cannot prove which password authenticated them. Requiring
-    // a fresh login prevents them becoming valid again after a student changes
-    // their temporary password and clears the forced-change flags.
+    // Older sessions can't prove which password they used; force a fresh login.
     return false;
 }
 
 function gjc_require_role(array $roles): void
 {
-    // A returning visitor with a valid remember-me cookie gets their session
-    // restored here, before the role check bounces them to the login page.
+    // Signed-in pages must not be cached, or Back after logout shows a stale copy.
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
     global $db;
     if ($db instanceof PDO) {
         gjc_attempt_remember_login($db);
@@ -468,11 +427,7 @@ function gjc_require_role(array $roles): void
 
     $role = gjc_current_role();
     if (!in_array($role, $roles, true)) {
-        // Record only a SIGNED-IN user being turned away from another role's
-        // area — that is someone with a real session reaching for something
-        // they may not have, and it left no trace anywhere before. An
-        // anonymous visitor bounced to the login page is just a redirect and
-        // would bury the real signal under noise from every logged-out hit.
+        // Log only signed-in users denied access; anonymous redirects are noise.
         $deniedUserId = gjc_user_id();
         if ($deniedUserId > 0 && $db instanceof PDO && function_exists('logAudit')) {
             logAudit(
@@ -526,9 +481,7 @@ function gjc_require_role(array $roles): void
                 }
             }
 
-            // A stall auto-suspended over restricted-product strikes locks out
-            // the owner and their staff for the duration — see
-            // gjc_record_product_violation().
+            // Restricted-product strike suspension locks out owner and staff.
             if ($role === 'merchant') {
                 $suspendedUntil = gjc_merchant_suspended_until($db, $userId);
                 if ($suspendedUntil !== null) {
@@ -539,10 +492,7 @@ function gjc_require_role(array $roles): void
                 }
             }
 
-            // A finance-issued suspension (admin/users.php) applies to every
-            // role, and merchant staff go down with their owner's stall. Checked
-            // on every page load, not just at login, so suspending someone who
-            // is already signed in ends their session on their next click.
+            // Finance suspension is checked every page load; staff inherit the owner's.
             $account = gjc_account_suspension($db, $userId, $role === 'merchant');
             if ($account !== null) {
                 session_unset();
@@ -582,16 +532,7 @@ function gjc_require_role(array $roles): void
 /** Nobody on file is older than this — an upper bound for date-of-birth sanity. */
 const GJC_MAX_AGE = 120;
 
-/**
- * Idempotent self-healer for the personal-details block on an account: sex,
- * date of birth, and address. Lives on `users` rather than
- * `student_info` so every role carries the same fields — a parent or a merchant
- * owner has an address exactly like a student does.
- *
- * Every column is NULLable with no default: these are optional details a user
- * fills in over time, and an account created before this ran is simply blank
- * rather than wrong. Age is deliberately NOT a column — see gjc_age_from_dob().
- */
+/** Self-healer for optional personal details on users (sex, DOB, address). Age is computed, not stored. */
 function gjc_ensure_user_profile_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, 'users')) {
@@ -615,10 +556,7 @@ function gjc_ensure_user_profile_schema(PDO $db): void
     }
 }
 
-/**
- * Commits the existing profile UPDATE and normalized address as one operation.
- * No schema DDL runs here; callers retain their current validation and audit behavior.
- */
+/** Save the profile and address together. */
 function gjc_save_profile_with_address(PDO $db, int $userId, string $sql, array $params, array $address): void
 {
     if ($db->inTransaction()) {
@@ -667,10 +605,7 @@ function gjc_save_profile_with_address(PDO $db, int $userId, string $sql, array 
     }
 }
 
-/**
- * Normalized optional user addresses. Existing profile columns remain during EXPAND/MIGRATE.
- * Schema creation must precede application transactions.
- */
+/** Self-healer for user addresses. Call outside transactions. */
 function gjc_ensure_user_address_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, 'users')) {
@@ -784,16 +719,7 @@ function gjc_user_address_values(PDO $db, int $userId): ?array
     return $values;
 }
 
-/**
- * The personal-details columns and their definitions, in the order they are
- * shown. One source of truth for the self-healer, the edit forms, and the
- * read-only views, so a field can never exist in the schema but go missing from
- * a form (or the reverse).
- *
- * The address is deliberately coarse — barangay, municipality, province, e.g.
- * "San Fernando Sur, Cabiao, Nueva Ecija". A canteen wallet has no use for a
- * house number, and collecting one only creates personal data to look after.
- */
+/** Personal-details columns in display order (shared by schema, forms and views). */
 function gjc_user_profile_columns(): array
 {
     return [
@@ -811,12 +737,7 @@ function gjc_sex_options(): array
     return ['Male', 'Female', 'Prefer not to say'];
 }
 
-/**
- * Age in whole years from a stored date of birth, or null when there isn't one.
- * Age is computed on every read and never stored: a number in a column is
- * correct for at most a year, and would eventually contradict the birth date
- * sitting next to it.
- */
+/** Age in years from date of birth, or null. */
 function gjc_age_from_dob(?string $dob): ?int
 {
     $dob = trim((string) $dob);
@@ -844,23 +765,14 @@ function gjc_dob_label(?string $dob): string
     return date('M d, Y', strtotime((string) $dob));
 }
 
-/**
- * "19 years old", or an em dash when no birth date is on file. Age is shown as
- * a field in its own right, but it is still only ever computed from
- * date_of_birth — there is no age column to fall out of step with it.
- */
+/** "19 years old", or an em dash with no birth date. */
 function gjc_age_label(?string $dob): string
 {
     $age = gjc_age_from_dob($dob);
     return $age === null ? '—' : $age . ' years old';
 }
 
-/**
- * The address as one line — "San Fernando Sur, Cabiao, Nueva Ecija" — skipping
- * the parts that were left blank so a half-filled address doesn't render as a
- * row of stray commas. Returns '' when nothing at all is on file, which callers
- * show as an em dash.
- */
+/** Address as one line, skipping blank parts. */
 function gjc_format_address(array $row): string
 {
     $parts = array_filter([
@@ -872,17 +784,7 @@ function gjc_format_address(array $row): string
     return implode(', ', $parts);
 }
 
-/**
- * Reads the personal-details fields out of a submitted form, validates them,
- * and returns ['values' => [column => value], 'error' => ?string]. Shared by
- * every profile edit page so one rule set covers them all — a birth date that
- * the student page rejects can't be smuggled in through the parent page.
- *
- * A field left blank is stored as NULL rather than '', so clearing a value
- * actually clears it and the read-side "is anything on file?" checks stay
- * honest. Sex and date of birth follow the available users columns. Address
- * fields remain logical profile inputs even after their legacy columns are removed.
- */
+/** Validate submitted personal details. Returns ['values' => [...], 'error' => ?string]; blanks become NULL. */
 function gjc_collect_profile_details(array $post, array $columns): array
 {
     $blank = static function (string $key) use ($post): ?string {
@@ -929,9 +831,7 @@ function gjc_collect_profile_details(array $post, array $columns): array
 
 function gjc_generate_student_id(PDO $db): string
 {
-    // Tied to the active school year (e.g. "2026-2027" -> "2026"), not just
-    // today's real-world calendar year, so IDs stay meaningful across a
-    // year rollover. Falls back to today's year if no school year is active.
+    // Year comes from the active school year, falling back to the current year.
     $activeYearName = gjc_active_school_year_name($db);
     $year = $activeYearName !== null ? substr($activeYearName, 0, 4) : date('Y');
 
@@ -945,16 +845,8 @@ function gjc_generate_student_id(PDO $db): string
 }
 
 /**
- * 3NF EXPAND/MIGRATE for year level. The year level a student holds in a given
- * school year lives on student_enrollments (it depends on student + year).
- * student_info only keeps entry_yr_lvl: the year level the student entered at,
- * written once at registration/import and never updated (exactly how
- * student_info.yr_lvl has always behaved). Display = active-year enrollment
- * yr_lvl, falling back to entry_yr_lvl.
- *
- * Legacy student_info.yr_lvl (where still present) is dual-written but never
- * read; the CLI contract (gjc_ensure_student_entry_year_contract_schema) drops it.
- * DDL: never call from inside a transaction.
+ * Year level per school year lives on student_enrollments; student_info keeps entry_yr_lvl.
+ * DDL: never call inside a transaction.
  */
 function gjc_ensure_student_entry_year_schema(PDO $db): void
 {
@@ -976,11 +868,7 @@ function gjc_ensure_student_entry_year_schema(PDO $db): void
     }
 }
 
-/**
- * Columns + placeholders for writing a student's entry year level, covering
- * both the EXPAND shape (legacy yr_lvl still present, dual-written) and the
- * CONTRACTED shape (entry_yr_lvl only). Returns [columnSql, placeholderSql, count].
- */
+/** Columns for writing the entry year level. Returns [columnSql, placeholderSql, count]. */
 function gjc_student_entry_year_write_columns(PDO $db): array
 {
     $cols = gjc_table_columns($db, 'student_info');
@@ -1035,12 +923,7 @@ function gjc_backfill_student_ids(PDO $db): void
     }
 }
 
-/**
- * Session-scoped CSRF token for state-changing fetch endpoints (Scan & Pay
- * payment/validation and POS QR creation). Pages embed gjc_csrf_token() and
- * send it back as an X-CSRF-Token header or csrf_token form field;
- * gjc_csrf_verify() accepts either.
- */
+/** Session CSRF token; sent as X-CSRF-Token header or csrf_token field. */
 function gjc_csrf_token(): string
 {
     if (empty($_SESSION["gjc_csrf_token"])) {

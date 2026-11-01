@@ -15,24 +15,14 @@ gjc_backfill_fee_waiver_credits($db);
 $currentUser = gjc_current_user($db);
 $currentPage = 'maintenance';
 
-/**
- * A plain header row is trivial to retype by hand — anyone can read the
- * required column names off the error message and fake a "template". This
- * signs the exact column list with the app's existing view-token secret
- * (GJC_VIEW_TOKEN_SECRET, connection/app.php) so a file only passes if it
- * carries the real, unforgeable marker the server itself generated. The
- * signature is tied to the column list too, so if the template ever changes
- * shape, old/faked files stop validating automatically.
- */
+/** HMAC-signed marker so only the real downloaded template is accepted. */
 function maintenance_csv_template_marker(string $kind, array $columns): string
 {
     $sig = substr(hash_hmac('sha256', 'csv_template:' . $kind . ':' . implode(',', $columns), GJC_VIEW_TOKEN_SECRET), 0, 32);
     return '#genpay-template:' . $kind . ':' . $sig;
 }
 
-/** Streams a CSV template (signed marker + header + optional example row) and exits.
- *  Must run before any other output — called immediately below, before any
- *  HTML rendering. */
+/** Stream a CSV template and exit. Must run before any output. */
 function maintenance_stream_csv_template(string $filename, string $kind, array $header, array $exampleRow = []): never
 {
     header('Content-Type: text/csv; charset=UTF-8');
@@ -47,10 +37,7 @@ function maintenance_stream_csv_template(string $filename, string $kind, array $
     exit;
 }
 
-// Header order here MUST match maintenance_student_csv_columns() /
-// maintenance_fee_waiver_csv_columns() exactly — the parser only accepts a
-// file whose header is byte-for-byte that column list, in that order, so a
-// template generated any other way would reject itself on re-upload.
+// Header order must match the *_csv_columns() lists exactly.
 if (($_GET['download_template'] ?? '') === 'students') {
     $cols = maintenance_student_csv_columns();
     maintenance_stream_csv_template(
@@ -103,8 +90,7 @@ function maintenance_ensure_student_registry(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // Bring pre-parent installs up to date. A fresh read avoids the stale
-    // static cache in gjc_table_columns() when this runs twice per request.
+    // Fresh read; gjc_table_columns() caches per request.
     $columns = maintenance_table_columns_fresh($db, 'imported_student_registry');
     $adds = [
         'parent_name'    => "VARCHAR(255) NULL AFTER phone_number",
@@ -133,13 +119,7 @@ function maintenance_student_csv_columns(): array
     ];
 }
 
-/**
- * Reads and verifies the signed marker line (maintenance_csv_template_marker())
- * that a real "Download Template" file starts with — consumes exactly one
- * line from $handle. A hand-typed CSV, even one that copies the exact column
- * names from an error message, will not have this line, because it can't be
- * forged without GJC_VIEW_TOKEN_SECRET.
- */
+/** Read and verify the signed marker line (consumes one line). */
 function maintenance_assert_template_marker($handle, string $kind, array $columns): void
 {
     $firstLine = fgets($handle);
@@ -155,21 +135,13 @@ function maintenance_assert_template_marker($handle, string $kind, array $column
     }
 }
 
-/**
- * Only the downloaded template is accepted: the header row must match the
- * template's columns exactly, in the template's exact order — reordering,
- * renaming, adding, or dropping a column (even an optional one) is refused.
- * This is stricter than "every column is recognised" (the old behaviour,
- * which tolerated any column order and let optional columns be omitted).
- * Returns the cleaned header for convenience.
- */
+/** Require the header to match the template exactly, in order. Returns the cleaned header. */
 function maintenance_assert_exact_template_header(array $header, array $canonicalOrder): array
 {
     if (isset($header[0])) {
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $header[0]);
     }
-    // Trailing blank cells (Excel sometimes exports a stray trailing comma)
-    // don't count as a structural mismatch.
+    // Ignore trailing blank cells (Excel stray comma).
     while ($header && trim((string) end($header)) === '') {
         array_pop($header);
     }
@@ -223,8 +195,7 @@ function maintenance_parse_student_csv(string $path): array
             throw new RuntimeException('Row ' . $rowNumber . ' must contain exactly ' . count($known) . ' cells. Keep blank optional cells in place.');
         }
 
-        // Pull each known column by its header position; absent optional columns
-        // default to '' so downstream code can rely on every key existing.
+        // Missing optional columns default to ''.
         $row = [];
         foreach ($known as $col) {
             $pos = $index[$col] ?? null;
@@ -261,13 +232,7 @@ function maintenance_split_name(string $fullName, string $fallbackEmail = ''): a
     ];
 }
 
-/**
- * Validates every parsed row up-front so the whole batch can be judged before a
- * single account is written. Each row becomes ready / duplicate / error, with
- * in-file duplicates caught alongside ones already in the database, and the
- * intended guardian action worked out. This is what makes the preview an
- * all-or-nothing gate rather than a row-by-row commit.
- */
+/** Mark every row ready / duplicate / error before anything is written. */
 function maintenance_validate_student_rows(PDO $db, array $rows): array
 {
     $emailCheck   = $db->prepare("SELECT userID FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1");
@@ -389,8 +354,7 @@ function maintenance_validate_student_rows(PDO $db, array $rows): array
     ];
 }
 
-/** The fee_waiver_credits.id for an existing student — the row always exists by
- *  this point (gjc_backfill_fee_waiver_credits() runs on every page load). */
+/** fee_waiver_credits.id for an existing student (row always exists). */
 function maintenance_fee_waiver_credit_id(PDO $db, int $studentUserId): int
 {
     $stmt = $db->prepare("SELECT id FROM fee_waiver_credits WHERE student_user_id = ? LIMIT 1");
@@ -398,15 +362,7 @@ function maintenance_fee_waiver_credit_id(PDO $db, int $studentUserId): int
     return (int) ($stmt->fetchColumn() ?: 0);
 }
 
-/**
- * ============================================================
- *  Fee Waiver Import — separate from Bulk Student Import above.
- *  Matches EXISTING students by student_id_number and mints their
- *  Fee Waiver Credit straight into GenCoin (empty -> claimed, no
- *  waiver upload) via gjc_import_fee_waiver_credit(). Does not
- *  create or touch any account/user data.
- * ============================================================
- */
+/* ── Fee Waiver Import: existing students only; mints empty -> claimed ── */
 function maintenance_fee_waiver_csv_columns(): array
 {
     return [
@@ -467,13 +423,7 @@ function maintenance_parse_fee_waiver_csv(string $path): array
     return $rows;
 }
 
-/**
- * Validates every parsed row against the CURRENT database: the student ID
- * must already exist, the amount must be sane, and — the key difference
- * from the student importer — the student's Fee Waiver Credit must
- * currently be 'empty' (never entered before) since this path mints
- * straight from empty -> claimed with no in-between review step.
- */
+/** Validate fee-waiver rows; the student's credit must still be 'empty'. */
 function maintenance_validate_fee_waiver_rows(PDO $db, array $rows): array
 {
     $studentCheck = $db->prepare(
@@ -553,15 +503,7 @@ function maintenance_validate_fee_waiver_rows(PDO $db, array $rows): array
     ];
 }
 
-/**
- * Creates or reuses a guardian (parent) login account keyed by email and makes
- * sure a row exists in `parents`, returning what the caller needs to link it to
- * a student. New guardians get a random temp password and must change it on
- * first login, mirroring how imported students are provisioned. An email already
- * in use by a non-guardian account is reported back as a conflict rather than
- * being altered. $cache (keyed by lowercased email) means the same guardian
- * across several student rows is provisioned once and merely linked to each.
- */
+/** Create or reuse a guardian account by email; $cache dedupes within one import. */
 function maintenance_provision_parent(PDO $db, array $parent, array &$cache): array
 {
     $email = strtolower(trim((string) $parent['email']));
@@ -755,41 +697,6 @@ function maintenance_insert_merchant_user(PDO $db, array $data): int
     return (int) $db->lastInsertId();
 }
 
-function maintenance_insert_merchant_record(PDO $db, int $userId, string $businessName, string $notes, ?string $stallId = null): int
-{
-    if (!gjc_table_exists($db, 'merchant')) {
-        return 0;
-    }
-
-    $columns = maintenance_table_columns_fresh($db, 'merchant');
-    $payload = [
-        'userID' => $userId,
-        'stall_name' => $businessName,
-        'stall_id' => ($stallId !== null && $stallId !== '') ? $stallId : null,
-        'operational_status' => 'active',
-        'notes' => $notes !== '' ? $notes : null,
-    ];
-
-    $insert = [];
-    $values = [];
-    foreach ($payload as $column => $value) {
-        if (in_array($column, $columns, true)) {
-            $insert[] = $column;
-            $values[] = $value;
-        }
-    }
-
-    if (!$insert) {
-        return 0;
-    }
-
-    $sql = 'INSERT INTO merchant (' . implode(', ', $insert) . ') VALUES (' . implode(', ', array_fill(0, count($insert), '?')) . ')';
-    $stmt = $db->prepare($sql);
-    $stmt->execute($values);
-
-    return (int) $db->lastInsertId();
-}
-
 function maintenance_temp_password(int $length = 10): string
 {
     // Ambiguous characters (0/O, 1/l/I) left out so the password is easy to read aloud.
@@ -802,12 +709,7 @@ function maintenance_temp_password(int $length = 10): string
     return $out;
 }
 
-/**
- * Queues a newly-created guardian's login credentials email for background
- * delivery. Mirrors the merchant credentials mail in
- * admin/api/stall_applications.php. Returns true when queued; a failure never
- * derails an import that has already committed.
- */
+/** Queue a new guardian's credentials email. Returns true when queued. */
 function maintenance_send_guardian_credentials(string $email, string $name, string $tempPassword): bool
 {
     if ($email === '' || $tempPassword === '') {
@@ -836,35 +738,6 @@ function maintenance_send_guardian_credentials(string $email, string $name, stri
     $altBody = "Dear {$name},\n\nA GenPay parent account has been created so you can monitor and manage your child's wallet.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
 
     return gjc_queue_email($email, $name !== '' ? $name : 'Guardian', 'GenPay - Parent Account Credentials', $body, $altBody);
-}
-
-/**
- * Records an admin-created merchant as an already-approved stall application, so
- * it matches a merchant onboarded through the public form + approval. This is the
- * only home for fields like sex / proprietor_name (no column on users/merchant).
- */
-function maintenance_insert_approved_application(PDO $db, array $data, int $userId, int $adminId): int
-{
-    if (!gjc_table_exists($db, 'stall_applications')) {
-        return 0;
-    }
-
-    $proprietorName = trim(implode(' ', array_filter(
-        [$data['first_name'], $data['middle_name'], $data['last_name'], $data['suffix']],
-        fn($part) => $part !== ''
-    )));
-    $stallId = $data['stall_id'] !== '' ? $data['stall_id'] : null;
-
-    // Address + document columns are left to their '' defaults (not collected here).
-    return gjc_stall_application_create($db,[
-        'business_name'=>$data['business_name'],'first_name'=>$data['first_name'],
-        'middle_name'=>$data['middle_name']!==''?$data['middle_name']:null,'last_name'=>$data['last_name'],
-        'suffix'=>$data['suffix']!==''?$data['suffix']:null,'sex'=>$data['sex'],
-        'contact_number'=>$data['phone'],'email'=>$data['email'],'preferred_stall_id'=>$stallId,'stall_id'=>$stallId,
-        'profile_picture'=>'','business_permit'=>'','sanitary_permit'=>'','gjc_requirements'=>'','clearance'=>'',
-        'terms_accepted'=>1,'status'=>'awarded','current_step'=>5,'reviewed_by'=>$adminId,
-        'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$userId,
-    ]);
 }
 
 function maintenance_ensure_restricted_products_schema(PDO $db): void
@@ -951,10 +824,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
             gjc_ensure_parent_schema($db);
 
-            // Re-validate the whole batch against the current database. If any row
-            // is invalid we refuse before opening a transaction — nothing is
-            // written unless every row is clean (duplicates are the one allowed
-            // skip, since detecting them is the point of the unique student ID).
+            // Re-validate; refuse the whole batch if any row is invalid.
             $report = maintenance_validate_student_rows($db, $rows);
             if ($report['has_errors']) {
                 throw new RuntimeException(
@@ -979,9 +849,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             ];
             $createdUserIds = [];
             $parentCache    = [];
-            // Guardians whose accounts were freshly created in this batch; their
-            // temp-password emails are sent AFTER commit so SMTP latency never
-            // holds a DB lock open and a bad address can't roll back the import.
+            // Guardian emails are sent after commit.
             $guardianEmailQueue = [];
 
             [$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns($db);
@@ -1001,8 +869,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 "INSERT IGNORE INTO parent_student_links (parent_id, student_user_id) VALUES (?, ?)"
             );
 
-            // One all-or-nothing transaction: every insert commits together, or a
-            // mid-import failure rolls the whole batch back leaving no partial data.
+            // All-or-nothing transaction.
             $db->beginTransaction();
             try {
                 foreach ($report['rows'] as $entry) {
@@ -1023,9 +890,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         $studentInfoInsert->execute(array_merge([$userId, $studentId], array_fill(0, $yrCount, $row['year_level']), [$courseId]));
                         gjc_student_wallet($db, $userId);
 
-                        // Fee Waiver Credit: freshly-created student only, never touched again on
-                        // re-import. INSERT IGNORE is belt-and-suspenders — $userId is always a
-                        // brand-new AUTO_INCREMENT id here, so the unique key can't actually collide.
+                        // New students only; INSERT IGNORE is just a safety net.
                         $db->prepare("INSERT IGNORE INTO fee_waiver_credits (student_user_id, status) VALUES (?, 'empty')")
                            ->execute([$userId]);
 
@@ -1098,9 +963,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 throw $importFailure;
             }
 
-            // The batch is committed. Now email each newly-created guardian their
-            // temporary password. A failure here never affects imported data — it
-            // only bumps the "email failed" counter shown in the summary.
+            // Email failures only bump the summary counter.
             foreach ($guardianEmailQueue as $guardian) {
                 if (maintenance_send_guardian_credentials($guardian['email'], $guardian['name'], $guardian['password'])) {
                     $summary['parents_emailed']++;
@@ -1139,9 +1002,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $previewFileName = '';
         }
 
-        // ── Fee Waiver Import: separate from Bulk Student Import above —
-        // matches EXISTING students by student_id_number and mints straight
-        // into GenCoin, no account creation involved. ──────────────────────
+        // ── Fee Waiver Import ──
         if ($feeWaiverAction === 'preview') {
             if (empty($_FILES['fee_waiver_csv']) || (int) $_FILES['fee_waiver_csv']['error'] !== UPLOAD_ERR_OK) {
                 throw new RuntimeException('Please choose a valid CSV file.');
@@ -1165,8 +1026,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 throw new RuntimeException('Upload and preview a CSV before importing.');
             }
 
-            // Re-validate against the current database — a status may have
-            // changed (or another import already claimed a row) since preview.
+            // Re-validate; statuses may have changed since preview.
             $report = maintenance_validate_fee_waiver_rows($db, $rows);
             if ($report['has_errors']) {
                 throw new RuntimeException(
@@ -1183,9 +1043,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             ];
             $failures = [];
 
-            // No outer transaction: each row is an independent existing student,
-            // and gjc_import_fee_waiver_credit() opens its own transaction per
-            // call — one failed row never affects the others.
+            // No outer transaction; each row opens its own.
             foreach ($report['rows'] as $entry) {
                 if ($entry['status'] !== 'ready') {
                     continue;
@@ -1252,7 +1110,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $db->beginTransaction();
             try {
                 $newMerchantUserId = maintenance_insert_merchant_user($db, $merchantData);
-                $newMerchantId = maintenance_insert_merchant_record(
+                $newMerchantId = gjc_insert_merchant_record(
                     $db,
                     $newMerchantUserId,
                     $merchantData['business_name'],
@@ -1267,7 +1125,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     }
                 }
 
-                maintenance_insert_approved_application($db, $merchantData, $newMerchantUserId, (int) $currentUser['id']);
+                gjc_insert_awarded_merchant_application($db, $merchantData, $newMerchantUserId, (int) $currentUser['id']);
 
                 $db->commit();
             } catch (Throwable $merchantCreateError) {
@@ -1325,9 +1183,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-// Validate whatever is staged for preview against the current database so the
-// operator always sees an up-to-date verdict (works on POST preview and on any
-// later page reload while a preview is held in the session).
+// Re-validate the staged preview on every load.
 $previewReport = $previewRows ? maintenance_validate_student_rows($db, $previewRows) : null;
 $feeWaiverPreviewReport = $feeWaiverPreviewRows ? maintenance_validate_fee_waiver_rows($db, $feeWaiverPreviewRows) : null;
 
@@ -2519,11 +2375,7 @@ async function fwcOpenDetailModal(studentId) {
     }
 }
 
-// ── Fixed table header: glued to the viewport once the real thead scrolls
-// past it, instead of scrolling away with the table. A CSS "sticky" thead
-// doesn't work here (Bootstrap's .table-responsive forces overflow-y: auto,
-// which hijacks the sticky positioning context), so this measures the real
-// header cells and mirrors them into a position:fixed bar.
+// ── Fixed table header (CSS sticky fails inside .table-responsive) ──
 function rpInitFixedHeader(tableId) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -2577,8 +2429,7 @@ function rpInitFixedHeader(tableId) {
     window.addEventListener('scroll', onScrollOrResize, { passive: true });
     window.addEventListener('resize', onScrollOrResize);
 
-    // Column widths can change on sort/redraw even while scroll position
-    // doesn't — re-measure then too, not just on scroll.
+    // Re-measure on DataTables redraw too.
     if (window.jQuery && jQuery.fn.DataTable && jQuery.fn.DataTable.isDataTable('#' + tableId)) {
         jQuery('#' + tableId).on('draw.dt order.dt', function () {
             setTimeout(reposition, 0);

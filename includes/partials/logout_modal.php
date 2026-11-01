@@ -1,8 +1,5 @@
 <?php
-// Partial: Logout confirmation modal — included by every sidebar that has
-// a logout link (admin/student/merchant, including the inline duplicate
-// sidebars). Relies on BASE_URL from connection/config.php already being
-// loaded by the including page.
+// Partial: logout confirmation modal. Needs BASE_URL.
 ?>
 <div class="logout-modal-overlay" id="logoutModalOverlay">
     <div class="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logoutModalTitle" onclick="event.stopPropagation();">
@@ -32,6 +29,11 @@ function closeLogoutModal() {
 function logoutModalEscHandler(e) {
     if (e.key === 'Escape') closeLogoutModal();
 }
+// Mobile back-forward cache restores the page as it was (modal open, session gone)
+// despite no-store; reload so the server can redirect to login.
+window.addEventListener('pageshow', function (e) {
+    if (e.persisted) location.reload();
+});
 document.addEventListener('DOMContentLoaded', function () {
     var overlay = document.getElementById('logoutModalOverlay');
     if (overlay) {
@@ -39,9 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-// Instant active-tab feedback. The gold highlight is rendered server-side on
-// the *next* page, so a clicked tab shows nothing until that page finishes
-// loading — which reads as a lag. Paint the highlight immediately on click.
+// Highlight the clicked nav item immediately.
 document.addEventListener('click', function (e) {
     var link = e.target.closest('.sidebar-menu > a, .merchant-menu > a, .student-menu > a, .parent-menu > a');
     if (!link || link.classList.contains('active')) return;

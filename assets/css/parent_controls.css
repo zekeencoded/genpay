@@ -1,5 +1,4 @@
-/* Wallet Controls page-specific components. Shell components
-   (.parent-card, buttons, badges) live in parent_shell.css. */
+/* Wallet Controls page; shell styles are in parent_shell.css. */
 
 .control-card { background: #fff; border-radius: var(--ad-radius); border: 1px solid var(--ad-line); padding: 20px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16, 32, 24, 0.04); }
 .control-card h5 { font-weight: 800; font-size: 15px; color: var(--gp-ink); margin: 0 0 6px; }
@@ -26,8 +25,8 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
 .stat-pill { background: var(--gp-cream); border: 1.5px solid var(--ad-line); border-radius: var(--gp-radius); padding: 10px 16px; font-size: 13px; }
 .stat-pill strong { display: block; font-size: 18px; font-weight: 800; color: var(--gp-ink); font-family: var(--gp-mono); }
 .stat-pill span { color: var(--gp-muted); }
-.back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--gp-green-700); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 18px; }
-.back-link:hover { text-decoration: underline; }
+.back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 5px 12px; border: 1px solid var(--ad-line); border-radius: 999px; background: #fff; color: var(--gp-ink); font-size: 13px; font-weight: 700; text-decoration: none; }
+.back-link:hover { background: var(--gp-cream); color: var(--gp-ink); }
 .flash-msg { padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
 .flash-msg.success { background: var(--gp-success-bg); color: var(--gp-success); border: 1px solid #a8dcbe; }
 .flash-msg.error   { background: var(--gp-danger-bg); color: var(--gp-danger); border: 1px solid #f0b8b2; }

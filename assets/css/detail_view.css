@@ -1,23 +1,5 @@
-/* ============================================================
-   Detail view — shared chrome for every single-record "Read" page:
-   admin/view_user.php, admin/view_transaction.php, admin/view_audit.php
-   and the portal pages (student/merchant/parent view_transaction.php,
-   merchant/view_product.php, merchant/view_staff.php). Built entirely on
-   the gp-* "Scan & Pay" tokens, so it needs theme.css ahead of it — admin
-   pages get that via admin.css, portal pages via gjc-clear.css. The one
-   admin-only token it touches (--emerald-soft-2) carries a literal
-   fallback so the sheet stands on its own. The .uv-* namespace keeps it
-   clear of the per-page listing skins.
-
-   Direction: a record, not an app widget. The hero is a flat forest
-   slab (no gradient, no keyline), containers sit at a 4px
-   radius, and inline tags at 2px. Status is the one element allowed
-   to carry colour, and it does so as a filing tab.
-
-   Note: gjc-clear.css sets `* { letter-spacing: 0 !important }`,
-   so every intentional letter-spacing below carries !important to
-   survive it.
-   ============================================================ */
+/* ═══ Detail view — shared chrome for single-record view pages (.uv-*).
+   Needs theme.css. gjc-clear.css resets letter-spacing, so overrides use !important. ═══ */
 
 .uv-wrap { max-width: 940px; margin: 0 auto; padding: 30px 20px 56px; }
 .uv-download { margin-top: 18px; }
@@ -36,9 +18,7 @@
     font-size: 14px; font-weight: 700; color: var(--gp-muted); text-decoration: none;
 }
 .uv-back:hover { color: var(--gp-green-850); }
-/* --- Identity hero: a flat record header, not a floating balance card.
-   One solid forest field; the drop shadow is pulled
-   back to a hairline so the slab sits on the page instead of hovering. --- */
+/* --- Identity hero: flat forest header --- */
 .uv-hero {
     position: relative; overflow: hidden;
     border-radius: var(--gp-radius); background: var(--gp-green-950);
@@ -189,10 +169,7 @@
     }
 }
 
-/* --- Itemised receipt (portal view_transaction.php pages) ---
-   A till roll, not a data table: quantity in mono at a fixed gutter, name
-   in the middle, money right-aligned, hairline rules between lines and a
-   heavier rule above the total. --- */
+/* --- Itemised receipt (portal view_transaction pages) --- */
 .uv-items .gp-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .uv-items-count {
     flex: 0 0 auto; font-size: 11px; font-weight: 800; letter-spacing: .08em !important;
@@ -229,8 +206,7 @@
     display: flex; align-items: flex-start; gap: 9px;
 }
 
-/* Outgoing money reads red on the hero, incoming green — the portal pages
-   show one side of a movement, unlike the admin view which is neutral. */
+/* Outgoing red, incoming green. */
 .uv-amount.is-out { color: #fca5a5; }
 .uv-amount.is-in  { color: #8ef0b3; }
 

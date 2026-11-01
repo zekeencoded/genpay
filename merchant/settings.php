@@ -1,9 +1,5 @@
 <?php
-// ============================================================
-//  merchant/settings.php
-//  Business Profile - lets the merchant admin edit the display name
-//  and logo that appear publicly on the Stall Directory (stalls.php).
-// ============================================================
+// Business Profile: the owner's public display name, logo, documents and contact.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -45,9 +41,7 @@ if ($merchant) {
     );
 }
 
-// ── The application record, where the richer detail lives ────────────────
-// Merchants onboarded before the application workflow have no row here, so
-// every field below has to tolerate being absent rather than assumed present.
+// ── Application record (may not exist for older merchants) ──
 $application = null;
 if (gjc_table_exists($db, 'stall_applications')) {
     $appStmt = $db->prepare(
@@ -104,11 +98,7 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     $salesToday = ['amount' => (float) $amount, 'orders' => (int) $orders];
 }
 
-/**
- * users.contact_number is a BIGINT, so a Philippine mobile stored as
- * 09614708398 comes back as 9614708398 with the leading zero eaten. Put it
- * back rather than showing the merchant a number they cannot dial.
- */
+/** Restore the leading zero lost by the BIGINT contact_number column. */
 function profile_phone($value): string
 {
     $digits = preg_replace('/\D+/', '', (string) $value);
@@ -171,9 +161,7 @@ if ($ownerPhone === '0') {
     $ownerPhone = '';
 }
 
-// ── Completeness: what a finished stall profile has on file ──────────────
-// Every chip is an action: the logo and permits open a file picker, the
-// mobile number opens Edit contact.
+// ── Completeness chips (each opens its action) ──
 $profileChecks = $merchant ? [
     ['done' => $logoUrl !== null,                          'label' => 'Upload a logo',              'href' => null],
     ['done' => trim((string) $merchant['stall_name']) !== '', 'label' => 'Add a display name',      'href' => '#listing'],
@@ -210,7 +198,7 @@ $ordinal = static function (int $n): string {
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=12">

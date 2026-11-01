@@ -6,9 +6,7 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
-// Printable maintenance-fee statement for one student, for the registrar to add
-// to the tuition bill. Finance may print any student; a parent only their own
-// linked student (same rule as print_fee_waiver.php).
+// Maintenance-fee statement for the registrar. Finance: any student; parents: own linked student.
 gjc_require_role(['finance', 'parent']);
 gjc_ensure_maintenance_fees_schema($db);
 

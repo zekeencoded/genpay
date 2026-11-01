@@ -2,9 +2,7 @@
 @import url("theme.css?v=14");
 
 :root {
-  /* Alias layer — pure aliases of the shared gp-* theme
-     (assets/css/theme.css, the Scan & Pay design language).
-     theme.css is the single source of truth for the palette. */
+  /* Aliases of the gp-* palette in theme.css. */
   --emerald-950: var(--gp-green-950);
   --emerald-900: var(--gp-green-900);
   --emerald-800: var(--gp-green-850);
@@ -60,10 +58,7 @@ body {
   padding-right: 8px;
 }
 
-/* The 42px mark is wider than the collapsed rail's content box, so centre
-   the brand row and scale the mark down — the same treatment the <=992px
-   patch already applies. Without it the logo sat left-aligned and the
-   sidebar's overflow:hidden sliced it in half. */
+/* Centre and shrink the logo in the collapsed rail so it isn't clipped. */
 .admin-sidebar.collapsed .brand-box {
   justify-content: center;
   gap: 0;
@@ -162,12 +157,7 @@ body {
   position: relative;
 }
 
-/* Pending-count badge on a nav item. This was an inline style on Stall
-   Applications only; it is a class now because Top-ups and Encashments carry
-   it too. Expanded, it sits at the right end of the row. Collapsed to the icon
-   rail there is no room for a number, so it becomes a dot — the item still
-   reads as "work is waiting here". Colour is the existing --gp-red the inline
-   style already used; nothing new is introduced. */
+/* Pending-count badge on a nav item; a dot when the sidebar is collapsed. */
 .nav-badge {
   margin-left: auto;
   background: var(--gp-red);
@@ -284,9 +274,7 @@ body {
   width: calc(100% - 58px);
 }
 
-/* Full-bleed flat dark topbar, flush with the viewport edge —
-   identical to the student sd-topbar. The negative margins undo
-   .admin-main's padding on three sides. */
+/* Full-bleed topbar; negative margins undo .admin-main's padding. */
 .topbar {
   margin: calc(var(--main-pad) * -1) calc(var(--main-pad) * -1) 26px;
   padding: 18px 28px;
@@ -354,8 +342,7 @@ body {
   color: var(--gold);
 }
 
-/* The student balance-hero look: forest gradient with gold/green
-   radial glows (--gp-grad-hero), mono numbers. */
+/* Hero look: forest gradient with gold/green glows. */
 .metric-card {
   min-height: 152px;
   padding: 22px 24px;
@@ -579,8 +566,7 @@ a.mini-metric-card:focus-visible {
   color: #116232;
 }
 
-/* .premium-table styling now comes from the canonical table system in
-   theme.css (minimal hairline, one design for all roles). */
+/* .premium-table styles come from theme.css. */
 
 .table-icon {
   width: 22px;
@@ -859,11 +845,7 @@ a.mini-metric-card:focus-visible {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   TOKEN ECONOMY — CIRCULATION HEALTH WIDGET
-   Flat brand-green/gold/slate system (see assets/css/gjc-clear.css
-   for the shared --gjc-* tokens this widget is built on).
-═══════════════════════════════════════════════════════════ */
+/* ═══ TOKEN ECONOMY — CIRCULATION HEALTH WIDGET (uses --gjc-* tokens) ═══ */
 
 /* ── Section wrapper ─────────────────────────────────────── */
 .ce-section {
@@ -938,11 +920,7 @@ a.mini-metric-card:focus-visible {
   font-size: 14px;
 }
 
-/* ════════════════════════════════════════════════════════════
-   LEDGER PANEL — cap headline + the one proportional bar that
-   visualises the page's core invariant: vault + every wallet
-   pool always sums to the cap. Replaces the old hero stat row.
-════════════════════════════════════════════════════════════ */
+/* ═══ LEDGER PANEL — cap headline + bar showing vault + pools = cap ═══ */
 .ce-ledger-panel {
   background: var(--gjc-panel);
   border: 1px solid var(--gjc-line);
@@ -1041,8 +1019,7 @@ a.mini-metric-card:focus-visible {
   flex-shrink: 0;
 }
 
-/* Category colour mapping — single source of truth, reused on the
-   bar segments, legend dots, and pool-card icon chips below. */
+/* Category colours for bar segments, legend dots and pool icons. */
 .ce-pool-vault     { background: var(--gp-green-850); }
 .ce-pool-students  { background: var(--gp-gold); }
 .ce-pool-merchants { background: var(--gjc-slate); }
@@ -1409,11 +1386,7 @@ a.mini-metric-card:focus-visible {
 .btn-primary-custom:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(240, 165, 0, 0.32); }
 .btn-primary-custom:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-/* Sizing only. This shares a name with Bootstrap's .btn-sm modifier, so any
-   declaration here lands on every small Bootstrap button in the admin area —
-   which is why it must not set `border`: doing so stripped the outline off
-   .btn-outline-* buttons that theme.css does not restyle, leaving bare
-   coloured text. Colour and border belong to the variant, not the size. */
+/* Sizing only; shares Bootstrap's .btn-sm, so never set border here. */
 .btn-sm { padding: 7px 14px; border-radius: var(--gp-radius); font-size: 13px; font-weight: 800; cursor: pointer; }
 .btn-outline {
   background: transparent;
@@ -1446,23 +1419,10 @@ a.mini-metric-card:focus-visible {
 .badge-danger    { background: var(--gp-danger-bg); color: var(--gp-danger); }
 .badge-secondary { background: #e2e8f0; color: #475569; padding: 7px 11px; border-radius: var(--gp-radius); font-size: 12px; font-weight: 800; }
 
-/* ============================================================
-   Leases & Rent
-   ============================================================ */
+/* ═══ Leases & Rent ═══ */
 
 /* -- "How this works" explainer -- */
-/* ============================================================
-   NEEDS YOUR ATTENTION — the dashboard's first section.
-
-   The finance dashboard used to open with the Merchant/Tenant Directory,
-   so the first thing on screen was lease compliance while the four queues
-   that actually need clearing lived on other pages. This strip is the
-   answer to "what do I do now".
-
-   Shape and colour come straight from the existing stat-tile vocabulary
-   (white card, hairline, 40px icon chip, tabular figure) so it reads as
-   part of the same system rather than a new component.
-   ============================================================ */
+/* ═══ NEEDS YOUR ATTENTION — dashboard queue strip ═══ */
 
 .gp-attention-head {
   display: flex;
@@ -1550,14 +1510,7 @@ a.mini-metric-card:focus-visible {
   margin-top: 3px;
 }
 
-/* A queue with work waiting gets the keyline and the tinted icon chip; a clear
-   one stays on the page, greyed, so the user learns the set never changes.
-
-   The red stops at those two marks. "Open the queue" is a direction, not an
-   alarm, so it stays muted: three reds per card across four cards turns the
-   whole strip into a warning, and clearing these queues is the job, not an
-   incident. The same restraint is why the count badge in the sidebar keeps
-   red — one small mark carries it. */
+/* Active queues get a red keyline and tinted icon; clear ones stay greyed. */
 .gp-attention-card.is-active { border-left: 3px solid var(--gp-red); }
 .gp-attention-card.is-active .gp-attention-icon {
   background: var(--gp-danger-bg);
@@ -1605,8 +1558,7 @@ a.mini-metric-card:focus-visible {
 .gp-howto-toggle.is-collapsed .gp-howto-caret { transform: rotate(180deg); }
 .gp-howto-body {
   padding: 0 18px 6px;
-  /* Generous cap so the steps never clip on a narrow screen; max-height needs a
-     concrete value for the collapse to animate at all. */
+  /* max-height must be concrete for the collapse to animate. */
   max-height: 1400px;
   transition: max-height .28s ease, opacity .18s ease;
 }
@@ -1630,8 +1582,7 @@ a.mini-metric-card:focus-visible {
 .gp-howto-steps strong { color: var(--text-main); }
 .gp-howto-steps .gp-rent-badge { vertical-align: baseline; }
 
-/* Sitting under the rent roll it is reference material, not a lead banner:
-   quieter ground, and margin above instead of below. */
+/* Footnote variant: quieter, margin above. */
 .gp-howto.is-footnote {
   margin: 24px 0 0;
   background: var(--gjc-soft-2);
@@ -1656,13 +1607,7 @@ a.mini-metric-card:focus-visible {
   border: 1px solid rgba(180, 83, 9, 0.22);
 }
 .gp-notice.is-warning strong { color: var(--gp-warning); }
-/* A standing footnote, not an alert: the revenue-privacy note on
-   admin/merchant_details.php explains why a section is absent and never
-   changes, so it gets no fill, no border and no alert colour. It had been
-   using an .is-info variant — a full blue slab, the only blue on an
-   emerald/gold page — which out-shouted both the stat tiles above it and the
-   genuine overdue-rent warning below. Reads as a caption on the page
-   background instead. --gp-muted clears 4.5:1 on --gp-cream (4.60). */
+/* Standing caption note: no fill, no border. */
 .gp-notice.is-note {
   background: none;
   border: none;
@@ -1676,11 +1621,7 @@ a.mini-metric-card:focus-visible {
 .gp-notice.is-note > i { margin-top: 2px; font-size: 13px; color: var(--emerald-600); }
 .gp-notice.is-note strong { color: var(--text-main); font-weight: 700; }
 
-/* -- Label/value list for detail pages inside the admin shell
-   (admin/merchant_details.php). A plain definition list: label left, value
-   right, hairline between rows, two columns when there is room. No icon
-   boxes — one tinted square per field made the page read as a wall of
-   cards. -- */
+/* -- Label/value list for admin detail pages -- */
 .gp-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1778,8 +1719,7 @@ a.mini-metric-card:focus-visible {
   .md-figures > div:nth-child(n+3) { border-top: 1px solid var(--ad-line); }
 }
 
-/* A stat tile whose figure is a badge, not a number — the mono/tabular
-   treatment .detail-stat strong applies would fight the pill. */
+/* Stat tile whose value is a badge, not a number. */
 
 /* -- Uploaded documents, opened through the admin/doc.php proxy -- */
 .gp-doc-links { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1862,8 +1802,7 @@ a.mini-metric-card:focus-visible {
 .metric-card.is-filtering { outline: 2px solid var(--gp-green-700); outline-offset: 2px; }
 
 /* -- Lease ledger (admin/lease_details.php) -- */
-/* Back link for admin pages that drill into one record. The topbar already
-   carries the record's name, so this only has to point the way out. */
+/* Back link on admin detail pages. */
 .gp-detail-back a {
   display: inline-flex;
   align-items: center;
@@ -1875,14 +1814,7 @@ a.mini-metric-card:focus-visible {
 }
 .gp-detail-back a:hover { color: var(--emerald-800); }
 
-/* ── Detail-page section switcher ─────────────────────────────────────────
-   The tab strip on admin/merchant_details.php and admin/lease_details.php.
-   Both pages shipped the .gp-tabs / .gp-tab markup with no rule behind it,
-   so the switcher rendered as a row of bare anchors. Each tab is a link, not
-   a JS panel toggle — the href reloads the page with ?tab=, which is why the
-   active one is marked with .is-active server-side and carries aria-current.
-   Horizontally scrollable rather than wrapping, so a narrow screen keeps the
-   strip on one line instead of pushing the panel down. */
+/* ── Detail-page tabs (links with ?tab=); scrolls horizontally on narrow screens ── */
 .gp-tabs {
   display: flex;
   align-items: center;
@@ -1925,9 +1857,7 @@ a.mini-metric-card:focus-visible {
   box-shadow: var(--gp-focus-ring);
 }
 
-/* Active tab reads as filled, the same forest green the primary buttons use,
-   with a forest underline. (It was gold; gold lines on active and focused
-   states were removed app-wide.) */
+/* Active tab: filled forest green with underline. */
 .gp-tab.is-active,
 .gp-tab.is-active:hover {
   background: var(--gp-green-700);
@@ -2047,8 +1977,7 @@ a.mini-metric-card:focus-visible {
 .mt-2  { margin-top: 10px !important; }
 .mt-1  { margin-top: 6px !important; }
 
-/* An <a> to the stall's own page (admin/merchant_details.php), so the card
-   opens in a new tab, gets a real URL, and needs the link chrome reset. */
+/* Card is a link to the stall page; reset link styles. */
 .tenant-card {
   position: relative;
   display: block;
@@ -2065,8 +1994,7 @@ a.mini-metric-card:focus-visible {
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 
-/* Unread merchant-activity count, pinned to the card's top-right corner.
-   Cleared (server-side stamp + element removed) when the card is opened. */
+/* Unread merchant-activity badge; cleared when the card is opened. */
 .tenant-card-notif {
   position: absolute;
   top: -9px;

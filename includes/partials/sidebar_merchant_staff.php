@@ -1,9 +1,5 @@
 <?php
-// Partial: Merchant Staff sidebar — included by dashboard.php and friends.
-// Same sd-sidebar / sd-brand / sd-menu / sd-logout markup as
-// sidebar_merchant_admin.php / sidebar_student.php, just with staff's
-// reduced link set and "Cashier Staff" brand subtitle.
-// Requires: $currentPage string (e.g. 'dashboard', 'pos', 'inventory')
+// Partial: merchant staff sidebar (reduced links). Requires $currentPage.
 $currentPage = $currentPage ?? '';
 ?>
 <aside class="sd-sidebar" id="sdSidebar">
@@ -40,12 +36,7 @@ $currentPage = $currentPage ?? '';
     </a>
 </aside>
 <script>
-/* Rail collapse. The state has to survive navigation — every item in the rail
-   is a link, so without persisting it the sidebar sprang back open on the next
-   page load. The class is restored inline right after the <aside> (before
-   first paint, so there is no flash of the wide rail and no width transition),
-   and re-saved by watching the element itself. One key across the student,
-   merchant-admin and merchant-staff shells: it is the same component. */
+/* Rail collapse, persisted across pages (key shared by student and merchant shells). */
 function toggleSdSidebar() {
     var el = document.getElementById('sdSidebar');
     if (el) el.classList.toggle('collapsed');

@@ -1,16 +1,7 @@
 <?php
 /**
- * CRUD "Read": one row from the admin transaction feed.
- *
- * The id travels as a signed HMAC token, so the URL cannot be walked by
- * incrementing a number. The token is scoped to the source it was minted for,
- * so a token for a ledger row will not open the top-up request that happens to
- * share its id.
- *
- * ?source= mirrors gjc_fetch_admin_transactions()'s three feeds:
- *   ledger             -> transactions
- *   topup_request      -> topup_requests
- *   encashment_request -> encashment_requests
+ * View one admin transaction by signed, source-scoped token.
+ * ?source= ledger | topup_request | encashment_request
  */
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
@@ -23,12 +14,7 @@ if (!in_array($source, ['ledger', 'topup_request', 'encashment_request'], true))
     $source = 'ledger';
 }
 
-// The reference number is no longer a lookup key in the URL: the id the token
-// carries already identifies a row within its source, and matching on a
-// user-supplied ref would reopen the walkable address the token closes.
-// A missing or tampered token verifies to null and falls through to the same
-// "not available" screen as a genuine miss, so the page never reveals whether
-// a given record exists.
+// Invalid tokens show the same "not available" screen as a miss.
 $recordId = gjc_verify_view_token($_GET['token'] ?? null, 'admin_txn_' . $source);
 
 $transaction = $recordId !== null

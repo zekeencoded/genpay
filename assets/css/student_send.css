@@ -1,5 +1,4 @@
-/* Shared extras for the Send GenCoin (student/transfer.php) page, on top of the sd-* shell and the shared
-   pf-* / tu-* primitives. */
+/* Send GenCoin page (student/transfer.php) extras. */
 
 /* ===== SUCCESS CARD (transfer) ===== */
 .sp-btn-pay.sg-btn-send-another {

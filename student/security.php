@@ -43,11 +43,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             gjc_current_role(),
             'PASSWORD_CHANGE',
             'users',
-            // There is no before-state worth recording for a password: the old
-            // hash must never go in the log, and the previous value of a secret
-            // is not something an auditor should be able to read. This used to
-            // write the same placeholder string to both sides, which carried no
-            // information at all.
+            // No before-state for passwords.
             null,
             ['password_changed' => true, 'changed_via' => 'student_profile'],
             null,
@@ -81,7 +77,7 @@ $csrfToken = gjc_csrf_token();
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
 </head>
 

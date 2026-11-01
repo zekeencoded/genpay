@@ -1,36 +1,18 @@
 <?php
 /**
- * GenPay — Mailer Helper
- * Wraps PHPMailer with project SMTP credentials.
- *
- * Sending is ASYNC by default: gjc_queue_email() drops the message into the
- * storage/mail_spool file queue and returns in ~1ms, then a detached
- * background worker (connection/mail_worker.php) delivers it — so submit /
- * award / reject respond instantly instead of waiting 2-5s for the Gmail
- * SMTP handshake. The worker retries transient failures (3 attempts, 15s
- * apart) and parks permanent failures in storage/mail_spool/failed.
- *
- * Usage (async, preferred):
- *   gjc_queue_email($email, $name, $subject, $htmlBody, $altBody);
- *
- * Usage (synchronous, only where blocking is acceptable):
- *   $mail = gjc_mailer(); ... $mail->send();
+ * Mailer helper. gjc_queue_email() spools mail for the background worker
+ * (mail_worker.php); gjc_mailer() sends synchronously.
  */
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require_once __DIR__ . '/../PHPMailer-master/src/Exception.php';
-require_once __DIR__ . '/../PHPMailer-master/src/PHPMailer.php';
-require_once __DIR__ . '/../PHPMailer-master/src/SMTP.php';
+require_once __DIR__ . '/lib/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/lib/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/lib/PHPMailer/src/SMTP.php';
 
 /**
- * SMTP credentials, in precedence order: the MAIL_USER / MAIL_PASS environment
- * variables, then connection/mail_config.php (gitignored).
- *
- * Throws when neither supplies them. The worker calls gjc_mailer() before it
- * claims any spool file, so a missing config leaves queued emails in place to
- * be sent once it is fixed, instead of burning their retries on auth failures.
+ * SMTP credentials from MAIL_USER/MAIL_PASS, then mail_config.php. Throws if missing.
  *
  * @return array{user:string,pass:string}
  */
@@ -76,9 +58,7 @@ function gjc_mailer(): PHPMailer
     return $mail;
 }
 
-// ────────────────────────────────────────────────────────────────
-//  Async file-spool queue (no DB tables)
-// ────────────────────────────────────────────────────────────────
+// ── Async file-spool queue ──
 
 /** Spool directory for queued emails; created (and Apache-denied) on demand. */
 function gjc_mail_spool_dir(): string
@@ -87,8 +67,7 @@ function gjc_mail_spool_dir(): string
     if (!is_dir($dir)) {
         @mkdir($dir, 0755, true);
     }
-    // Spool files contain email bodies (including temp passwords) — the
-    // project root is the webroot, so deny HTTP access to the folder.
+    // Spool holds email bodies; block HTTP access.
     $ht = $dir . '/.htaccess';
     if (is_dir($dir) && !is_file($ht)) {
         @file_put_contents($ht, "Require all denied\n");
@@ -113,12 +92,7 @@ function gjc_spawn_mail_worker(): void
     }
 }
 
-/**
- * Queue an email for background delivery and return immediately.
- * Falls back to a synchronous send if the spool cannot be written, so a
- * broken spool never loses an email. Returns true when the message was
- * queued (or sent by the fallback).
- */
+/** Queue an email; falls back to a direct send if the spool fails. */
 function gjc_queue_email(
     string $toEmail,
     string $toName,
@@ -169,14 +143,7 @@ function gjc_send_now(
 }
 
 /**
- * Queues the one-stop stall application confirmation: the application was
- * received and a verification meeting has been auto-scheduled. Mirrors the
- * existing "Meeting Scheduled" template and adds the mandatory reminder to
- * bring the ORIGINAL documents to the meeting.
- *
- * Shared by the public submission form (apply.php). Never throws — returns a
- * ['sent' => bool, 'error' => string] result; 'sent' now means the email was
- * queued for immediate background delivery.
+ * Queue the stall application received / meeting scheduled email. Never throws.
  *
  * @return array{sent:bool,error:string}
  */
@@ -230,9 +197,7 @@ function gjc_send_stall_meeting_email(
 }
 
 /**
- * Queues the "your verification meeting was moved" notice, sent when finance
- * reschedules an applicant's auto-assigned slot. Shows the previous schedule
- * struck out next to the new one and repeats the bring-the-originals reminder.
+ * Queue the meeting rescheduled email.
  *
  * @return array{sent:bool,error:string}
  */
@@ -286,12 +251,7 @@ function gjc_send_stall_meeting_reschedule_email(
     return ['sent' => $queued, 'error' => $queued ? '' : 'Could not queue the reschedule email.'];
 }
 
-/**
- * Queues the "your application didn't go through, please re-apply" email —
- * shared by an admin's explicit reject and the automatic no-show expiry.
- * Moved here (from admin/api/stall_applications.php) so both call sites use
- * one template instead of two copies drifting apart.
- */
+/** Queue the application rejected/expired email. */
 function gjc_send_stall_application_termination_email(array $app, string $heading, string $intro, string $reason): void
 {
     $safeName   = htmlspecialchars($app['proprietor_name'], ENT_QUOTES, 'UTF-8');

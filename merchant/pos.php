@@ -28,9 +28,7 @@ if (gjc_table_exists($db, "merchant_inventory")) {
 // Get merchant wallet for this POS context
 $wallet = gjc_merchant_wallet($db, $ownerMerchId);
 
-// Recent transactions for the in-POS Transactions tab, so the cashier can
-// look up a sale without leaving the terminal. Full history lives on its
-// own page; this is just the latest slice.
+// Latest transactions for the POS Transactions tab.
 $recentTransactions = [];
 if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
     $txStmt = $db->prepare(
@@ -56,7 +54,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=26">
@@ -97,9 +95,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                     </button>
                 </div>
 
-                <!-- Queue: today's orders in arrival order (#1, #2, #3...).
-                     Tapping one shows its detail on the right, in place of
-                     the Register panel. -->
+                <!-- Queue: today's orders; tapping one opens its detail. -->
                 <div class="pos-pane" id="posPaneQueue">
                     <h4><span class="me-dot me-dot-green me-pulse" style="margin-right:6px"></span>Order Queue</h4>
                     <div id="queueList" class="pq-list">
@@ -215,9 +211,7 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                 </div>
             </div>
 
-            <!-- Register: walk-in cart + checkout, beside the product/queue
-                 tabs so the cashier never leaves this screen. Swaps out for
-                 the order detail view when a queue order is opened. -->
+            <!-- Register: walk-in cart + checkout. -->
             <div class="pos-cart-panel">
                 <div class="pos-pane" id="posRegisterView">
                     <h4>Walk-in Order</h4>
@@ -763,6 +757,7 @@ async function voidQueueOrder(uid, btn) {
     try {
         const fd = new FormData();
         fd.append('action', 'void_order');
+        fd.append('csrf_token', POS_CSRF);
         fd.append('order_id', order.id);
         fd.append('source', order.source);
         const res = await fetch(LIVE_QUEUE_API, { method: 'POST', body: fd });
@@ -1061,9 +1056,7 @@ function lwGc(cash) {
     return (cash / 10).toLocaleString('en-PH', {maximumFractionDigits:2});
 }
 
-// `cash` is what the RECIPIENT RECEIVES; both fees are added on top. The
-// merchant is debited base + both fees and gets their own cut straight back,
-// so their real cost is base + systemFee. Rates come from CirculationEngine.
+// `cash` is what the recipient receives; fees are added on top.
 const LW_SYSTEM_RATE   = <?= json_encode(CirculationEngine::FEE_SYSTEM_RATE) ?>;
 const LW_MERCHANT_RATE = <?= json_encode(CirculationEngine::FEE_MERCHANT_RATE) ?>;
 

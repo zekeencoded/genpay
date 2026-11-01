@@ -1,7 +1,5 @@
 <?php
-// CLI regression: the public apply form refuses uploads once one network address
-// passes the hourly limit. A temporary login_attempts table keeps real rows
-// untouched, and no file is ever moved (the limit is checked first).
+// CLI test: apply uploads are refused past the hourly per-IP limit.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';

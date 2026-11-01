@@ -594,11 +594,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                 return;
             }
 
-            /* Minting is the only irreversible act in a closed-loop economy and
-               it had no confirmation at all, while banning a single account
-               asks you to type the word BAN. One stray zero multiplies the
-               money supply by ten, so the amount is echoed back in full and the
-               resulting vault total is shown before anything is committed. */
+            /* Confirm the amount and resulting vault total before minting. */
             const ok = await gpConfirm({
                 title: 'Add money to the system?',
                 body: 'This creates new GenCoin and raises the circulation cap. It cannot be undone or reversed.',
@@ -625,18 +621,13 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
             });
 
             if (data.success) {
-                /* Reload rather than print a Refresh link: the vault, cap and
-                   pool cards sitting directly above this form are now stale,
-                   and a success message beside stale figures is worse than a
-                   brief wait. */
+                /* Reload so the figures above are current. */
                 gpToast('Added ' + gpMoney(amount) + ' to the vault.');
                 setTimeout(() => location.reload(), 1200);
                 return;
             }
 
-            /* data.error was being injected as unescaped innerHTML; gpToast
-               sets textContent. mint.php answers with .error where the rest of
-               admin/api answers with .message, so read both. */
+            /* mint.php returns .error; other APIs use .message. */
             gpToast(data.error || data.message || 'The amount could not be added.', false);
             gpBusyDone(btn);
         });

@@ -7,8 +7,7 @@
   margin-bottom: 24px !important;
 }
 
-/* Appearance (bg, radius, shadow, border, text/icon colors, ::after) is unified
-   in gjc-clear.css — these higher-specificity rules must stay layout-only */
+/* Layout only; appearance lives in gjc-clear.css. */
 .transactions-page .transaction-stat-card {
   min-height: 165px !important;
   padding: 24px !important;
@@ -129,8 +128,6 @@
   font-weight: 800;
 }
 
-/* TABLE — .transactions-table styling now comes from the canonical
-   table system in theme.css. */
 
 .reference-text,
 .transaction-amount {

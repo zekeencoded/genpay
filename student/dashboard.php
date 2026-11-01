@@ -20,9 +20,7 @@ if ($studentFirstName === '') {
 }
 $balance     = (float) $wallet['balance'];
 
-// Not enrolled for the active school year. gjc_enforce_student_lock() has
-// already turned away the money-moving pages and sent them here; the balance
-// stays on screen because it is still theirs and is not going anywhere.
+// Unenrolled: money pages are blocked, balance still shown.
 $walletState  = gjc_student_wallet_state($db, (int) $currentUser['id']);
 $isUnenrolled = $walletState === 'frozen_unenrolled';
 // Graduated / transferred out: the wallet is closed and the remaining balance
@@ -111,7 +109,7 @@ $currentPage = 'dashboard';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <style>
         /* Not-enrolled notice. Reversible state, so it reads as information,
            not alarm — warning tokens, never the danger scale. */
@@ -133,9 +131,7 @@ $currentPage = 'dashboard';
             <?php
             $topbarTitle = $e($greeting) . ', ' . $e($studentFirstName);
             $topbarSubtitle = "Here's what's happening with your wallet today.";
-            // Kept on phones: this one is the greeting, not a caption
-            // restating the title. It is the only page where the bar is
-            // saying something to the student rather than labelling itself.
+            // Keep the greeting on phones.
             $topbarSubtitleMobile = true;
             $topbarShowBell = true;
             require __DIR__ . '/../includes/partials/topbar_student.php';
@@ -150,9 +146,12 @@ $currentPage = 'dashboard';
                     <div>
                         <h3>Your wallet is frozen</h3>
                         <p>
-                            Spending, transfers, and cash-in are paused because you have graduated or transferred out. Your remaining
-                            balance below is safe &mdash; you can still withdraw it at the Finance office.
+                            Spending, receiving, and cash-in are paused because you have graduated or transferred out. Your remaining
+                            balance below is safe &mdash; you can still send it to another student.
                         </p>
+                        <a href="<?= STUDENT_URL ?>/transfer.php" class="btn btn-success btn-sm mt-2">
+                            <i class="fa-solid fa-paper-plane"></i> Send GenCoin
+                        </a>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -166,7 +165,7 @@ $currentPage = 'dashboard';
                         <p>
                             Your balance below is intact and stays preserved &mdash; nothing has been taken from your
                             wallet. Paying at the canteen, sending GenCoin, and requesting a top-up are paused until
-                            your enrollment is recorded. You can still withdraw your remaining balance at the Finance office. Contact Finance to update your status.
+                            your enrollment is recorded. Contact Finance to update your status.
                         </p>
                     </div>
                 </div>

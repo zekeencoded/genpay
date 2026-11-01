@@ -1,12 +1,5 @@
 <?php
-// ============================================================
-//  student/api/fee_waiver_claim.php
-//  Self-service claim: a student turns their own posted Fee Waiver
-//  Credit into real GenCoin, minted straight into their wallet via
-//  CirculationEngine::feeWaiverClaim() (see connection/app.php's
-//  gjc_claim_fee_waiver_credit(), shared with the parent-side endpoint).
-//  Final and one-way — there is no un-claim action.
-// ============================================================
+// Student claims their posted Fee Waiver Credit into GenCoin (one-way).
 declare(strict_types=1);
 header('Content-Type: application/json');
 

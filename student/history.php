@@ -61,6 +61,22 @@ if ($wallet['id'] > 0 && gjc_table_exists($db, 'transactions')) {
     }
 }
 
+// Received transfers live on the sender's ledger row; list them here too.
+foreach (gjc_received_transfers($db, (int) ($wallet['id'] ?? 0)) as $row) {
+    $message = trim((string) ($row['transfer_message'] ?? ''));
+    $transactions[] = [
+        'id' => (int) $row['id'],
+        'source' => 'received_transfer',
+        'ref' => (string) ($row['reference_no'] ?: 'N/A'),
+        'desc' => 'From ' . gjc_user_label($db, (int) $row['initiated_by']) . ($message !== '' ? ' — ' . $message : ''),
+        'type' => 'Transfer Received',
+        'amount' => (float) ($row['amount'] ?? 0),
+        'status' => gjc_transaction_status_label((string) ($row['status'] ?? 'completed')),
+        'created_at' => (string) ($row['created_at'] ?? ''),
+        'date' => !empty($row['created_at']) ? date('M d, Y h:i A', strtotime((string) $row['created_at'])) : 'N/A',
+    ];
+}
+
 if (gjc_table_exists($db, 'topup_requests')) {
     $stmt = $db->prepare(
         "SELECT id, reference_no, amount, payment_method, status, created_at
@@ -108,7 +124,7 @@ $currentPage = 'history';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
 </head>
 
@@ -221,10 +237,7 @@ $currentPage = 'history';
     <?php require __DIR__ . '/../includes/partials/datatables_assets.php'; ?>
     <script src="<?= JS_URL ?>/gjc_table_cards.js?v=1"></script>
     <script>
-    // ── Live wallet stats — balance/received/spent stay current without a
-    // manual reload. The transaction table itself is left to a normal reload
-    // since it's a DataTables instance; swapping its rows via raw innerHTML
-    // would desync DataTables' internal state (pagination/search/sorting). ──
+    // ── Live wallet stats (table refreshes on reload; DataTables owns its rows) ──
     const historyBalanceValue = document.getElementById("historyBalanceValue");
     const historyReceivedValue = document.getElementById("historyReceivedValue");
     const historySpentValue = document.getElementById("historySpentValue");

@@ -37,9 +37,7 @@ foreach ($linkedStudents as $s) {
     }
 }
 
-// Filters — the wallet selector is re-verified against the linked-wallet set
-// below, never trusted as-is (a parent could otherwise probe any wallet id).
-// 'me' includes every transaction on the parent's wallet, including allowances.
+// Filters; the wallet filter is re-verified below. 'me' = the parent's own wallet.
 $walletFilter    = trim((string) ($_GET['student'] ?? '0'));
 $showOwnOnly     = ($walletFilter === 'me' && $parentWalletId > 0);
 $selectedStudent = $showOwnOnly ? 0 : (int) $walletFilter;
@@ -90,9 +88,7 @@ foreach ($rows as &$r) {
     $meta = gjc_student_txn_meta($type);
     $r['label'] = $type === 'top_up' ? 'Top-up' : ($type === 'p2p_transfer' ? 'Transfer' : ($type === 'student_withdraw' ? 'Withdrawal' : $meta['label']));
     $r['incoming'] = $meta['incoming'];
-    // Whose wallet the money moved on — the parent's own, or a linked child's.
-    // In the parent's wallet filter, allowances are outgoing. In the combined
-    // trail they are attributed to the student recipient and shown only once.
+    // Own wallet or a linked child's.
     $r['is_own'] = ((int) $r['parent_wallet_id'] > 0
         && (int) $r['parent_wallet_id'] === $parentWalletId
         && ($showOwnOnly || (int) $r['student_wallet_id'] === 0));
@@ -124,6 +120,23 @@ unset($r);
 $ownCount     = count(array_filter($rows, static fn(array $r): bool => $r['is_own']));
 $studentCount = count($rows) - $ownCount;
 
+// What the filter sheet has applied, in words, for the line under the Filters button.
+$activeFilters = (int) ($walletFilter !== '0') + (int) ($filterType !== '')
+    + (int) ($dateFrom !== '') + (int) ($dateTo !== '');
+$filterSummary = [];
+if ($showOwnOnly) {
+    $filterSummary[] = 'My transactions';
+} elseif ($selectedStudent > 0) {
+    $filterSummary[] = $studentByWallet[$selectedStudent] ?? '';
+}
+if ($filterType !== '') {
+    $filterSummary[] = $typeOptions[$filterType];
+}
+if ($dateFrom !== '' || $dateTo !== '') {
+    $filterSummary[] = ($dateFrom !== '' ? date('M j, Y', strtotime($dateFrom)) : 'Start')
+        . ' to ' . ($dateTo !== '' ? date('M j, Y', strtotime($dateTo)) : 'today');
+}
+
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $currentPage = 'activity';
 ?>
@@ -137,9 +150,9 @@ $currentPage = 'activity';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_wallet.css?v=18">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
 </head>
 <body class="gp-theme">
@@ -166,48 +179,26 @@ $currentPage = 'activity';
             </div>
             <?php endif; ?>
 
-            <div class="parent-card">
-                <form method="GET" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
-                    <div style="min-width:180px;">
-                        <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">Wallet</label>
-                        <select name="student" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
-                            <option value="0" <?= $walletFilter === '0' ? 'selected' : '' ?>>All Wallets</option>
-                            <?php if ($parentWalletId > 0): ?>
-                            <option value="me" <?= $showOwnOnly ? 'selected' : '' ?>>My Transactions (Parent)</option>
-                            <?php endif; ?>
-                            <?php foreach ($linkedStudents as $s): ?>
-                            <?php if ((int) $s['wallet_id'] <= 0) continue; ?>
-                            <option value="<?= (int) $s['wallet_id'] ?>" <?= $selectedStudent === (int) $s['wallet_id'] ? 'selected' : '' ?>>
-                                <?= $e(trim($s['first_name'] . ' ' . $s['last_name'])) ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div style="min-width:160px;">
-                        <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">Type</label>
-                        <select name="type" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
-                            <?php foreach ($typeOptions as $val => $label): ?>
-                            <option value="<?= $e($val) ?>" <?= $filterType === $val ? 'selected' : '' ?>><?= $e($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div style="min-width:150px;">
-                        <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">From</label>
-                        <input type="date" name="from" value="<?= $e($dateFrom) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
-                    </div>
-                    <div style="min-width:150px;">
-                        <label style="display:block;font-size:12px;font-weight:700;color:var(--gp-muted);margin-bottom:6px;">To</label>
-                        <input type="date" name="to" value="<?= $e($dateTo) ?>" style="width:100%;height:42px;border:1.5px solid var(--ad-line);border-radius:10px;padding:0 12px;font-size:14px;">
-                    </div>
-                    <button type="submit" class="parent-btn parent-btn--forest" style="height:42px;">Filter</button>
-                    <a href="<?= PARENT_URL ?>/activity.php" class="parent-btn" style="height:42px;">Reset</a>
-                </form>
+            <!-- Filters open on their own page; this line only says what is applied. -->
+            <div class="pa-bar">
+                <a href="<?= PARENT_URL ?>/activity_filter.php?<?= $e(http_build_query([
+                        'student' => $walletFilter,
+                        'type'    => $filterType,
+                        'from'    => $dateFrom,
+                        'to'      => $dateTo,
+                    ])) ?>" class="pa-filter-btn">
+                    <i class="fa-solid fa-sliders"></i> Filters
+                </a>
+                <?php if ($activeFilters): ?>
+                <a href="<?= PARENT_URL ?>/activity.php" class="pa-filter-reset">Clear</a>
+                <p class="pa-summary"><?= $e(implode(', ', array_filter($filterSummary))) ?></p>
+                <?php endif; ?>
             </div>
 
             <div class="parent-card">
                 <div class="parent-card-head">
                     <h5><i class="fa-solid fa-list-check me-2" style="color:var(--gp-green-700)"></i>Transactions</h5>
-                    <span style="font-size:12px;color:var(--gp-muted);">
+                    <span class="pa-count">
                         <?= count($rows) ?> records (max 300)<?php if ($ownCount && $studentCount): ?>
                         &middot; <?= $ownCount ?> yours, <?= $studentCount ?> your students'<?php endif; ?>
                     </span>
@@ -219,14 +210,14 @@ $currentPage = 'activity';
                 </div>
                 <?php else: ?>
                 <div class="table-responsive">
-                    <table class="table align-middle js-datatable parent-table" id="activityTable" data-page-length="15">
+                    <table class="table align-middle js-datatable parent-table" id="activityTable" data-page-length="15" data-hide-filter="true">
                         <thead>
                             <tr>
                                 <th>Date &amp; Time</th>
-                                <th data-card="title">Reference</th>
+                                <th data-card="hide">Reference</th>
                                 <th>Wallet</th>
-                                <th data-card="hide">Type</th>
-                                <th data-card="hide">Items</th>
+                                <th>Type</th>
+                                <th data-card="title">Items</th>
                                 <th data-card="amount">Amount</th>
                                 <th>Status</th>
                                 <th class="text-end">Action</th>
@@ -245,8 +236,8 @@ $currentPage = 'activity';
                                     <?php endif; ?>
                                 </td>
                                 <td><?= $e($r['label']) ?></td>
-                                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--gp-muted);" title="<?= $e($r['items_summary']) ?>">
-                                    <?= $r['items_summary'] !== '' ? $e($r['items_summary']) : '—' ?>
+                                <td class="pa-items" title="<?= $e($r['items_summary']) ?>">
+                                    <?= $e($r['items_summary'] !== '' ? $r['items_summary'] : $r['label']) ?>
                                 </td>
                                 <td style="color:<?= $r['incoming'] ? 'var(--gp-success)' : 'var(--gp-ink)' ?>;font-weight:700;">
                                     <?= $r['incoming'] ? '+' : '−' ?>&#8369;<?= number_format((float) $r['amount'], 2) ?>
@@ -280,6 +271,35 @@ $currentPage = 'activity';
 function toggleParentSidebar() {
     document.getElementById('parentSidebar').classList.toggle('collapsed');
 }
+
+/* Number the pager with as many page buttons as fit between Prev and Next. */
+function fitPager() {
+    const ul = document.querySelector('#activityTable_wrapper .dataTables_paginate ul.pagination');
+    if (!ul) return;
+    ul.querySelectorAll('.ellipsis').forEach(li => { li.style.display = 'none'; });
+    const pages = Array.from(ul.querySelectorAll('.page-item:not(.previous):not(.next):not(.ellipsis)'));
+    pages.forEach(li => { li.style.display = 'none'; });
+    const current = pages.findIndex(li => li.classList.contains('active'));
+    if (current < 0) return;
+    pages[current].style.display = '';
+    // Grow outward from the current page until the row would overflow.
+    for (let d = 1; d < pages.length; d++) {
+        for (const i of [current - d, current + d]) {
+            if (i < 0 || i >= pages.length) continue;
+            pages[i].style.display = '';
+            if (ul.scrollWidth > ul.clientWidth) {
+                pages[i].style.display = 'none';
+                return;
+            }
+        }
+    }
+}
+
+jQuery(function ($) {
+    $('#activityTable').on('draw.dt', fitPager);
+    window.addEventListener('resize', fitPager);
+    fitPager();
+});
 </script>
 
 <?php require __DIR__ . '/../includes/partials/bottom_nav_parent.php'; ?>

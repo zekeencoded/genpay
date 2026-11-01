@@ -1,34 +1,11 @@
 <?php
 
 /**
- * Central, append-only audit logger.
- *
- * Storage is hardened by `database/migrations/audit_hardening.php`, which is the
- * ONLY thing allowed to touch this table's shape. It runs as root from the CLI
- * and it:
- *   - adds the columns listed in gjc_audit_required_columns()
- *   - installs BEFORE UPDATE / BEFORE DELETE triggers that SIGNAL an error, so
- *     the table is append-only at the database level, not just by convention
- *   - creates the `gjc_audit_writer` account with INSERT + SELECT on this one
- *     table and nothing else, and writes its password to
- *     connection/audit_config.php
- *
- * Nothing in the request path issues DDL any more. This file used to run seven
- * ALTER TABLEs and one UPDATE on every single page load, which meant the app
- * connection needed ALTER on the audit table — and a connection that can ALTER
- * the audit log can also rewrite it. gjc_ensure_audit_table() is now a cached
- * read-only check that shouts into the error log if the migration hasn't run.
- *
- * The connection is separate from the app's `$db` by design and has no fallback
- * to it. If the audit credentials are missing, logging stops loudly rather than
- * quietly downgrading to an account that could tamper with what it writes.
+ * Append-only audit logger. Schema, triggers and the writer account come from
+ * database/migrations/audit_hardening.php; there is no fallback to the app DB.
  */
 
-/**
- * Columns `database/migrations/audit_hardening.php` is responsible for adding.
- * Used both by the migration (to know what to create) and by the runtime check
- * below (to know what to complain about).
- */
+/** Columns the audit hardening migration adds. */
 function gjc_audit_required_columns(): array
 {
     return [
@@ -45,13 +22,7 @@ function gjc_audit_required_columns(): array
     ];
 }
 
-/**
- * Which of gjc_audit_required_columns() are not on the live table.
- *
- * Cached for the request — every page that logs anything calls this, and one
- * SHOW COLUMNS per request is the whole budget we want to spend on it.
- * Returns the sentinel ['__table_missing__'] when the table isn't there at all.
- */
+/** Required columns missing from the live table (cached per request). */
 function gjc_audit_schema_missing_columns(PDO $pdo, bool $refresh = false): array
 {
     static $missing = null;
@@ -75,12 +46,7 @@ function gjc_audit_schema_missing_columns(PDO $pdo, bool $refresh = false): arra
     return $missing;
 }
 
-/**
- * Read-only health check. This used to create the table and run seven ALTERs on
- * every request; it now only looks, and tells the operator to run the migration
- * if the shape is wrong. Same signature and same call sites as before, so the
- * pages that call it with the app connection keep working unchanged.
- */
+/** Read-only check; logs a warning if the migration hasn't run. */
 function gjc_ensure_audit_table(PDO $pdo): void
 {
     static $warned = false;
@@ -101,13 +67,7 @@ function gjc_ensure_audit_table(PDO $pdo): void
     );
 }
 
-/**
- * Credentials for the audit connection, in precedence order:
- * environment variables, then connection/audit_config.php.
- *
- * Returns null when neither supplies a user and a password. There is no root
- * fallback on purpose — see the note at the top of this file.
- */
+/** Audit credentials from env vars, then audit_config.php. No root fallback. */
 function gjc_audit_credentials(): ?array
 {
     static $creds = null;
@@ -158,12 +118,7 @@ function gjc_audit_credentials(): ?array
     return $creds;
 }
 
-/**
- * The audit connection, or null if it cannot be opened.
- *
- * A failure is cached for the rest of the request so a dead audit database
- * costs one connection attempt per request instead of one per logged action.
- */
+/** Audit connection, or null. Failures are cached for the request. */
 function gjc_audit_pdo(): ?PDO
 {
     static $auditPdo = null;
@@ -195,10 +150,7 @@ function gjc_audit_pdo(): ?PDO
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
-        // Timestamps are written and read as UTC on this connection regardless of
-        // what the server or the app connection is set to, so the hash chain
-        // hashes the same string everywhere and a server tz change can't shift
-        // historic rows.
+        // Use UTC so the hash chain is stable across server timezones.
         $auditPdo->exec("SET time_zone = '+00:00'");
     } catch (Throwable $e) {
         $failed = true;
@@ -213,16 +165,7 @@ function gjc_audit_pdo(): ?PDO
     return $auditPdo;
 }
 
-/**
- * Recursively blank out anything that looks like a credential before it is
- * written to the log. Applied to old_value/new_value on every call, and by the
- * hardening migration to legacy rows.
- *
- * Flag-shaped values are kept: `force_password_change: 1` and
- * `password_changed: true` match the key pattern but carry no secret, and
- * redacting them would throw away the only signal those entries have. A numeric
- * PIN (`pin: 1234`) is not flag-shaped and is still redacted.
- */
+/** Redact credential-like values; flag values like `password_changed: true` are kept. */
 function gjc_audit_redact($value)
 {
     if (is_array($value)) {
@@ -262,14 +205,7 @@ function gjc_audit_flag_shaped($value): bool
     return false;
 }
 
-/* ── Action types ───────────────────────────────────────────────────────────
- *
- * ONE list. It used to live in three places that had to be edited together —
- * the DB enum, a `$allowedActions` array inside logAudit(), and the filter in
- * admin/audit_log.php — and forgetting the second one made logAudit() return
- * without inserting anything, silently. The column is now VARCHAR, so this
- * constant is the only gate, and admin/audit_log.php builds its filter from it.
- */
+/* ── Action types (single source; also feeds the admin/audit_log.php filter) ── */
 
 const AUDIT_ACTION_TYPES = [
     // Authentication
@@ -328,14 +264,7 @@ const AUDIT_ACTION_TYPES = [
     'MIGRATION_ROLE_RELABEL',
 ];
 
-/**
- * Retired labels. Still in the table, so the viewer must be able to filter on
- * them, but rejected for new writes.
- *
- * TUITION_CREDIT belonged to admin/api/tuition_credits.php, which no longer
- * exists — fee waivers replaced it and log FEE_WAIVER_STATUS_CHANGE. Two rows
- * survive from the old feature.
- */
+/** Retired labels: filterable in the viewer, rejected for new writes. */
 const AUDIT_LEGACY_ACTION_TYPES = [
     'TUITION_CREDIT',
 ];
@@ -353,15 +282,7 @@ function gjc_audit_action_types(bool $includeLegacy = false): array
 
 /* ── Display helpers (used by the audit viewer) ────────────────── */
 
-/**
- * Format a stored audit timestamp in Asia/Manila.
- *
- * Takes a UNIX epoch, not the raw column. A MySQL TIMESTAMP is rendered in
- * whatever the reading session's time_zone happens to be — +08 on this server
- * today, UTC on the audit connection, something else after a server move. So
- * the viewer selects UNIX_TIMESTAMP(timestamp), which is tz-independent, and
- * this converts it once, explicitly, here.
- */
+/** Format a UNIX epoch in Asia/Manila (pass UNIX_TIMESTAMP, not the raw column). */
 function gjc_audit_manila(?int $epoch, string $format = 'M j, Y g:i A'): string
 {
     if ($epoch === null) {
@@ -377,33 +298,20 @@ function gjc_audit_manila(?int $epoch, string $format = 'M j, Y g:i A'): string
     }
 }
 
-/**
- * True when this entry predates the hash chain and cannot be verified.
- * Not the same as "broken" — unverifiable, and badged as such in the viewer.
- */
+/** Row predates the hash chain: unverifiable, not broken. */
 function gjc_audit_is_legacy_row(array $row): bool
 {
     return ($row['entry_hash'] ?? null) === null;
 }
 
-/**
- * Display name for affected_table.
- *
- * Entries written before Phase 3 name "e_wallet_transactions", a table that has
- * never existed in this database — the real one is `transactions`. Those rows
- * cannot be rewritten (the log is append-only), so the viewer relabels them
- * instead of pretending the value was always right.
- */
+/** Display name for affected_table; relabels the old "e_wallet_transactions" value. */
 function gjc_audit_table_label(?string $table): string
 {
     $table = (string) $table;
     return $table === 'e_wallet_transactions' ? 'transactions (legacy)' : $table;
 }
 
-/**
- * Whether the audit writer is usable, for the viewer's warning banner.
- * Returns [ok, message].
- */
+/** Audit writer health for the viewer banner. Returns [ok, message]. */
 function gjc_audit_health(PDO $db): array
 {
     $missing = gjc_audit_schema_missing_columns($db);
@@ -427,10 +335,7 @@ function gjc_audit_health(PDO $db): array
 
 /* ── Request context ────────────────────────────────────────────────────── */
 
-/**
- * One id shared by every entry this request writes, so the five rows a stall
- * award produces can be pulled back together as one action.
- */
+/** One id shared by every entry written in this request. */
 function gjc_audit_correlation_id(): string
 {
     static $id = null;
@@ -440,11 +345,7 @@ function gjc_audit_correlation_id(): string
     return $id;
 }
 
-/**
- * A stable, non-reversible handle for the current session. Ties a user's
- * entries together without putting a live session id in a table that finance
- * staff can read.
- */
+/** Non-reversible session handle, so raw session ids aren't stored. */
 function gjc_audit_session_ref(): ?string
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -454,30 +355,13 @@ function gjc_audit_session_ref(): ?string
     return ($sid === '' || $sid === false) ? null : substr(hash('sha256', $sid), 0, 16);
 }
 
-/**
- * The client address. Deliberately REMOTE_ADDR only: X-Forwarded-For is
- * attacker-controlled unless a trusted proxy is in front rewriting it, and
- * there is no such proxy here. A forgeable IP in an audit log is worse than a
- * boring one.
- */
+/** REMOTE_ADDR only; X-Forwarded-For is spoofable without a trusted proxy. */
 function gjc_audit_ip(): string
 {
     return substr((string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'), 0, 45);
 }
 
-/**
- * Map any role string the app uses onto one of the stored user_role labels.
- *
- * Every label this returns must also be accepted as INPUT: logAudit() feeds
- * gjc_audit_role_from_user()'s output straight back through here, so a label
- * that does not round-trip would be silently downgraded.
- *
- * 'parent' was missing until now and fell through to the default, so every
- * parent action — logins, password changes, allowance transfers, the wallet
- * controls — was filed under 'Student'. Filtering the audit log by Student
- * returned a guardian's activity. 30 rows were affected before this was fixed;
- * database/migrations/audit_hardening.php relabels them.
- */
+/** Map an app role to a stored user_role label. Output must round-trip as input. */
 function gjc_audit_role(string $role): string
 {
     $role = strtolower(trim($role));
@@ -491,8 +375,7 @@ function gjc_audit_role(string $role): string
         'system' => 'System',
         'anonymous' => 'Anonymous',
         'unknown' => 'Unknown',
-        // An unrecognised role is a bug, not a student. Guessing 'Student' here
-        // put words in a real role's mouth and hid the mistake; say so instead.
+        // Unknown role is a bug; don't guess 'Student'.
         default => gjc_audit_role_unknown($role),
     };
 }
@@ -523,9 +406,6 @@ function gjc_audit_role_from_user(PDO $pdo, int $userId): string
             3, 4, 8 => 'Finance',
             6 => 'Vendor/Staff',
             7 => 'Parent',
-            // Falling back to 'student' here was the same guess by another
-            // route: it turned a roleID this function does not know about into
-            // a student. An absent session role now reads as Unknown.
             default => gjc_audit_role((string) ($_SESSION['role'] ?? '')),
         };
     } catch (Throwable) {
@@ -537,11 +417,7 @@ function gjc_audit_role_from_user(PDO $pdo, int $userId): string
 
 const AUDIT_PAYLOAD_MAX_BYTES = 16384;
 
-/**
- * Redact, encode, and cap. Oversized payloads used to throw inside the INSERT
- * under STRICT_TRANS_TABLES and take the whole entry down with them; now the
- * entry survives and says it was cut.
- */
+/** Redact, JSON-encode and cap the size so oversized payloads don't fail the insert. */
 function gjc_audit_json($value): ?string
 {
     if ($value === null) {
@@ -570,14 +446,7 @@ function gjc_audit_json($value): ?string
 
 /* ── Hash chain ─────────────────────────────────────────────────────────── */
 
-/**
- * The stored fields that are hashed, in a fixed order. Both the writer and
- * gjc_audit_verify_chain() build their canonical string from this list, so the
- * two cannot drift.
- *
- * log_id is not in it — it isn't known before the INSERT. Ordering and deletion
- * are caught by prev_hash linkage instead.
- */
+/** Hashed fields in fixed order (shared by writer and verifier). */
 function gjc_audit_chain_fields(): array
 {
     return [
@@ -588,13 +457,7 @@ function gjc_audit_chain_fields(): array
     ];
 }
 
-/**
- * sha256(prev_hash | canonical JSON of this row).
- *
- * Types are normalised on both sides — user_id as int, everything else as a
- * string or null — because what PDO hands back on a read is not always what PHP
- * handed in on the write.
- */
+/** sha256(prev_hash | canonical row JSON), with types normalised. */
 function gjc_audit_chain_hash(?string $prevHash, array $row): string
 {
     $canonical = [];
@@ -613,16 +476,7 @@ function gjc_audit_chain_hash(?string $prevHash, array $row): string
     );
 }
 
-/**
- * Walk the chain and report the first row that does not add up.
- *
- * Two different breakages are detected: a row whose entry_hash no longer
- * matches its own contents (edited), and a row whose prev_hash does not match
- * the entry_hash of the row before it (something removed or reordered).
- *
- * Rows written before the chain existed have entry_hash NULL and are skipped —
- * they are unverifiable, not broken, and the viewer badges them as legacy.
- */
+/** Find the first edited or unlinked row in the chain. Legacy rows are skipped. */
 function gjc_audit_verify_chain(?int $fromLogId = null): array
 {
     $result = [
@@ -664,8 +518,7 @@ function gjc_audit_verify_chain(?int $fromLogId = null): array
                 $result['first_log_id'] = $logId;
             }
 
-            // The very first chained row links to whatever was there before it,
-            // which may be nothing. After that, linkage must be exact.
+            // The first chained row may link to nothing.
             if (!$first && (string) $row['prev_hash'] !== (string) $expectedPrev) {
                 $result['ok'] = false;
                 $result['broken_log_id'] = $logId;
@@ -698,16 +551,7 @@ function gjc_audit_verify_chain(?int $fromLogId = null): array
 
 /* ── Deferred writes for in-transaction callers ─────────────────────────── */
 
-/**
- * Entries raised inside an open transaction, keyed by connection.
- *
- * The audit connection is separate and autocommitting, so an entry written
- * mid-transaction lands immediately and survives a rollback — which is how you
- * end up with an audit record of a mint that never happened
- * (CirculationEngine::logTransaction() logs at line ~1092, the commit is ~190
- * lines earlier in the call but later in time). Queue instead, and let the
- * caller's commit or rollback decide what the entry says.
- */
+/** Entries queued during an open transaction, so a rollback can't leave a false record. */
 function &gjc_audit_queue(): array
 {
     static $queues = [];
@@ -727,9 +571,7 @@ function gjc_audit_register_shutdown(): void
         foreach ($queues as $key => $rows) {
             unset($queues[$key]);
             foreach ($rows as $row) {
-                // Nobody told us how this ended. Say so rather than guessing:
-                // 'unconfirmed' means the action started and the outcome was
-                // never recorded, which is itself worth seeing in the log.
+                // Outcome never recorded.
                 $row['outcome'] = 'unconfirmed';
                 $row['reason'] = $row['reason']
                     ?? 'Request ended before the transaction reported success or failure.';
@@ -759,13 +601,7 @@ function gjc_audit_commit(PDO $db): void
     }
 }
 
-/**
- * Flush this connection's queued entries as failures.
- *
- * The attempt still gets recorded — an admin who tried to release ₱50,000 and
- * hit a constraint is exactly the kind of thing an audit trail is for — but it
- * is marked 'failure' so it can never be mistaken for money that moved.
- */
+/** Flush queued entries as failures. */
 function gjc_audit_rollback(PDO $db, string $reason = ''): void
 {
     $queues = &gjc_audit_queue();
@@ -788,13 +624,7 @@ function gjc_audit_rollback(PDO $db, string $reason = ''): void
 
 /* ── The writer ─────────────────────────────────────────────────────────── */
 
-/**
- * Insert one prepared row, chaining it onto the last entry.
- *
- * The read-then-insert has to be atomic or two concurrent requests both chain
- * off the same prev_hash and one of them is orphaned, so it runs under a named
- * lock held on the audit connection for the duration.
- */
+/** Insert one row onto the chain under a named lock. */
 function gjc_audit_write(array $row): void
 {
     $auditDb = gjc_audit_pdo();
@@ -851,10 +681,7 @@ function gjc_audit_write(array $row): void
             $entryHash,
         ]);
     } catch (Throwable $e) {
-        // Never let an audit failure break the request it is auditing — but
-        // never let it be invisible either. This catch used to be empty, which
-        // is how a full table, a dead connection or a rejected value could stop
-        // the whole audit trail without anyone noticing.
+        // Never break the request, but always log the failure.
         error_log(
             '[audit] INSERT failed for ' . ($row['action_type'] ?? '?')
             . ' on ' . ($row['affected_table'] ?? '?')
@@ -872,14 +699,7 @@ function gjc_audit_write(array $row): void
 }
 
 /**
- * Record one action.
- *
- * The positional signature is unchanged — 60-odd call sites depend on it. The
- * trailing $meta array is where the new fields go:
- *
- *   target_id  the id of the row this action touched (string or int)
- *   outcome    success | failure | denied | unconfirmed   (default success)
- *   reason     why, for anything a human would want justified
+ * Record one action. $meta: target_id, outcome (success|failure|denied|unconfirmed), reason.
  *
  * @param array{target_id?:mixed,outcome?:string,reason?:?string} $meta
  */
@@ -898,9 +718,7 @@ function logAudit(
         $action_type = strtoupper(trim($action_type));
 
         if (!in_array($action_type, AUDIT_ACTION_TYPES, true)) {
-            // Name the caller. The old code just returned, so a typo'd or
-            // unregistered action type meant the action was never logged and
-            // nothing anywhere said so.
+            // Unknown action type: log the caller instead of dropping silently.
             $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0] ?? [];
             $where = ($caller['file'] ?? '?') . ':' . ($caller['line'] ?? '?');
             $note = in_array($action_type, AUDIT_LEGACY_ACTION_TYPES, true)
@@ -910,9 +728,7 @@ function logAudit(
             return;
         }
 
-        // A missing actor is a fact about the event, not a reason to drop it.
-        // gjc_expire_overdue_stall_applications() runs from the public
-        // apply.php with no logged-in user; those entries used to vanish.
+        // No actor (e.g. public apply.php) still gets logged.
         if ($user_id > 0) {
             $role = $user_role !== ''
                 ? gjc_audit_role($user_role)
@@ -959,8 +775,7 @@ function logAudit(
             'endpoint'       => substr((string) ($_SERVER['SCRIPT_NAME'] ?? (PHP_SAPI === 'cli' ? 'cli' : 'unknown')), 0, 255),
             'http_method'    => substr((string) ($_SERVER['REQUEST_METHOD'] ?? 'CLI'), 0, 8),
             'session_ref'    => gjc_audit_session_ref(),
-            // Stamped now, not at flush time — a queued entry must carry the
-            // moment the action happened, not the moment the transaction ended.
+            // Stamp when the action happened, not when the queue flushes.
             'timestamp'      => gmdate('Y-m-d H:i:s'),
         ];
 

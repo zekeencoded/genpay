@@ -1,17 +1,10 @@
 <?php
-// ============================================================
-//  Google reCAPTCHA v2 (checkbox) for the public stall application form.
-// ============================================================
+// Google reCAPTCHA v2 for the public stall application form.
 
-// Public by design: the site key ships in the page. The secret key stays in
-// connection/local_config.php as 'recaptcha_secret_key'.
+// Site key is public; the secret is 'recaptcha_secret_key' in local_config.php.
 const GJC_RECAPTCHA_SITE_KEY = '6LfaOwMuAAAAAH8DHWuNQTKE0D8Djgx-QsOaqlCu';
 
-/**
- * Checks a reCAPTCHA response token with Google. Returns null when it verifies,
- * otherwise the message to show the applicant. Fails closed: a missing secret
- * or an unreachable Google blocks the submission.
- */
+/** Verify a reCAPTCHA token. Returns null on success or an error message. Fails closed. */
 function gjc_verify_recaptcha(string $token): ?string
 {
     if ($token === '') {

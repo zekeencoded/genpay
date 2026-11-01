@@ -1,24 +1,12 @@
 <?php
-// Partial: parent portal topbar (shared header for all parent pages).
-// Including pages must set, before requiring this file:
-//   $currentUser    (array) - from gjc_current_user($db); ['name'] is used
-//   $topbarTitle    (string) - final <h1> HTML
-//   $topbarSubtitle (string) - final <p> HTML
-// Optional:
-//   $topbarSubtitleMobile (bool) - keep the subtitle on a phone. It is hidden
-//       there by default: on every page but one it restates what the title and
-//       the page itself already say, and it cost two lines above the fold.
-//       Set it only where the subtitle is the sole on-screen home of something
-//       — controls.php names which student's wallet is being edited, and
-//       nothing else on that page does.
+// Partial: parent topbar.
+// Required: $currentUser, $topbarTitle, $topbarSubtitle (HTML).
+// Optional: $topbarSubtitleMobile (show the subtitle on phones; hidden by default).
 $topbarSubtitleMobile = $topbarSubtitleMobile ?? false;
 $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>
 <?php require __DIR__ . '/csrf_bootstrap.php'; ?>
-<!-- The title and subtitle are DIRECT children of the header, not wrapped in
-     a div: parent_shell.css lays the bar out as a named grid, and on a phone
-     the subtitle drops onto its own full-width row under the title/avatar
-     row. A wrapper would trap it in the title column. -->
+<!-- Title and subtitle are direct children so the grid can move the subtitle on phones. -->
 <header class="parent-topbar<?= $topbarSubtitleMobile ? ' is-subtitle-mobile' : '' ?>">
     <button class="parent-menu-btn" aria-label="Toggle navigation" onclick="toggleParentSidebar()">
         <i class="fa-solid fa-bars"></i>
@@ -27,13 +15,11 @@ $__topbar_e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES,
     <p><?= $topbarSubtitle ?></p>
     <div class="parent-user">
         <span class="parent-user-name"><?= $__topbar_e($currentUser['name']) ?></span>
+        <?php
+        // Same bell as the student topbar; low-balance alerts land here too.
+        $notifApiUrl = PARENT_URL . '/api/notifications.php';
+        require __DIR__ . '/notif_bell.php';
+        ?>
         <?php require __DIR__ . '/avatar_parent.php'; ?>
-        <?php /* Phone only (hidden by CSS elsewhere): the sidebar's Logout link
-                 is display:none under 768px and the bottom nav has no free
-                 slot. Same modal as the sidebar (logout_modal.php). */ ?>
-        <a href="<?= BASE_URL ?>/logout.php" class="parent-logout-btn" aria-label="Log out"
-           onclick="openLogoutModal(event);">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-        </a>
     </div>
 </header>

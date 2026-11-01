@@ -1,10 +1,7 @@
-/* Parent Portal shell — same forest/gold sd-* visual language as
-   student/admin/merchant, under its own .parent-* class namespace
-   (mirrors the exact pattern used in admin.css / merchant.css).
-   Replaces the legacy .student-layout shell, which was deleted with
-   assets/css/student.css once nothing referenced it. */
+/* Parent Portal shell (.parent-*), same forest/gold look as the other roles. */
 @import url("gjc-clear.css?v=23");
 @import url("theme.css?v=14");
+@import url("notif_bell.css?v=3");
 
 :root {
   --emerald-950: var(--gp-green-950);
@@ -52,10 +49,7 @@ body {
   padding-right: 8px;
 }
 
-/* The 42px mark is wider than the collapsed rail's content box, so centre
-   the brand row and scale the mark down — the same treatment the tablet
-   media query already applies. Without it the logo sat left-aligned and the
-   sidebar's overflow:hidden sliced it in half. */
+/* Centre and shrink the logo in the collapsed rail so it isn't clipped. */
 .parent-sidebar.collapsed .parent-brand {
   justify-content: center;
   gap: 0;
@@ -235,13 +229,7 @@ body {
   width: calc(100% - 58px);
 }
 
-/* Full-bleed flat dark topbar, flush with the viewport edge — identical
-   to the student sd-topbar / admin .topbar / merchant .merchant-topbar.
-
-   Laid out as a named grid rather than a flex row so the phone breakpoint
-   can move the subtitle onto its own full-width row without touching the
-   markup (see the <768px block). The four children — menu button, h1, p,
-   .parent-user — are all direct children of the header for that reason. */
+/* Full-bleed topbar as a grid so the phone layout can move the subtitle. */
 .parent-topbar {
   margin: calc(var(--main-pad) * -1) calc(var(--main-pad) * -1) 26px;
   min-height: auto;
@@ -323,11 +311,6 @@ body {
   overflow: hidden;
 }
 
-/* Topbar logout — phone only; desktop/tablet use the sidebar's Logout. */
-.parent-logout-btn {
-  display: none;
-}
-
 /* ===== CONTENT WRAPPER (replaces the old inline style="padding:24px 28px") ===== */
 .parent-content {
   width: 100%;
@@ -404,9 +387,7 @@ body {
 .parent-badge--success { background: var(--gp-success-bg); color: var(--gp-success); }
 .parent-badge--warning { background: var(--gp-warning-bg); color: var(--gp-warning); }
 
-/* ===== TABLE =====
-   .parent-table styling now comes from the canonical table system in
-   theme.css (parent pages carry body.gp-theme). */
+/* ===== TABLE (styles come from theme.css) ===== */
 
 .parent-empty {
   text-align: center;
@@ -445,9 +426,7 @@ body {
   .parent-logout { justify-content: center; padding: 0; }
 }
 
-/* Base box-model for .view-btn — gjc-clear.css skins the view-button family
-   (colour, border, pill radius); the box-model normally comes from admin.css,
-   which the parent shell doesn't load. */
+/* Base box model for .view-btn (admin.css isn't loaded here). */
 .view-btn {
   min-height: 32px;
   padding: 0 13px;
@@ -460,31 +439,15 @@ body {
   text-decoration: none;
 }
 
-/* Media never overflows its column. This is the one genuinely useful rule
-   from assets/css/responsive.css; the rest of that file is deliberately NOT
-   linked on parent pages — at <=768px it forces `button, .btn {width:100%}`
-   and `input, select {width:100%}`, plus `h1 {font-size:20px}` and
-   `.card {padding:12px !important}`, which would flatten the scanner
-   toolbar on parent/cart.php and override the type ramp. */
+/* Keep media inside its column (responsive.css isn't loaded on parent pages). */
 .parent-layout img,
 .parent-layout video {
   max-width: 100%;
   height: auto;
 }
 
-/* ============================================================
-   MOBILE (<768px) — the student shell's pattern, ported
-   ============================================================
-   Copied from student_dashboard.css's own `@media (max-width: 767.98px)`
-   block and bottom_nav_student.php so the parent portal and the student
-   portal are the same product on a phone: no sidebar, a fixed bottom nav
-   with a raised gold cart FAB, and content padded clear of it.
-
-   Same breakpoint (767.98px) and the same values on purpose — if the
-   student shell's mobile look changes, this should be changed with it.
-   Above 768px the parent keeps its own admin-style icon rail (the block
-   above), which the student shell has no equivalent of.
-   ============================================================ */
+/* ═══ MOBILE (<768px): same as the student shell — bottom nav with cart FAB, no sidebar.
+   Keep in sync with student_dashboard.css. ═══ */
 
 .parent-bottomnav {
   display: none;
@@ -495,8 +458,7 @@ body {
     display: none;
   }
 
-  /* The hamburger has nothing left to toggle — the bottom nav replaces it,
-     exactly as on the student shell, which carries no menu button at all. */
+  /* Bottom nav replaces the hamburger. */
   .parent-menu-btn {
     display: none;
   }
@@ -508,17 +470,10 @@ body {
     padding: 0;
   }
 
-  /* One row: the title, and the avatar beside it. The desktop bar puts the
-     title, the subtitle and the user side by side; at 390px that left the
-     title a ~150px column, so a name like "Ma. Cristina Villanueva" wrapped
-     to three lines and shoved the heading into a sliver. Dropping the name
-     (below) and the subtitle leaves the bar with one job on a phone: saying
-     where you are. A page that opts its subtitle back in gets a second row
-     for it. */
+  /* One row: title and avatar. */
   .parent-topbar {
     margin: 0 0 16px;
-    /* 16px and the 16px h1 below are the student shell's own mobile values
-       (student_dashboard.css), kept identical on purpose — same product. */
+    /* Same values as the student shell. */
     padding: 16px;
     border-radius: 0;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -532,19 +487,12 @@ body {
     line-height: 1.25;
   }
 
-  /* The subtitle goes. Clamping it to two lines still left the bar reading
-     as two stacked blocks of text, and on every page but one the sentence
-     only restates the title: "Activity Trail" over "Your own purchases and
-     every wallet transaction across your linked students." The title and
-     the page below it already say that, and those two lines were spent
-     above the fold. */
+  /* Hide the subtitle on phones. */
   .parent-topbar > p {
     display: none;
   }
 
-  /* Opted in with $topbarSubtitleMobile where the subtitle is the only
-     on-screen home of something — controls.php names whose wallet is being
-     edited, and nothing else on that page does. */
+  /* Pages opt the subtitle back in with $topbarSubtitleMobile. */
   .parent-topbar.is-subtitle-mobile {
     grid-template-areas:
       "title user"
@@ -562,8 +510,7 @@ body {
     overflow: hidden;
   }
 
-  /* The name goes; the avatar carries identity and the bottom nav's Profile
-     tab is where it belongs. Reclaims the width the title needed. */
+  /* Hide the name; the avatar is enough. */
   .parent-user-name {
     display: none;
   }
@@ -574,27 +521,15 @@ body {
     font-size: 13px;
   }
 
-  .parent-user {
-    gap: 8px;
-  }
-
-  .parent-logout-btn {
-    display: grid;
-    place-items: center;
+  /* Bell matches the avatar beside it. */
+  .parent-topbar .sd-bell {
     width: 34px;
     height: 34px;
-    border-radius: var(--gp-radius);
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.85);
     font-size: 14px;
-    text-decoration: none;
-    transition: background 0.15s, color 0.15s;
   }
 
-  .parent-logout-btn:hover,
-  .parent-logout-btn:focus-visible {
-    background: var(--gp-gold-soft);
-    color: var(--gp-gold);
+  .parent-user {
+    gap: 8px;
   }
 
   /* Bottom padding clears the fixed nav plus the iOS home indicator. */
@@ -638,9 +573,7 @@ body {
     color: var(--gp-gold);
   }
 
-  /* Must out-specify `.parent-bottomnav a` (0,1,1) above, or its flex:1 /
-     display:flex / font-size win and stretch the FAB into an oval. The
-     student shell carries the identical guard on .sd-scan-fab. */
+  /* Out-specify `.parent-bottomnav a` so the FAB stays round. */
   .parent-bottomnav a.parent-cart-fab {
     flex: 0 0 auto;
     width: 54px;
@@ -660,22 +593,7 @@ body {
   }
 }
 
-/* ============================================================
-   DESKTOP TWO-COLUMN CONTENT GRID
-   ============================================================
-   Every parent page pinned a 680–900px column to the left of a full-width
-   <main>, so anything wider than ~1200px showed a stack of cards and then
-   half a screen of empty cream. `.parent-content--wide` lifts the cap and
-   `.parent-grid` reflows the SAME cards into two columns once there is
-   genuinely room for them — it is the tu-grid idiom from
-   student_topup.css, generalised so all the parent pages share one rule.
-
-   The 1200px breakpoint is on the viewport but sized for the content box:
-   the rail eats 250px and the main padding another 56px, so 1200px of
-   viewport is ~894px of content — two ~437px columns. Below that the grid
-   collapses to the single stack it has always been, which is also what the
-   <768px phone shell gets.
-   ============================================================ */
+/* ═══ DESKTOP TWO-COLUMN GRID: .parent-content--wide + .parent-grid, two columns from 1200px ═══ */
 .parent-content--wide {
   max-width: 1320px;
 }
@@ -687,8 +605,7 @@ body {
   align-items: start;
 }
 
-/* Grid items must be allowed to shrink or a wide table inside one column
-   blows the column out instead of scrolling in its own .table-responsive. */
+/* Let grid items shrink so tables scroll inside their column. */
 .parent-grid > * {
   min-width: 0;
 }
@@ -701,14 +618,12 @@ body {
   min-width: 0;
 }
 
-/* Opts a card out of the columns and back onto the full content width —
-   heroes, filter bars and wide transaction tables. */
+/* Span the full width. */
 .parent-grid-full {
   grid-column: 1 / -1;
 }
 
-/* The page CSS files give these cards their own bottom margin for the old
-   single stack; inside the grid the gap does that job. */
+/* The grid gap replaces the cards' bottom margin. */
 .parent-grid .parent-card,
 .parent-grid .control-card,
 .parent-grid .pcard {

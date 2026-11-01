@@ -69,6 +69,13 @@ $dbUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $currentAdminId = gjc_user_id();
 // Finance staff get a read-only list; account actions are super-admin only (admin/api/users.php is off their allowlist).
 $isSuperAdmin = gjc_sub_role() === 'super_admin';
+// Choices for the Add User modal's student and merchant fields.
+$addUserCourses = $isSuperAdmin ? $db->query("SELECT courseID, course_code, course_name FROM course ORDER BY course_code")->fetchAll(PDO::FETCH_ASSOC) : [];
+$addUserStalls = $isSuperAdmin ? $db->query(
+    "SELECT s.stall_id, s.label FROM stalls s
+      WHERE s.status = 'vacant' AND NOT EXISTS (SELECT 1 FROM merchant m WHERE m.stall_id = s.stall_id)
+      ORDER BY s.label"
+)->fetchAll(PDO::FETCH_ASSOC) : [];
 
 $esc = gjc_e(...);
 
@@ -95,11 +102,7 @@ foreach ($dbUsers as $u) {
     $isSuspended = ($statusLabel === 'Suspended');
     $isBanned    = ($statusLabel === 'Banned');
 
-    // Mirrors users_suspend_guard() in admin/api/users.php. That endpoint is
-    // the real gate — this only decides whether to offer the menu item, so the
-    // two must agree or the UI offers an action that always fails. The same
-    // guard covers Suspend and Ban: an account you may not suspend is an
-    // account you may not ban either.
+    // Must match users_suspend_guard() in admin/api/users.php.
     $canSuspend = ((int) $u['userID'] !== $currentAdminId)
         && !in_array((int) ($u['roleID'] ?? 0), [3, 4], true)
         && (string) ($u['sub_role'] ?? '') !== 'super_admin';
@@ -183,7 +186,7 @@ $currentPage = 'users';
                     </div>
                     <?php if ($isSuperAdmin): ?>
                     <button type="button" class="filter-btn add-staff-btn" data-bs-toggle="modal" data-bs-target="#addStaffModal">
-                        <i class="fa-solid fa-user-plus me-2"></i>Add Finance Staff
+                        <i class="fa-solid fa-user-plus me-2"></i>Add User
                     </button>
                     <?php endif; ?>
                 </div>
@@ -267,11 +270,7 @@ $currentPage = 'users';
                                 <td>
                                     <?php
                                     $statusClass = strtolower($u['status']);
-                                    // Second line under a Suspended pill, for
-                                    // its end date. A ban has none — the pill
-                                    // alone says it. The full reason is the
-                                    // pill's tooltip either way: it is free
-                                    // text and too long for the cell.
+                                    // Suspension end date under the pill; reason is in the tooltip.
                                     $untilNote = '';
                                     if ($u['suspended']) {
                                         $untilNote = $u['suspended_until']
@@ -315,10 +314,7 @@ $currentPage = 'users';
                                                 <li><hr class="dropdown-divider"></li>
                                                 <?php endif; ?>
                                                 <?php if ($u['banned']): ?>
-                                                <!-- A ban outranks a suspension, so it is the only
-                                                     lockout action a banned account offers: there is
-                                                     nothing to suspend on top of it, and Suspend
-                                                     would be refused by the endpoint anyway. -->
+                                                <!-- Banned accounts only offer Lift Ban. -->
                                                 <li><button type="button" class="dropdown-item js-lift-ban"
                                                         data-user-id="<?= (int) $u['id'] ?>"
                                                         data-user-name="<?= $esc($u['name']) ?>">
@@ -399,7 +395,7 @@ $currentPage = 'users';
     </div>
 
     <?php if ($isSuperAdmin): ?>
-    <!-- Add Finance Staff Modal -->
+    <!-- Add User Modal -->
     <!-- Same markup and styles as Maintenance → Add Merchant, so both account forms look alike. -->
     <div class="modal fade" id="addStaffModal" tabindex="-1" aria-labelledby="addStaffTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
@@ -407,19 +403,95 @@ $currentPage = 'users';
                 <div class="modal-header border-0" style="padding:20px 24px 0">
                     <div>
                         <h5 class="modal-title fw-bold" id="addStaffTitle" style="font-size:17px">
-                            <i class="fa-solid fa-user-plus me-2" style="color:var(--gp-success)"></i>Add Finance Staff
+                            <i class="fa-solid fa-user-plus me-2" style="color:var(--gp-success)"></i>Add User
                         </h5>
-                        <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">Finance staff can open Dashboard, Users (view only), Transactions, Cash Management, Leases &amp; Rent and Stall Applications. Everything else stays super-admin only.</p>
+                        <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">Pick the role first; the form shows the extra details that role needs.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="padding:16px 24px 24px">
                     <form id="addStaffForm" class="merchant-bypass-form" autocomplete="off">
-                        <input type="hidden" name="action" value="add_finance_staff">
+                        <input type="hidden" name="action" value="add_user">
                         <input type="hidden" name="csrf_token" value="<?= $esc(gjc_csrf_token()) ?>">
 
                         <div class="mbf-section">
-                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-user"></i> Staff member</div>
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-user-shield"></i> Role</div>
+                            <div class="maintenance-form-grid">
+                                <div class="full">
+                                    <label for="addStaffRole">Role *</label>
+                                    <select id="addStaffRole" name="role" required>
+                                        <option value="" selected disabled>Select a role</option>
+                                        <option value="student">Student</option>
+                                        <option value="merchant">Merchant</option>
+                                        <option value="parent">Parent</option>
+                                        <option value="finance_staff">Finance Staff — Dashboard, Users (view only), Transactions, Cash Management, Leases &amp; Rent, Stall Applications</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section" data-role-fields="student" hidden>
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-graduation-cap"></i> Student details</div>
+                            <div class="maintenance-form-grid">
+                                <div>
+                                    <label for="addUserStudentId">Student ID *</label>
+                                    <input type="text" id="addUserStudentId" name="student_id_number" maxlength="80" required>
+                                </div>
+                                <div>
+                                    <label for="addUserYear">Year Level *</label>
+                                    <input type="number" id="addUserYear" name="year_level" min="1" max="12" value="1" required>
+                                </div>
+                                <div class="full">
+                                    <label for="addUserCourse">Course *</label>
+                                    <select id="addUserCourse" name="course_id" required>
+                                        <option value="" selected disabled>Select a course</option>
+                                        <?php foreach ($addUserCourses as $course): ?>
+                                        <option value="<?= (int) $course['courseID'] ?>"><?= $esc($course['course_code'] . ' — ' . $course['course_name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section" data-role-fields="merchant" hidden>
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-store"></i> Business</div>
+                            <div class="maintenance-form-grid">
+                                <div>
+                                    <label for="addUserBusiness">Business Name *</label>
+                                    <input type="text" id="addUserBusiness" name="business_name" maxlength="255" required>
+                                </div>
+                                <div>
+                                    <label for="addUserSex">Proprietor's Sex *</label>
+                                    <select id="addUserSex" name="sex" required>
+                                        <option value="" selected disabled>Select</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                                <div class="full">
+                                    <label for="addUserStall">Stall</label>
+                                    <select id="addUserStall" name="stall_id">
+                                        <option value="">No stall yet</option>
+                                        <?php foreach ($addUserStalls as $stall): ?>
+                                        <option value="<?= $esc($stall['stall_id']) ?>"><?= $esc($stall['label']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section" data-role-fields="parent" hidden>
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-children"></i> Child</div>
+                            <div class="maintenance-form-grid">
+                                <div class="full">
+                                    <label for="addUserLinkStudent">Child's Student ID</label>
+                                    <input type="text" id="addUserLinkStudent" name="link_student_id" maxlength="80" placeholder="Optional — links this parent to the student">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mbf-section">
+                            <div class="mbf-section-eyebrow"><i class="fa-solid fa-user"></i> Personal details</div>
                             <div class="maintenance-form-grid">
                                 <div>
                                     <label for="addStaffFirst">First Name *</label>
@@ -464,13 +536,13 @@ $currentPage = 'users';
                             </div>
                             <div class="mbf-credentials-note mt-2">
                                 <i class="fa-solid fa-circle-info"></i>
-                                <span>The staff member signs in with the email above. This temporary password (at least 8 characters) is emailed to them, and they will be prompted to set a new password on first login.</span>
+                                <span>The new user signs in with the email above. This temporary password (at least 8 characters) is emailed to them, and they will be prompted to set a new password on first login.</span>
                             </div>
                         </div>
 
                         <div id="addStaffMsg" role="status"></div>
                         <div class="maintenance-btn-row mt-2">
-                            <button class="maintenance-btn primary" type="submit" id="addStaffSubmit">Create Staff</button>
+                            <button class="maintenance-btn primary" type="submit" id="addStaffSubmit">Create User</button>
                             <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
                         </div>
                     </form>
@@ -581,10 +653,7 @@ $currentPage = 'users';
         document.getElementById("sidebar").classList.toggle("collapsed");
     }
 
-    // The filter-row "Search User" field drives the users table's own
-    // DataTables search directly, instead of the table showing its own
-    // auto-rendered search box too (data-hide-filter="true" above suppresses
-    // that one) — one search field instead of two.
+    // The filter-row search box drives the DataTable search.
     jQuery(function ($) {
         const $input = $("#usersSearchInput");
         const $table = $("#usersTable");
@@ -596,9 +665,7 @@ $currentPage = 'users';
         });
     });
 
-    // ── Suspend / ban / lift ────────────────────────────────────────────────
-    // Delegated off the table body: DataTables re-renders rows on every page
-    // change and sort, so per-button listeners bound at load would go stale.
+    // ── Suspend / ban / lift (delegated; DataTables re-renders rows) ──
     const USERS_API = "<?= ADMIN_URL ?>/api/users.php";
 
     const resetModal = document.getElementById('resetPasswordModal');
@@ -688,6 +755,17 @@ $currentPage = 'users';
         }
     });
 
+    // Show only the selected role's fields; disabled fields are skipped by validation and FormData.
+    document.getElementById("addStaffRole")?.addEventListener("change", function () {
+        document.querySelectorAll("#addStaffForm [data-role-fields]").forEach((section) => {
+            const on = section.dataset.roleFields === this.value;
+            section.hidden = !on;
+            section.querySelectorAll("input, select").forEach((field) => { field.disabled = !on; });
+        });
+    });
+    document.querySelectorAll("#addStaffForm [data-role-fields] input, #addStaffForm [data-role-fields] select")
+        .forEach((field) => { field.disabled = true; });
+
     document.getElementById("addStaffForm")?.addEventListener("submit", async function (e) {
         e.preventDefault();
         const btn = document.getElementById("addStaffSubmit");
@@ -708,7 +786,7 @@ $currentPage = 'users';
             msg.innerHTML = '<div class="maintenance-alert error">Could not reach the server. Try again.</div>';
         }
         btn.disabled = false;
-        btn.textContent = "Create Staff";
+        btn.textContent = "Create User";
     });
 
     document.getElementById("suspendForm").addEventListener("submit", async function (e) {
@@ -738,9 +816,7 @@ $currentPage = 'users';
         const btn = document.getElementById("banSubmitBtn");
         const msg = document.getElementById("banMsg");
 
-        // Client-side echo of the endpoint's own check, so a mistyped
-        // confirmation costs a keystroke instead of a round trip. The endpoint
-        // still enforces it — this is convenience, not the gate.
+        // Client-side check; the endpoint enforces it too.
         if (document.getElementById("banConfirm").value.trim().toUpperCase() !== "BAN") {
             msg.innerHTML = '<div class="alert alert-danger mb-0">Type BAN in the confirmation box to continue.</div>';
             return;
@@ -764,9 +840,7 @@ $currentPage = 'users';
         btn.textContent = "Ban Account";
     });
 
-    // Both lifts are the same round trip against the same endpoint — only the
-    // action name and the confirm wording differ, so they share one function
-    // rather than two copies that could drift apart.
+    // Shared by lift suspension and lift ban.
     async function liftLockout(btn, action, title) {
         const ok = await gpConfirm({
             title: title,

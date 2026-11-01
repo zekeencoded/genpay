@@ -1,10 +1,5 @@
 <?php
-// ============================================================
-//  merchant/print_menu.php
-//  Printable cardboard-menu sheet: every available product with its
-//  scan QR (encodes the SKU, same value student/api/cart.php looks up),
-//  plus the merchant's static Wallet QR for checkout.
-// ============================================================
+// Printable menu: product scan QRs plus the merchant's Wallet QR.
 session_start();
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
@@ -70,7 +65,7 @@ $walletQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&ec
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/print_menu.css?v=7">
 </head>

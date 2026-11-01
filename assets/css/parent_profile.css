@@ -1,9 +1,6 @@
-/* Parent Profile page-specific components. Shell components
-   (.parent-card, buttons, badges) live in parent_shell.css. */
+/* Parent Profile page; shell styles are in parent_shell.css. */
 
-/* The hero and tabs come from profile_hub.css (ph-id / ph-tabs) and are
-   spaced by .parent-content's own gap. A lone form card is capped so its
-   fields do not stretch across a wide screen. */
+/* Cap a lone form card's width. */
 .parent-content .tab-pane .pcard { max-width: 760px; margin-bottom: 0; }
 .pcard { background: #fff; border-radius: var(--ad-radius); border: 1px solid var(--ad-line); padding: 20px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16, 32, 24, 0.04); }
 .pcard h5 { font-size: 15px; font-weight: 800; color: var(--gp-ink); margin: 0 0 4px; }
@@ -25,6 +22,9 @@
 .flash.err { background: var(--gp-danger-bg); color: var(--gp-danger); border: 1px solid #f0b8b2; }
 #photoMsg { font-size: 12px; margin-top: 6px; min-height: 16px; }
 
-/* Group heading inside a profile form ("Address", "Emergency Contact") —
-   see includes/partials/profile_details_fields.php. */
+/* Group heading inside a profile form. */
 .pcard .pd-subhead { margin: 20px 0 12px; padding-top: 16px; border-top: 1px dashed var(--ad-line); font-size: 12px; font-weight: 800; letter-spacing: .06em !important; text-transform: uppercase; color: var(--gp-muted); }
+
+/* Phone-only way back from a form to the Settings menu (tabs are hidden there). */
+.back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 5px 12px; border: 1px solid var(--ad-line); border-radius: 999px; background: #fff; color: var(--gp-ink); font-size: 13px; font-weight: 700; text-decoration: none; }
+.back-link:hover { background: var(--gp-cream); color: var(--gp-ink); }

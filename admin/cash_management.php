@@ -16,9 +16,7 @@ $pendingEncashments = (int) $db->query("SELECT COUNT(*) FROM encashment_requests
 $releasedToday = (float) $db->query("SELECT COALESCE(SUM(amount), 0) FROM encashment_requests WHERE status = 'released' AND DATE(released_at) = CURDATE()")->fetchColumn();
 $loadedToday = gjc_cash_in_loaded_today($db);
 
-// Sending GenCoin moves points OUT of the cashier vault, so an empty vault is
-// what makes a send fail. Read-only; the mint form on Economy is still the
-// only way to change it.
+// Vault balance (sending GenCoin draws from it). Read-only.
 $vaultBalance = null;
 try {
     $vaultBalance = (float) ((new CirculationEngine($db))->getCirculationSnapshot()['vault'] ?? 0);
@@ -555,9 +553,7 @@ $currentPage = 'cash';
         document.getElementById("sidebar").classList.toggle("collapsed");
     }
 
-    // ── Cash In / Cash Out tabs ─────────────────────────────────────────────
-    // Hash-addressable (#cash-in / #cash-out) so other pages and the old
-    // encashments.php redirect can land on a tab.
+    // ── Cash In / Cash Out tabs (#cash-in / #cash-out) ──
     function cashShowTab(name) {
         if (name !== 'cash-in' && name !== 'cash-out') name = 'cash-in';
         document.querySelectorAll('[data-cash-tab]').forEach((tab) => {

@@ -1,14 +1,5 @@
 <?php
-// ============================================================
-//  merchant/rent.php — the tenant's own view of their rent
-//  Read-only by design: rent is handed over at the finance
-//  office and recorded there, so there is nothing to submit
-//  here. This is where a merchant checks when the next charge
-//  falls, what is still owed, and the reference number of any
-//  payment already logged against them.
-//  Owner-only, same rule as encash.php — a stall's rent is the
-//  proprietor's obligation, not their staff's business.
-// ============================================================
+// Tenant's read-only rent view (owner only).
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -101,7 +92,7 @@ $currentPage = 'rent';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
 
@@ -143,9 +134,7 @@ $currentPage = 'rent';
                 <section class="gp-rent-hero <?= rent_e($stateTone[$account['state']] ?? '') ?> mb-4">
                     <div>
                         <?php
-                            // Label the headline number for what it actually is — a big
-                            // figure under a vague "rent standing" reads as money owed
-                            // even when the tenant is paid up.
+                            // Label the headline figure clearly.
                             if ($account['outstanding'] > 0.005) {
                                 $heroLabel  = 'Unpaid rent';
                                 $heroAmount = gjc_money($account['outstanding']);

@@ -1,12 +1,5 @@
 <?php
-// ============================================================
-//  parent/api/fee_waiver_claim.php
-//  Self-service claim: a parent turns a linked student's posted Fee
-//  Waiver Credit into real GenCoin, minted straight into the student's
-//  wallet. Shares gjc_claim_fee_waiver_credit() with the student-side
-//  endpoint (student/api/fee_waiver_claim.php) so the race-safety and
-//  mint logic only lives in one place. Final and one-way.
-// ============================================================
+// Parent claims a linked student's posted Fee Waiver Credit into GenCoin (one-way).
 declare(strict_types=1);
 header('Content-Type: application/json');
 

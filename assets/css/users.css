@@ -175,9 +175,7 @@
   color: var(--gp-danger);
 }
 
-/* A ban is permanent, so it reads heavier than the tinted suspension pill —
-   solid fill rather than a wash, to separate the two at a glance down a
-   column where both are red. */
+/* Ban: solid fill, heavier than the suspension pill. */
 .status-pill.banned {
   background: var(--gp-danger);
   color: #fff;
@@ -240,8 +238,7 @@
   color: var(--gp-green-850);
 }
 
-/* Ban is the one destructive item in the Manage menu, so it is the only one
-   that reads red — hard to pick by accident sitting next to Suspend. */
+/* Ban is the only red (destructive) menu item. */
 .premium-dropdown .dropdown-item.js-ban,
 .premium-dropdown .dropdown-item.js-ban:hover {
   color: var(--gp-danger);

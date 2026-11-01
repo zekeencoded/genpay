@@ -1,65 +1,22 @@
-/* ============================================================
-   GenPay — RESPONSIVE TABLE CARDS (behaviour)
-   Pairs with assets/css/gjc-table-cards.css.
-
-   On a narrow screen a listing table stops being a table and
-   becomes a list of rows: what the row is on the left of the first
-   line, the figure on the right, the supporting detail muted
-   underneath, and a tap anywhere opening its full details.
-
-   What each column does is declared on its <th>:
-     data-card="title"   first line, left — the row's identity
-     data-card="amount"  first line, right — the figure
-     data-card="hide"    detail-only; off the row
-     (unmarked)          the muted second line, dot-separated
-
-   Declaring a title is what opts a table into that list layout. A
-   table that declares none keeps a LABEL / value line per field,
-   which is the right presentation when the values do not describe
-   themselves — the parent's school-year balances are three money
-   columns that would be unreadable stripped of their headings. It
-   is also how detail-only fields render when a row expands.
-
-   Tapping a card resolves in this order:
-     1. a link in the row (the View button's href) — navigate to it
-     2. a "View" button in the row — click it (the merchant order
-        queue opens a modal rather than a page)
-     3. otherwise expand the card in place to reveal the hidden
-        fields, so nothing is unreachable on tables with no detail
-        page of their own (top-ups, withdrawals, encashments)
-
-   Progressive enhancement is deliberate: the CSS keys off classes
-   only this file adds, so with JS off nothing changes and the
-   table keeps scrolling sideways as before.
-
-   Rows that arrive later are covered too — DataTables replaces the
-   whole tbody on every draw/search/page, and any
-   table built from a template string by a script. A single
-   document-level MutationObserver re-applies all of it.
-
-   Opt a table out with data-cards="false".
-   ============================================================ */
+/* ═══ Responsive table cards (pairs with gjc-table-cards.css).
+   On narrow screens rows become cards; columns are declared via data-card on <th>.
+   Tapping a card follows the row's link, clicks its View button, or expands it.
+   A MutationObserver re-applies after DataTables redraws. Opt out with data-cards="false". ═══ */
 (function () {
   "use strict";
 
-  /* A table this wide can't fit a tablet either, so it stacks one
-     breakpoint earlier than the rest. Mirrored in the stylesheet header. */
+  /* Wide tables stack one breakpoint earlier. */
   var WIDE_FROM_COLUMNS = 7;
   var PHONE_QUERY = "(max-width: 767.98px)";
   var TABLET_QUERY = "(max-width: 991.98px)";
 
-  /* Anything a tap should reach on its own, rather than being swallowed by
-     the card's own tap: the staff roster's Active switch, the inventory
-     buttons, the queue's Void. */
+  /* Controls that handle their own taps. */
   var INTERACTIVE = "a, button, input, select, textarea, label, .form-check";
 
-  /* What makes a cell the card's action footer — buttons and links only.
-     Deliberately narrower than INTERACTIVE: the staff roster's Active
-     switch is a value on a labelled line, not an action. */
+  /* What makes a cell the action footer (buttons and links only). */
   var ACTION_CONTENT = "a[href], button, .btn";
 
-  /* Controls that mean "show me this row" — the one control the card tap
-     replaces. Everything else in an action cell stays on the card. */
+  /* Controls the card tap replaces. */
   var VIEW_HINT = /\b(view|details?)\b/i;
 
   var READY_FLAG = "gjcCards"; // data-gjc-cards on the table element
@@ -73,8 +30,7 @@
     return parseInt(cell.getAttribute("colspan"), 10) || 1;
   }
 
-  /* Header text and card role per column index, expanded so a spanning <th>
-     covers each of the columns it sits over. */
+  /* Header text and role per column, expanding colspans. */
   function readColumns(table) {
     var head = table.tHead;
     if (!head || !head.rows.length) {
@@ -95,12 +51,7 @@
     return columns;
   }
 
-  /* Move the cell's content into a span of its own, so the label and the
-     value are two flex items rather than a label overlaid on padding — a
-     label long enough to wrap ("Starting Balance") then makes its row
-     taller instead of colliding with the label below it. Only moves nodes,
-     never rewrites them, so the cell's textContent — what DataTables
-     searches and sorts on — is untouched. Idempotent. */
+  /* Wrap cell content in a span (moves nodes, so DataTables search is unaffected). Idempotent. */
   function wrapValue(cell) {
     var only = cell.childNodes.length === 1 ? cell.firstChild : null;
     if (only && only.nodeType === 1 && only.className === VALUE_CLASS) {
@@ -121,8 +72,7 @@
     return VIEW_HINT.test(textOf(el)) || VIEW_HINT.test(el.getAttribute("title") || "");
   }
 
-  /* What tapping this card should do. Returns a link href, a control to
-     click, or nothing — in which case the card expands instead. */
+  /* Tap target: a link href, a control to click, or nothing (expand). */
   function findTarget(row) {
     var link = row.querySelector("a[href]");
     if (link && !/^#|^javascript:/i.test(link.getAttribute("href") || "")) {
@@ -145,11 +95,7 @@
     "gjc-cell-hidden"
   ];
 
-  /* Which job a cell does on the card. Anything the list layout's two lines
-     do not place falls back to a labelled line of its own: the detail-only
-     fields once a row is expanded — hence hidden cells carry both classes —
-     and any cell holding a control, like the staff Active switch, which
-     would be meaningless dropped into the muted run. */
+  /* Which part of the card a cell becomes. */
   function placementOf(cell, role, list) {
     if (role === "hide") {
       return ["gjc-cell-hidden", "gjc-cell-labelled"];
@@ -188,8 +134,7 @@
       var cell = cells[i];
       var span = spanOf(cell);
 
-      /* Empty-state rows span the table — "No products yet", DataTables'
-         own "No matching records found". No label belongs on those. */
+      /* No label on full-width empty-state rows. */
       if (span > 1 || cell.classList.contains("dataTables_empty")) {
         cell.classList.add("gjc-cell-full");
         cell.removeAttribute("data-label");
@@ -200,8 +145,7 @@
 
       var spec = columns[column] || { label: "", role: "" };
 
-      /* An empty header still reserves the label column, which is what
-         keeps a labelled card's values in one line. */
+      /* Keep the label column even when empty. */
       cell.setAttribute("data-label", spec.label);
 
       if (spec.role === "title") {
@@ -223,8 +167,7 @@
       column += span;
     }
 
-    /* A table earns the list layout by naming a title column, so placement
-       can only be settled once every cell in the row has been seen. */
+    /* Placement needs the whole row (list layout needs a title column). */
     for (var n = 0; n < roles.length; n++) {
       classify(roles[n].cell, roles[n].role, titled);
     }
@@ -234,8 +177,7 @@
     applyTarget(row, actionCell, hidden);
   }
 
-  /* Wire the row up as a link, a button, or an expander, and say so in the
-     markup so assistive tech and the stylesheet both know which it is. */
+  /* Make the row a link, button or expander, with matching ARIA. */
   function applyTarget(row, actionCell, hidden) {
     var target = findTarget(row);
 
@@ -249,9 +191,7 @@
       row.setAttribute("role", target.kind === "link" ? "link" : "button");
       row.setAttribute("tabindex", "0");
 
-      /* When the row's only control is its View control, the card tap has
-         replaced it — take it off the card. A row that also carries Edit,
-         Void or a QR button keeps all of them. */
+      /* Hide the View control when it's the only action. */
       if (actionCell && actionCell.querySelectorAll(ACTION_CONTENT).length === 1) {
         actionCell.classList.add("gjc-cell-absorbed");
       }
@@ -291,9 +231,7 @@
     }
   }
 
-  /* One delegated listener per table, so rows replaced by a redraw need no
-     rewiring. Taps that land on a control inside the row are that
-     control's, not the card's. */
+  /* One delegated listener per table; taps on inner controls are ignored. */
   function bindActivation(table) {
     function handled(event) {
       if (!table.classList.contains("gjc-cards--on")) {
@@ -345,8 +283,7 @@
     }
   }
 
-  /* Keep .gjc-cards--on in step with the viewport, on the table and on the
-     .table-responsive wrapper whose overflow has to stand down with it. */
+  /* Toggle .gjc-cards--on with the viewport. */
   function bindBreakpoint(table, wrap, query) {
     if (!window.matchMedia) {
       return;
@@ -374,8 +311,7 @@
     }
 
     var columns = readColumns(table);
-    /* A single-column table, or one with no header row, has nothing to
-       stack — leave it alone. */
+    /* Nothing to stack. */
     if (!columns || columns.length < 2 || !table.tBodies.length) {
       return;
     }
@@ -433,8 +369,7 @@
           }
         }
 
-        /* Rows swapped inside a table we already prepared (a DataTables
-           draw, the live order queue) need their labels written again. */
+        /* Relabel rows swapped in by redraws. */
         var target = records[i].target;
         var owner = target && target.closest ? target.closest("table.gjc-cards") : null;
         if (owner && stale.indexOf(owner) === -1) {
@@ -458,9 +393,7 @@
         for (var b = 0; b < stale.length; b++) {
           relabel(stale[b]);
         }
-        /* Wrapping a value is itself a childList change. Drop the records
-           this pass just generated so the observer doesn't re-enter on its
-           own work. */
+        /* Drop our own mutations so the observer doesn't loop. */
         observer.takeRecords();
       });
     });
@@ -473,8 +406,7 @@
     watch();
   }
 
-  /* Exposed so a page that builds a table outside the observer's reach can
-     ask for a pass explicitly. */
+  /* For tables built outside the observer's reach. */
   window.GjcTableCards = { scan: scan, relabel: relabel };
 
   if (document.readyState === "loading") {

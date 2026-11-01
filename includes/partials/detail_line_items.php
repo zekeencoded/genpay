@@ -1,13 +1,10 @@
 <?php
 /**
- * Itemised receipt block for the portal "Read" pages (student, merchant and
- * parent view_transaction.php). Rendered only when the transaction actually
- * has an order behind it — gjc_transaction_line_items() returns [] for
- * top-ups, transfers and encashments, and the caller skips the include.
+ * Itemised receipt for portal view_transaction pages.
  *
  * Expects:
  *   $uvItems       array from gjc_transaction_line_items()
- *   $uvItemsTotal  float, the transaction amount (shown as the receipt total)
+ *   $uvItemsTotal  float, the transaction amount
  *   $uvItemsNote   string|null, optional line under the heading
  */
 $uvItems = $uvItems ?? [];

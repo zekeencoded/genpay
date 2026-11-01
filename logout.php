@@ -52,7 +52,8 @@ session_destroy();
             color: '#052916',
             iconColor: '#117039'
         }).then(() => {
-            window.location.href = 'index.php';
+            // replace() drops logout.php from history so Back can't replay this animation
+            window.location.replace('index.php');
         });
     </script>
 </body>

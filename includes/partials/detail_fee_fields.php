@@ -1,19 +1,11 @@
 <?php
 /**
- * Maintenance-fee rows for a payment/transfer detail page: plain .uv-field rows
- * dropped into the page's existing details grid — Maintenance Fee, then the
- * Total (amount + fee). Shared by the admin, student, parent and merchant
- * view_transaction.php pages.
- *
- * The fee is billed to tuition, never taken from the wallet, so the state text
- * says so. A voided fee (sale returned) is shown as voided and left out of the
- * total. The merchant is only ever credited the sale amount, so their page shows
- * the fee for information and no combined total.
+ * Maintenance Fee and Total rows for view_transaction pages. Voided fees are excluded from the total.
  *
  * Expects:
  *   $ftFee         array|null  from gjc_maintenance_fee_for_reference() — null renders nothing
  *   $ftAmount      float       the payment/transfer amount
- *   $ftShowAmount  bool        also print an Amount row (pages whose grid lacks one)
+ *   $ftShowAmount  bool        also print an Amount row
  *   $ftMerchant    bool        merchant viewer: fee is informational, no total
  */
 $ftFee = $ftFee ?? null;

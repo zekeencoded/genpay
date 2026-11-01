@@ -1,7 +1,6 @@
 <?php
 
 // Parent accounts, parent wallets and balance alerts.
-// Loaded by connection/app.php; defines functions and constants only.
 
 // ─── Parent Account Module ────────────────────────────────────────────────────
 
@@ -28,8 +27,7 @@ function gjc_ensure_parent_schema(PDO $db): void
         ) ENGINE=InnoDB"
     );
 
-    // A link waiting for the student's approval. Kept apart from
-    // parent_student_links so every reader of that table sees approved links only.
+    // Pending links awaiting student approval (kept out of parent_student_links).
     $db->exec(
         "CREATE TABLE IF NOT EXISTS parent_link_requests (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -71,6 +69,48 @@ function gjc_ensure_parent_schema(PDO $db): void
     }
 }
 
+/**
+ * Mirror the bell's read state onto the dashboard's Low Balance Alerts.
+ * $notificationId null = "Mark all read" (clears every alert); otherwise only a
+ * low_balance notification counts, and it clears that student's alerts up to its time.
+ */
+function gjc_parent_alerts_mark_read_from_bell(PDO $db, int $parentUserId, ?int $notificationId): void
+{
+    if (!gjc_table_exists($db, 'parents') || !gjc_table_exists($db, 'parent_alerts')) {
+        return;
+    }
+    $pStmt = $db->prepare("SELECT id FROM parents WHERE user_id = ?");
+    $pStmt->execute([$parentUserId]);
+    $parentId = (int) $pStmt->fetchColumn();
+    if ($parentId <= 0) {
+        return;
+    }
+
+    if ($notificationId === null) {
+        $db->prepare("UPDATE parent_alerts SET is_read = 1 WHERE parent_id = ? AND is_read = 0")->execute([$parentId]);
+        return;
+    }
+
+    $nStmt = $db->prepare("SELECT type, link, created_at FROM notifications WHERE id = ? AND user_id = ?");
+    $nStmt->execute([$notificationId, $parentUserId]);
+    $notification = $nStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$notification || $notification['type'] !== 'low_balance') {
+        return;
+    }
+    // The link is built in gjc_check_parent_balance_alert(): .../controls.php?uid=<student user id>.
+    parse_str((string) parse_url((string) $notification['link'], PHP_URL_QUERY), $query);
+    $studentUserId = (int) ($query['uid'] ?? 0);
+    if ($studentUserId <= 0) {
+        return;
+    }
+    $db->prepare(
+        "UPDATE parent_alerts pa
+           JOIN student_wallets sw ON sw.id = pa.student_wallet_id
+            SET pa.is_read = 1
+          WHERE pa.parent_id = ? AND sw.user_id = ? AND pa.is_read = 0 AND pa.created_at <= ?"
+    )->execute([$parentId, $studentUserId, $notification['created_at']]);
+}
+
 function gjc_check_parent_balance_alert(PDO $db, int $walletId): void
 {
     if (!gjc_table_exists($db, 'parents') || !gjc_table_exists($db, 'parent_student_links') || !gjc_table_exists($db, 'parent_alerts')) {
@@ -83,7 +123,7 @@ function gjc_check_parent_balance_alert(PDO $db, int $walletId): void
     if (!$wallet) return;
 
     $pStmt = $db->prepare(
-        "SELECT p.id AS parent_id, p.low_balance_threshold
+        "SELECT p.id AS parent_id, p.user_id AS parent_user_id, p.low_balance_threshold
            FROM parents p
            JOIN parent_student_links psl ON psl.parent_id = p.id
           WHERE psl.student_user_id = ?
@@ -115,20 +155,34 @@ function gjc_check_parent_balance_alert(PDO $db, int $walletId): void
                 $wallet['balance'],
                 $parent['low_balance_threshold'],
             ]);
+            // Also surface it in the parent's notification bell. Best-effort: callers run
+            // this after committing a payment, so it must never throw.
+            try {
+                gjc_notify(
+                    $db,
+                    (int) $parent['parent_user_id'],
+                    'low_balance',
+                    'Low Balance Alert',
+                    sprintf(
+                        "%s's balance dropped to %s (your alert threshold is %s).",
+                        gjc_user_label($db, (int) $wallet['user_id']),
+                        gjc_money_plain((float) $wallet['balance']),
+                        gjc_money_plain((float) $parent['low_balance_threshold'])
+                    ),
+                    'triangle-exclamation',
+                    PARENT_URL . '/controls.php?uid=' . (int) $wallet['user_id']
+                );
+            } catch (\Throwable $notifyError) {
+                error_log('[parent low balance notify] ' . $notifyError->getMessage());
+            }
         }
     }
 }
 
-/**
- * Parent wallet: parents top up with cash (Finance or a merchant), then send
- * one-time allowance transfers to a linked student. Keyed on parents.id (not
- * users.userID directly) because the rest of the parent portal already
- * resolves identity through that table — see gjc_parent_id_for_user().
- */
+/** Parent wallet schema, keyed on parents.id. */
 function gjc_ensure_parent_wallet_schema(PDO $db): void
 {
-    // DDL — must run before any transaction starts (MySQL implicitly commits
-    // an open transaction the instant it sees DDL).
+    // DDL: run before any transaction.
     gjc_ensure_transaction_types($db, ['allowance']);
 
     $db->exec(

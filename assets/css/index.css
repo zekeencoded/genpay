@@ -74,14 +74,16 @@ body {
     padding: 80px 20px;
     background: #f9fcf8;
 }
-.how-to-apply .section-title {
+.how-to-apply .section-title,
+.faq .section-title {
     text-align: center;
     font-size: 36px;
     font-weight: 800;
     color: #052916;
     margin-bottom: 12px;
 }
-.how-to-apply .section-sub {
+.how-to-apply .section-sub,
+.faq .section-sub {
     text-align: center;
     color: #66756c;
     font-size: 16px;
@@ -217,3 +219,46 @@ body {
         font-size: 30px;
     }
 }
+.faq {
+    padding: 80px 20px;
+    background: #ffffff;
+}
+.faq-list {
+    max-width: 760px;
+    margin: 0 auto;
+}
+.faq details {
+    background: #f9fcf8;
+    border: 1px solid rgba(14, 99, 50, 0.08);
+    border-radius: var(--gp-radius);
+    margin-bottom: 12px;
+}
+.faq summary {
+    cursor: pointer;
+    padding: 18px 22px;
+    font-weight: 700;
+    color: #052916;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+    content: "+";
+    color: var(--gp-green-700);
+    font-size: 20px;
+    line-height: 1;
+}
+.faq details[open] summary::after { content: "\2212"; }
+.faq details p {
+    padding: 0 22px 18px;
+    margin: 0;
+    color: #66756c;
+    line-height: 1.6;
+}
+@media (max-width: 768px) {
+    .faq { padding: 56px 8px; }
+    .faq .section-title { font-size: 26px; }
+}
+.faq { scroll-margin-top: 80px; } /* keep the heading clear of the fixed navbar */

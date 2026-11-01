@@ -1,11 +1,5 @@
 <?php
-// ============================================================
-//  merchant/api/profile.php
-//  Lets a merchant admin update their business display name and logo,
-//  or take the logo down (remove_logo=1) so the tile falls back to plain.
-//  Both values are what the public Stall Directory (stalls.php) renders
-//  for an occupied stall, via merchant.stall_name and users.profile_img.
-// ============================================================
+// Update a merchant's display name and logo (or remove the logo).
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -42,12 +36,7 @@ $merchantId = (int) $merchant['merchantID'];
 $oldStallName = (string) $merchant['stall_name'];
 $oldLogo = trim((string) ($merchant['profile_img'] ?? ''));
 
-/**
- * Short content hash of a stored logo, or null if there is no file.
- *
- * A re-uploaded logo with the same extension lands on the same path, so the
- * path alone cannot show in the audit trail that the image was replaced.
- */
+/** Short hash of the stored logo (to show replacements in the audit log), or null. */
 function profile_logo_fingerprint(string $relPath): ?string
 {
     $abs = BASE_PATH . '/' . ltrim($relPath, '/');

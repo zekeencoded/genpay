@@ -1,13 +1,6 @@
-/* Parent Allowance + Activity page tweaks, layered on top of the sd-*/pf-*/tu-*
-   component classes shared with the student pages (student_dashboard.css,
-   student_topup.css, student_send.css, student_profile.css), so the two
-   portals share one visual language.
+/* Parent Allowance + Activity tweaks on top of the shared sd-, pf- and tu- classes. */
 
-   Named for parent/wallet.php, which no longer links it — the parent top-up
-   feature was removed on 2026-08-27 and wallet.php is now balance-only. */
-
-/* A plain <select> inside the shared .pf-field wrapper — the student pages
-   only ever needed styled <input>s, so this fills the missing rule. */
+/* Style plain <select> in .pf-field. */
 .pf-field select.tu-select {
     width: 100%;
     border: 1.5px solid var(--sd-line);
@@ -26,11 +19,7 @@
     box-shadow: var(--gp-focus-ring);
 }
 
-/* ===== ACTIVITY: whose wallet a row belongs to =====
-   Parents shop from their own wallet now, so the trail mixes their purchases
-   with their children's. The rows stay in one table — a single chronology is
-   easier to read than two — but the parent's own carry a YOU badge and a
-   cream tint, and the Wallet filter can isolate either side. */
+/* ===== ACTIVITY: the parent's own rows get a YOU badge and a cream tint ===== */
 .pa-wallet-cell {
     white-space: nowrap;
 }
@@ -48,8 +37,7 @@
     text-transform: uppercase;
 }
 
-/* Matched to the specificity of theme.css's own
-   `body.gp-theme .table tbody tr ...` rules, which out-specify a bare class. */
+/* Match theme.css's specificity. */
 body.gp-theme .table tbody tr.pa-own-row td {
     background: var(--gp-cream);
 }
@@ -58,3 +46,196 @@ body.gp-theme .table tbody tr.pa-own-row:hover td {
     background: var(--gp-row-hover);
 }
 
+/* ===== ACTIVITY: record count and items cell ===== */
+.pa-count {
+    font-size: 12px;
+    color: var(--gp-muted);
+}
+
+/* Desktop keeps the items column to one line; card view shows the full text. */
+.pa-items {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--gp-muted);
+}
+
+/* Card view: the parent's own rows keep their cream tint. */
+table.gjc-cards.gjc-cards--on > tbody > tr.pa-own-row {
+    background: var(--gp-cream);
+}
+
+@media (max-width: 767.98px) {
+    /* The count drops under the title instead of squeezing beside it. */
+    .parent-card-head:has(> .pa-count) { flex-wrap: wrap; }
+    .pa-count { flex-basis: 100%; }
+}
+
+/* Phones: no expand chevron on activity rows; tapping still opens the transaction. */
+table#activityTable.gjc-cards.gjc-cards--on > tbody > tr.gjc-row-list[role]::after { content: none; }
+
+/* ===== ACTIVITY: filter entry point (activity.php) and filter page (activity_filter.php) ===== */
+.pa-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-bottom: 14px;
+}
+
+.pa-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid var(--ad-line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gp-ink);
+    text-decoration: none;
+}
+
+.pa-filter-btn:hover { background: var(--gp-cream); color: var(--gp-ink); }
+
+.pa-filter-reset {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gp-green-700);
+    text-decoration: none;
+}
+
+.pa-summary {
+    width: 100%;
+    margin: 0;
+    font-size: 12px;
+    color: var(--gp-muted);
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 5px 12px;
+    border: 1px solid var(--ad-line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--gp-ink);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.back-link:hover { background: var(--gp-cream); color: var(--gp-ink); }
+
+.pa-sheet { padding: 20px 18px; }
+
+.pa-field + .pa-field,
+.pa-field-pair { margin-top: 16px; }
+
+.pa-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gp-ink);
+    margin-bottom: 6px;
+}
+
+.pa-field select,
+.pa-field input {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    border: 1.5px solid var(--ad-line);
+    border-radius: 12px;
+    padding: 0 12px;
+    font-size: 15px;
+    background: #fff;
+}
+
+.pa-field-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.pa-field-pair .pa-field + .pa-field { margin-top: 0; }
+
+.pa-sheet-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.pa-sheet-actions .parent-btn {
+    flex: 1;
+    justify-content: center;
+    text-align: center;
+}
+
+/* ===== ACTIVITY: filter bar (legacy inline form, no longer rendered) ===== */
+.pa-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.pa-filters label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gp-muted);
+    margin-bottom: 5px;
+}
+
+.pa-filters select,
+.pa-filters input {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    border: 1.5px solid var(--ad-line);
+    border-radius: 10px;
+    padding: 0 10px;
+    font-size: 14px;
+    background: #fff;
+}
+
+.pa-filters-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.pa-filters .parent-btn {
+    height: 40px;
+}
+
+/* Tablet: fields two per row, buttons on their own row. */
+@media (max-width: 991.98px) {
+    .pa-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pa-filters-actions { grid-column: 1 / -1; }
+    .pa-filters-actions .parent-btn { flex: 1; }
+}
+
+/* Phones: same two-up grid, but tighter. */
+@media (max-width: 575.98px) {
+    .pa-filters { gap: 8px 10px; }
+    .pa-filters label { font-size: 11px; margin-bottom: 3px; }
+    .pa-filters select,
+    .pa-filters input,
+    .pa-filters .parent-btn { height: 36px; font-size: 13px; }
+    .pa-filters input[type="date"] { padding: 0 6px; }
+}
+
+/* Phones: Prev and Next share one line. fitPager() in activity.php decides
+   which page numbers fit between them. */
+@media (max-width: 575.98px) {
+    div.dataTables_wrapper div.dataTables_paginate ul.pagination {
+        flex-wrap: nowrap;
+        justify-content: space-between;
+    }
+}

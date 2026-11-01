@@ -1,11 +1,4 @@
-/* ============================================================
-   admin/merchant_details.php — the one interactive control.
-
-   The page is rendered server-side; the only thing that writes
-   is the inventory compliance toggle, which posts to
-   admin/api/get_stall_details.php and then reloads so the row,
-   the counts and the audit trail all come back in agreement.
-   ============================================================ */
+/* admin/merchant_details.php: inventory compliance toggle, then reload. */
 (function () {
     const config = window.merchantDetailConfig || {};
     const endpoint = config.endpoint;

@@ -1,9 +1,5 @@
 <?php
-// ============================================================
-//  student/api/guardian_link.php
-//  A student approves or declines a parent's request to link to
-//  their wallet (requests are created by parent/api/link.php).
-// ============================================================
+// Student approves or declines a parent link request.
 declare(strict_types=1);
 header('Content-Type: application/json');
 

@@ -113,7 +113,8 @@ try {
                 'Allowance Received',
                 gjc_user_label($db, $parentUserId) . ' sent you ' . gjc_money_plain($amount) . '.',
                 'hand-holding-dollar',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $result['reference']
             );
 
             echo json_encode([

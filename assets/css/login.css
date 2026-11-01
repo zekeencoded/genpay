@@ -1,12 +1,7 @@
 @import url("gjc-clear.css?v=23");
 @import url("theme.css?v=14");
 
-/* ===== GLOBAL =====
-   The photo-background "auth glass" treatment is a deliberate departure
-   from the app's flat cream/white-card system (it's the entry gate, not
-   an in-app screen) — kept distinct on purpose, but its dark overlay and
-   glass tones are now derived from --gp-green-950 (13, 36, 24) instead of
-   an independently-invented green, so it still tracks the real palette. */
+/* ===== GLOBAL: photo background with glass card (login only) ===== */
 body {
   font-family: var(--gjc-font-body);
   background: linear-gradient(rgba(13, 36, 24, 0.85), rgba(13, 36, 24, 0.85)), url('../images/GenSimeon-Bldg.jpg') center/cover no-repeat !important;
@@ -23,11 +18,7 @@ body {
   padding: 24px 16px;
 }
 
-/* ===== CARD =====
-   Auth-mode radius scale: 20px cards/modals, 12px inputs/buttons,
-   10px small nested chips, 999px pills. Deliberately its own (smaller)
-   scale than the app's 16/14px card system, but now a fixed scale
-   instead of 8 unrelated values. */
+/* ===== CARD ===== */
 .login-card {
   width: 100%;
   max-width: 420px;
@@ -188,19 +179,6 @@ body {
   transform: scale(1.02);
 }
 
-/* ===== SIGNUP ===== */
-.signup-text {
-  text-align: center;
-  margin-top: 15px;
-  font-size: 12px;
-  color: #ccc;
-}
-
-.signup-text a {
-  color: #fff;
-  text-decoration: none;
-}
-
 .eye img {
   width: 13px;
   height: 13px;
@@ -287,10 +265,6 @@ body {
     margin-top: 18px;
   }
 
-  .signup-text {
-    line-height: 1.5;
-  }
-
   .custom-modal {
     margin: 0 10px;
     padding: 14px;
@@ -316,13 +290,6 @@ body {
 /* TITLE */
 .modal-title {
   font-weight: 700;
-}
-
-/* TEXT */
-.modal-desc {
-  font-size: 13px;
-  color: var(--gjc-muted);
-  margin-bottom: 15px;
 }
 
 /* STEPS */

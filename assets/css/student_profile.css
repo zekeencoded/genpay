@@ -1,6 +1,4 @@
-/* Shared pf-* form primitives (alerts, fields, buttons, pills, notes) for the
-   sd-* forest-green shell — used by student/profile.php,
-   and future form pages. Hero styles at the bottom are profile-specific. */
+/* Shared pf-* form primitives for the sd-* shell; profile hero at the bottom. */
 
 /* ===== ALERTS ===== */
 .pf-alert {
@@ -190,8 +188,7 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* Room for the native dropdown arrow, so the select's text baseline still
-   matches the input sitting beside it in a .pf-form-grid pair. */
+/* Room for the dropdown arrow. */
 .pf-field select {
   padding-right: 34px;
 }
@@ -296,8 +293,7 @@
 .pf-pill.gold  { background: var(--sd-gold-soft); color: var(--gp-gold-deep); }
 .pf-pill.red   { background: var(--gp-danger-bg); color: var(--gp-danger); }
 
-/* Right-hand value in the Personal Details list. Unlike .pf-pill it wraps, so
-   a full address stays readable instead of overflowing its row. */
+/* Wrapping value in the Personal Details list. */
 .pf-detail-value {
   max-width: 62%;
   text-align: right;
@@ -521,8 +517,7 @@
   }
 }
 
-/* Group heading inside a profile form ("Address", "Emergency Contact") —
-   see includes/partials/profile_details_fields.php. */
+/* Group heading inside a profile form. */
 .pf-form .pd-subhead {
   margin: 22px 0 12px;
   padding-top: 16px;
@@ -534,8 +529,7 @@
   color: var(--sd-muted);
 }
 
-/* Two-column layout for long profile hubs (merchant staff): keeps the page
-   short on desktop instead of one tall stack. Single column on mobile. */
+/* Two columns on desktop, one on mobile. */
 .pf-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

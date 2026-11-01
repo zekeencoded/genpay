@@ -50,8 +50,7 @@
                 ctx.textAlign = align;
                 ctx.fillText(value, x, y);
             });
-            // Measure first, then draw at the final height. Long words and
-            // references wrap too, keeping the complete record in the image.
+            // Measure first, then draw at the final height; long text wraps.
             const block = (value, x, y, maxWidth, size = 17, color = ink, weight = '400', align = 'left') => {
                 ctx.font = font(size, weight);
                 let buffer = '';

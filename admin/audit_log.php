@@ -4,9 +4,6 @@ require_once __DIR__ . "/../connection/pdo.php";
 require_once __DIR__ . "/../connection/app.php";
 require_once __DIR__ . "/../connection/audit_logger.php";
 
-// The audit trail records what every other administrator did, and its payloads
-// carry student and parent names and email addresses. "Any finance account" is
-// too wide a door for that — a cashier had the same view as the super-admin.
 gjc_require_role(["finance"]);
 if (gjc_sub_role() !== "super_admin") {
     http_response_code(403);
@@ -21,10 +18,7 @@ $currentUser = gjc_current_user($db);
 
 $roles = ["", "Finance", "Student", "Merchant", "Vendor/Staff", "Parent", "System", "Anonymous", "Unknown"];
 
-// Built from the one list in audit_logger.php, legacy labels included so the
-// rows they already wrote stay reachable. This used to be a third hardcoded
-// copy that drifted: ENROLLMENT_STATUS_SET, ROSTER_UPLOADED, ROSTER_APPLIED and
-// TUITION_CREDIT all existed in the table but could not be selected here.
+// Filter options, including legacy labels.
 $actions = array_merge([""], gjc_audit_action_types(true));
 
 $outcomes = ["", "success", "failure", "denied", "unconfirmed"];

@@ -1,7 +1,6 @@
 <?php
 
 // Admin dashboard counts, money flow and finance queues.
-// Loaded by connection/app.php; defines functions and constants only.
 
 function gjc_count_users_by_role(PDO $db, string $roleName): int
 {
@@ -43,17 +42,8 @@ function gjc_count_users_by_role(PDO $db, string $roleName): int
 }
 
 /**
- * Daily money flow for the dashboard chart: how much entered wallets, how much
- * was spent at stalls, and how much left the system as cash.
- *
- * Read straight from the ledger with one grouped query rather than from the
- * recent-transactions list, which is capped at a few hundred rows and would
- * undercount a busy week. Only completed rows count; the vault-side types
- * (service fee, P2P) are internal shuffles, not flow.
- *
- *   loaded      top-ups + tuition credits   (money entering student wallets)
- *   spent       stall payments              (money moving to merchants)
- *   cashed_out  merchant encashments + student withdrawals (money leaving)
+ * Daily money flow for the dashboard chart, from completed ledger rows:
+ * loaded (top-ups, credits), spent (stall payments), cashed_out (encashments, withdrawals).
  */
 function gjc_dashboard_money_flow(PDO $db, int $days = 7): array
 {
@@ -106,19 +96,7 @@ function gjc_dashboard_money_flow(PDO $db, int $days = 7): array
     return ["labels" => $labels, "series" => $series];
 }
 
-/**
- * The two queues a finance officer is responsible for clearing.
- *
- * One source for both places that show them: the "Needs your attention" strip
- * on the dashboard and the count badges in the sidebar. When those two were
- * computed separately they could disagree, which is worse than showing
- * nothing — a badge saying 3 next to a tile saying 2 makes the user distrust
- * both numbers.
- *
- * Every count is guarded by gjc_table_exists() and the whole thing by a
- * try/catch, because a missing table or a bad connection must degrade to
- * "no badge" rather than take the sidebar down on every admin page.
- */
+/** Finance queue counts for the dashboard and sidebar badges. Never throws. */
 function gjc_finance_queue_counts(PDO $db): array
 {
     static $cached = null;

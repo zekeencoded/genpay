@@ -1,14 +1,10 @@
-/* Scan & Pay page (student/scan.php) — sp-* styles layered on the sd-*
-   forest-green shell from student_dashboard.css. Desktop: two-column
-   scanner + guide per the approved design. Mobile (<768px): full-screen
-   dark scanner with the gold reticle, manual-entry pill, and bottom nav. */
+/* Scan & Pay (student/scan.php): two columns on desktop, full-screen scanner on mobile. */
 
 .sp-mobile-only {
   display: none !important;
 }
 
-/* The scan-feedback toast only exists on the mobile full-screen scanner;
-   the desktop layout shows the same message in the Scan Result strip. */
+/* The toast is mobile-only. */
 @media (min-width: 768px) {
   .sp-mobile-toast {
     display: none !important;
@@ -322,9 +318,7 @@
     grid-template-columns: 1fr;
   }
 
-  /* Full-screen takeover applies only to pages that opt in with body.sp-page
-     (Scan & Pay, Shop Cart); pages reusing sp-frame/sp-btn without it stay
-     stacked cards. */
+  /* Full-screen scanner only on body.sp-page. */
   body.sp-page .sp-scanner {
     position: fixed;
     top: 0;

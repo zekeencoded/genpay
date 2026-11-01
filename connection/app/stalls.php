@@ -1,17 +1,8 @@
 <?php
 
 // Stall registry and lease stall lookups.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * Claim a stall for a merchant whose merchant.stall_id already names it. Runs
- * inside the caller's transaction and locks the stall row. Returns false when
- * the stall is reserved or another merchant already holds it.
- *
- * Occupancy is merchant.stall_id (3NF), unique per stall. Until the contract
- * drops the legacy reverse link, stalls.status = 'occupied' / stalls.merchant_id
- * are still written here; afterwards the claim only clears any reservation.
- */
+/** Claim a stall for a merchant inside the caller's transaction. False if reserved or taken. */
 function gjc_claim_stall(PDO $db, string $stallId, int $merchantId): bool
 {
     if (!$db->inTransaction()) {
@@ -34,10 +25,7 @@ function gjc_claim_stall(PDO $db, string $stallId, int $merchantId): bool
     return true;
 }
 
-/**
- * A lease's stall is merchant_leases.stall_id (FK -> stalls). The free-text
- * stall_number copy is only read as a fallback until the 3NF contract drops it.
- */
+/** Whether merchant_leases still has the legacy stall_number column. */
 function gjc_lease_has_stall_number(PDO $db): bool
 {
     return in_array('stall_number', gjc_table_columns($db, 'merchant_leases'), true);
@@ -56,10 +44,7 @@ function gjc_lease_stall_sql(PDO $db, string $alias = 'ml'): string
     return gjc_lease_has_stall_number($db) ? "COALESCE({$alias}.stall_id, {$alias}.stall_number)" : "{$alias}.stall_id";
 }
 
-/**
- * `<option>`s for a lease form's stall picker: every registry stall, labelled
- * with its current occupant (merchant.stall_id) so finance picks the right one.
- */
+/** Stall picker <option>s labelled with the current occupant. */
 function gjc_stall_registry_options_html(PDO $db, string $selected = ''): string
 {
     if (!gjc_table_exists($db, 'stalls')) {

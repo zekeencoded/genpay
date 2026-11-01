@@ -1,15 +1,8 @@
-/* GenPay Clear UI Theme
-   Shared override for admin, student, merchant, login, and public pages. */
+/* GenPay Clear UI theme, shared by all roles. */
 @import url("theme.css?v=14");
 
 :root {
-  /* Primary green scale — aliases of the shared gp-* theme
-     (assets/css/theme.css, the Scan & Pay design language). theme.css is
-     the single source of truth for the palette; the --gjc-* names below
-     stay defined because rules across the app still reference them, but
-     they no longer carry independent values. Aliases that nothing
-     referenced any more were dropped 2026-09-05 — reach for the --gp-*
-     token directly rather than re-adding a shim. */
+  /* Green scale: aliases of theme.css. Use --gp-* tokens directly in new code. */
   --gjc-green-950: var(--gp-green-950);
   --gjc-green-800: var(--gp-green-850);
   --gjc-green-700: var(--gp-green-700);
@@ -30,8 +23,7 @@
   --gjc-soft: var(--gp-cream);
   --gjc-soft-2: #f4faf7;
 
-  /* Semantic / status — aliased to the same gp-* status tokens used
-     everywhere else in the app (success/warning/danger/info). */
+  /* Status colours. */
   --gjc-danger: var(--gp-danger);
   --gjc-danger-bg: var(--gp-danger-bg);
   --gjc-danger-border: #f0b8b2;
@@ -40,11 +32,7 @@
   --gjc-success-border: #a8dcbe;
   --gjc-slate: #3f4b45;
 
-  /* Radius scale — aliases of theme.css, which is the single source of
-     truth for shape. The old 8/12/16/20/24 ramp is collapsed: containers,
-     panels and badges all square off, and only buttons stay pills. The
-     -sm/-lg/-xl/-2xl names are kept (and deliberately equal) so any code
-     that reaches for them cannot reintroduce a blob. */
+  /* Radius scale: aliases of theme.css (all sizes equal on purpose). */
   --gjc-radius-sm: var(--gp-radius);
   --gjc-radius: var(--gp-radius);
   --gjc-radius-md: var(--gp-radius);
@@ -59,8 +47,7 @@
   --gjc-shadow-lg: 0 14px 28px rgba(14, 99, 50, 0.18);
   --gjc-shadow-xl: 0 18px 45px rgba(5, 41, 22, 0.08);
 
-  /* Typography — Plus Jakarta Sans everywhere (has tnum tabular figures + ₱);
-     Manrope kept as fallback only */
+  /* Plus Jakarta Sans everywhere; Manrope fallback. */
   --gjc-font-display: "Plus Jakarta Sans", "Manrope", Arial, sans-serif;
   --gjc-font-body: "Plus Jakarta Sans", "Manrope", Arial, sans-serif;
 }
@@ -78,12 +65,9 @@ body {
   background: var(--gjc-page) !important;
   color: var(--gjc-ink) !important;
   font-family: var(--gjc-font-body) !important;
-  /* Tabular figures everywhere: balances, amounts, and tables align and
-     don't jiggle when values change. */
+  /* Tabular figures so numbers align. */
   font-variant-numeric: tabular-nums;
-  /* Bootstrap already lands on 1.5 here, but print_fee_waiver.php and the
-     generated preview documents do not load Bootstrap — stating it makes the
-     theme self-sufficient instead of inheriting a browser default of ~1.15. */
+  /* Explicit for pages without Bootstrap. */
   line-height: var(--gp-leading-normal);
 }
 
@@ -92,8 +76,7 @@ h1, h2, h3, h4, h5, h6,
   font-family: var(--gjc-font-display);
 }
 
-/* Plus Jakarta Sans needs slight tightening at display sizes.
-   !important to outrank the global letter-spacing reset above. */
+/* Tighten display headings (!important beats the global reset). */
 h1, h2, .h1, .h2 { letter-spacing: -0.02em !important; }
 h3, .h3 { letter-spacing: -0.01em !important; }
 
@@ -109,12 +92,6 @@ img {
   object-fit: contain;
 }
 
-/* (Legacy shell overrides removed — sidebars and topbars are styled by each
-   role's own shell CSS, all sharing the sd forest/gold design: admin.css
-   .admin-sidebar/.topbar, student_dashboard.css .sd-sidebar/.sd-topbar,
-   parent_shell.css .parent-sidebar/.parent-topbar. The old white boxed
-   topbar + gold-filled nav look that lived here was overriding admin.css
-   with !important and made the finance side look different.) */
 
 .user-avatar,
 .encash-avatar {
@@ -166,12 +143,7 @@ img {
   color: var(--gjc-muted) !important;
 }
 
-/* ── Card system: banking-minimal ─────────────────────────────────────
-   Tier 1 · surface panels (tables/forms): the white-panel block above.
-   Tier 2 · stat tiles: white, ink figures, tinted icon chip — the
-             numbers carry the hierarchy, the chrome disappears.
-   Tier 3 · hero balance: the one dark emerald card per page. No
-             keyline: the dark field on a light page carries it. */
+/* ── Card system: panels, stat tiles, one dark hero per page ── */
 
 /* Tier 2 — stat tiles */
 .metric-card,
@@ -447,8 +419,6 @@ img {
   border-radius: var(--gjc-radius);
 }
 
-/* (Legacy green-header table system removed — tables are now styled by the
-   canonical minimal-hairline block in theme.css, one design for all roles.) */
 
 .role-pill,
 .status-pill,
@@ -503,12 +473,6 @@ img {
   box-shadow: none !important;
 }
 
-/* Circulation widget (admin/economy.php via includes/circulation_widget.php)
-   The widget's own CSS in admin.css now owns this component's look (flat
-   white panels, ledger bar, neutral pool cards) - nothing left to override
-   here. .ce-pool-vault/.ce-pool-students/.ce-pool-merchants/
-   .ce-pool-parents are colour identifiers consumed directly by admin.css, not full-card
-   background painters, so no !important fight is needed any more. */
 
 .ce-mint-info-panel.ce-limit-hit {
   background: var(--gjc-gold-100) !important;
@@ -561,12 +525,10 @@ img {
 }
 
 .sub-text,
-.signup-text,
 .options {
   color: var(--gjc-muted) !important;
 }
 
-.signup-text a,
 .options a {
   color: var(--gjc-green-800) !important;
   font-weight: 800;
@@ -603,10 +565,7 @@ img {
   backdrop-filter: none !important;
 }
 
-/* Public landing page navbar. .modal-title/.modal-desc/.modal-steps used to
-   sit in this selector list, so every dialog heading in the app was painted
-   like a navbar: white background, drop shadow and a 4px gold underline. That
-   was never the intent of a rule whose own comment says "landing page". */
+/* Public landing page navbar. */
 .navbar {
   background: #fff !important;
   box-shadow: var(--gjc-shadow-sm) !important;

@@ -3,9 +3,7 @@
 // Requires: $currentPage string (e.g. 'dashboard', 'users', 'leases', etc.)
 $currentPage = $currentPage ?? "";
 
-// Pending work, so the queues that need clearing are visible from anywhere
-// rather than only after opening each page. Same source as the dashboard's
-// "Needs your attention" strip, so a badge and a tile can never disagree.
+// Queue badges (same counts as the dashboard).
 $__queues = function_exists('gjc_finance_queue_counts') && isset($db)
     ? gjc_finance_queue_counts($db)
     : ['encashments' => 0, 'stall_applications' => 0];
@@ -101,12 +99,7 @@ $__badge = static function (int $count, string $noun): string {
     </a>
 </aside>
 <script>
-/* The collapsed rail has to survive navigation: every item in it is a link,
-   so without this the sidebar sprang back open on the next page load. The
-   class is restored inline right after the <aside> (before first paint, so
-   there is no flash of the wide rail and no width transition), and re-saved
-   by watching the element itself — that catches toggleSidebar() as well as the
-   pages that flip the class straight from an onclick attribute. */
+/* Persist the collapsed rail across pages (restored before first paint). */
 (function () {
     var el = document.getElementById('sidebar');
     if (!el) return;

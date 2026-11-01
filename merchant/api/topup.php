@@ -106,7 +106,8 @@ try {
                 'Wallet Loaded',
                 gjc_user_label($db, $ownerMerchId) . ' loaded ' . gjc_money_plain($result['credited_amount']) . ' into your wallet.',
                 'circle-plus',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $result['reference']
             );
 
             if ($result['merchant_fee'] > 0) {
@@ -206,7 +207,8 @@ try {
                     'Wallet Loaded',
                     gjc_user_label($db, $ownerMerchId) . ' loaded ' . gjc_money_plain($result['credited_amount']) . ' into your wallet.',
                     'circle-plus',
-                    PARENT_URL . '/wallet.php'
+                    PARENT_URL . '/activity.php?student=me',
+                    $result['reference']
                 );
             }
 

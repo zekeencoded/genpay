@@ -1,20 +1,10 @@
 <?php
 
 // Fee-waiver credits and maintenance fees.
-// Loaded by connection/app.php; defines functions and constants only.
 
 /**
- * School-managed Fee Waiver Credit: a non-wallet, non-GenCoin misc. credit
- * that finance creates (amount + signed parent waiver upload) to be applied
- * against a student's tuition by whichever system actually owns tuition fee
- * — GenPay does not track or manage tuition fee itself, only this credit.
- * Finance's own set_amount/upload_waiver/cancel workflow (admin/api/fee_waiver_credits.php)
- * never touches CirculationEngine, student_wallets, or system_settings.
- *
- * Once a credit is 'posted', the student or a linked parent may separately
- * choose to claim it into real GenCoin (gjc_claim_fee_waiver_credit()) —
- * that is the only path that mints, and it is self-service, one-way, and
- * unrelated to finance's workflow above.
+ * Fee Waiver Credit: non-wallet credit finance applies against tuition.
+ * Once posted, the student or parent may claim it into GenCoin (the only path that mints).
  */
 function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
 {
@@ -66,12 +56,7 @@ function gjc_ensure_fee_waiver_credits_schema(PDO $db): void
     );
 }
 
-/**
- * Backfills fee_waiver_credits for students who existed before this feature
- * shipped (the CSV import hook only creates rows for students created from
- * here on). Idempotent — INSERT IGNORE against the unique student_user_id
- * key, so already-populated rows are never touched.
- */
+/** Create missing fee_waiver_credits rows for existing students (idempotent). */
 function gjc_backfill_fee_waiver_credits(PDO $db): void
 {
     $db->exec(
@@ -82,12 +67,7 @@ function gjc_backfill_fee_waiver_credits(PDO $db): void
     );
 }
 
-/**
- * The Fee Waiver Credit for one student — reused as-is by the admin,
- * student, and parent views so nobody re-implements this lookup
- * differently. GenPay does not own tuition fee, so this returns only the
- * credit itself (amount, status, signed file), not any tuition total.
- */
+/** A student's Fee Waiver Credit (amount, status, signed file). */
 function gjc_student_waiver_credit(PDO $db, int $studentUserId): array
 {
     gjc_ensure_fee_waiver_credits_schema($db);
@@ -116,16 +96,9 @@ function gjc_student_waiver_credit(PDO $db, int $studentUserId): array
 }
 
 /**
- * Claims a posted Fee Waiver Credit into real GenCoin, minted straight into
- * the student's wallet via CirculationEngine::feeWaiverClaim(). Self-service
- * — callable by the student themselves or by a linked parent (the caller is
- * responsible for that access check; this function only re-checks the row's
- * status). Atomic test-and-set on the status column makes "whoever claims
- * first wins" race-safe between the student and parent hitting this at the
- * same time — see references/patterns.md's race-safety pattern.
+ * Claim a posted credit into GenCoin. Caller checks access; first claim wins (test-and-set).
  *
- * @throws RuntimeException if the credit isn't currently 'posted', or the
- *         student has no wallet yet.
+ * @throws RuntimeException if the credit isn't 'posted' or the student has no wallet.
  */
 function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUserId): array
 {
@@ -187,8 +160,7 @@ function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUse
 
         return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
     } catch (\Throwable $e) {
-        // Mint failed after the claim was taken — give the credit back to the queue
-        // instead of leaving it stuck 'claimed' with no money behind it.
+        // Mint failed: return the credit to 'posted'.
         $db->prepare(
             "UPDATE fee_waiver_credits SET status = 'posted' WHERE id = ? AND status = 'claimed'"
         )->execute([$creditId]);
@@ -197,19 +169,10 @@ function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUse
 }
 
 /**
- * Sibling to gjc_claim_fee_waiver_credit(), for the Bulk Student Import's
- * "Additional Fee" column (admin/maintenance.php): a brand-new student whose
- * import row carries an amount goes straight from 'empty' to 'claimed' —
- * there is no waiver document and no separate self-service claim step,
- * because finance reviewing the import preview and clicking Apply is itself
- * the approval. MUST be called AFTER the caller's own beginTransaction()/
- * commit() around the student-creation insert, never nested inside it —
- * CirculationEngine opens its own transaction and PDO does not support
- * nested transactions.
+ * Claim an imported "Additional Fee" straight from 'empty' to 'claimed'.
+ * Call after the caller's own transaction commits (no nested transactions).
  *
- * @throws RuntimeException if the credit isn't 'empty' (defensive — the
- *         row was just created moments ago by the same import), or the
- *         student has no wallet yet.
+ * @throws RuntimeException if the credit isn't 'empty' or the student has no wallet.
  */
 function gjc_import_fee_waiver_credit(PDO $db, int $studentUserId, float $amount, int $creditId, int $initiatedBy): array
 {
@@ -269,15 +232,8 @@ function gjc_import_fee_waiver_credit(PDO $db, int $studentUserId, float $amount
 }
 
 /**
- * Maintenance fee: a percentage charge on a student's POS payment or
- * P2P transfer. Like the Fee Waiver Credit it is NOT wallet money — the student's
- * balance is never touched and CirculationEngine/system_settings are never
- * involved. Each row is one tuition-assessment line finance bills later, so the
- * lifecycle is accrued -> collected (or voided when the sale is returned).
- *
- * Call this BEFORE beginTransaction(): CREATE TABLE is DDL and would implicitly
- * commit the payment transaction. It also primes the settings cache for the same
- * reason, so gjc_setting() inside the transaction never runs DDL.
+ * Maintenance fee: a % charge on POS payments and P2P transfers, billed to tuition (not wallet money).
+ * Call before beginTransaction(); it runs DDL.
  */
 function gjc_ensure_maintenance_fees_schema(PDO $db): void
 {
@@ -288,10 +244,7 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
     $done = true;
 
     $db->exec(
-        // 3NF: a fee row holds only its own facts. Student, type, amount, school
-        // year and time are its ledger row's (reference_no); when and by whom it
-        // was collected are its receipt's (collection_id). Read them through
-        // gjc_maintenance_fee_source().
+        // Other facts come from the ledger row and receipt; see gjc_maintenance_fee_source().
         "CREATE TABLE IF NOT EXISTS maintenance_fees (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             reference_no    VARCHAR(40) NOT NULL,
@@ -305,9 +258,7 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // One row per "Mark collected" action on one student — the receipt finance
-    // can point to. maintenance_fees.collection_id links each settled fee to it.
-    // The receipt's student is the student of its fees (3NF), not a stored copy.
+    // One receipt per "Mark collected" action.
     $db->exec(
         "CREATE TABLE IF NOT EXISTS maintenance_fee_collections (
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -323,10 +274,7 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
         $db->exec("ALTER TABLE maintenance_fees ADD COLUMN collection_id INT UNSIGNED NULL, ADD INDEX idx_mfee_collection (collection_id)");
     }
 
-    // Fees collected before receipts existed: group them into one legacy
-    // receipt per (student, collected_at, collector) so the history is complete.
-    // (Reads the legacy copies, so it only runs before the 3NF contract; after it
-    // a collected fee cannot exist without its receipt.)
+    // Group pre-receipt collected fees into legacy receipts (pre-3NF contract only).
     $legacy = !gjc_maintenance_fees_has_legacy_copies($db) ? [] : $db->query(
         "SELECT student_user_id, collected_at, collected_by, COUNT(*) AS n, SUM(fee_amount) AS total
            FROM maintenance_fees
@@ -356,14 +304,8 @@ function gjc_ensure_maintenance_fees_schema(PDO $db): void
 }
 
 /**
- * maintenance_fees as a FROM source, with every derived fact a query needs.
- * A fee row only stores its own facts (reference_no, fee_amount, status,
- * collection_id); the rest belongs to the ledger row it is a line on, or to
- * its receipt (3NF):
- *   student_user_id  the payer = owner of the transaction's student wallet
- *   source_type      transactions.transaction_type (payment | p2p_transfer)
- *   txn_amount, school_year_id, created_at   the transaction's
- *   collected_at, collected_by               the receipt's
+ * maintenance_fees as a FROM source with derived columns (student_user_id, source_type,
+ * txn_amount, school_year_id, created_at, collected_at, collected_by).
  * Use as: "FROM " . gjc_maintenance_fee_source('mf') . " WHERE mf.student_user_id = ?".
  */
 function gjc_maintenance_fee_source(string $alias = 'mf'): string
@@ -396,16 +338,10 @@ function gjc_mfc_has_stored_totals(PDO $db): bool
     return in_array('entry_count', gjc_table_columns($db, 'maintenance_fee_collections'), true);
 }
 
-/**
- * Settle every still-accrued fee for one student under a fresh receipt. Runs in
- * the caller's transaction. Returns ['receipt_no', 'entries', 'total'], or null
- * when the student has nothing accrued.
- */
+/** Settle a student's accrued fees under a new receipt. Returns ['receipt_no', 'entries', 'total'] or null. */
 function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collectedBy, ?string $createdBefore = null): ?array
 {
-    // $createdBefore limits the settle to fees created before that datetime
-    // (the auto-collect sweep leaves today's open so a same-day return can still void them).
-    // Student and time are the ledger row's (3NF), so the fees are reached through it.
+    // $createdBefore leaves today's fees open so same-day returns can void them.
     $cutoffSql = $createdBefore !== null ? ' AND t.created_at < ' . $db->quote($createdBefore) : '';
     $scopeSql = "maintenance_fees mf
            JOIN transactions t ON t.reference_no = mf.reference_no
@@ -425,8 +361,7 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
     }
 
     $receiptNo = gjc_reference('MFR');
-    // A receipt's count/total are its maintenance_fees rows (collection_id); the
-    // stored copies are only written until the 3NF contract drops them.
+    // Stored totals are only written until the 3NF contract drops them.
     $writeTotals = gjc_mfc_has_stored_totals($db);
     // The receipt's student is the student of its fees; the copy is written only until the contract.
     $writeStudent = gjc_mfc_has_stored_student($db);
@@ -453,12 +388,7 @@ function gjc_collect_maintenance_fees(PDO $db, int $studentUserId, int $collecte
     return ['receipt_no' => $receiptNo, 'entries' => (int) $sum['n'], 'total' => (float) $sum['total']];
 }
 
-/**
- * Auto-collect: settle every student's accrued fees from before today, one
- * receipt per student (collected_by 0 = system). Today's fees stay accrued so a
- * same-day return can still void them. Called when the admin wallet loads, so
- * no one has to press "Mark collected". Returns the receipts keyed by student.
- */
+/** Settle all accrued fees from before today, one receipt per student (collected_by 0 = system). */
 function gjc_auto_collect_maintenance_fees(PDO $db): array
 {
     $cutoff = date('Y-m-d 00:00:00');
@@ -488,17 +418,7 @@ function gjc_auto_collect_maintenance_fees(PDO $db): array
     return $receipts;
 }
 
-/**
- * The maintenance fee attached to each given transaction reference, keyed by
- * reference_no: ['fee_amount' => float, 'status' => accrued|collected|voided,
- * 'student_user_id' => int, 'collected_at' => ?string, 'receipt_no' => ?string].
- *
- * The fee is a line ON its payment/transfer, not a row of its own, so every
- * transaction view looks it up by the transaction's reference. It is a tuition
- * charge, never wallet money — nothing here touches balances or circulation.
- * Pass $studentUserId to scope to one student (the sender); references with no
- * fee simply have no key.
- */
+/** Maintenance fee per transaction reference, keyed by reference_no. */
 function gjc_maintenance_fees_by_reference(PDO $db, array $referenceNos, ?int $studentUserId = null): array
 {
     $referenceNos = array_values(array_unique(array_filter(array_map('strval', $referenceNos), static fn($r): bool => $r !== '')));
@@ -551,12 +471,7 @@ function gjc_maintenance_fee_state_label(string $status): string
     };
 }
 
-/**
- * The maintenance fee for a transaction of $amount pesos: the configured
- * percentage, rounded to the nearest centavo, never below ₱0.01 — so every
- * qualifying transaction pays at least one centavo. 0 when the fee is switched
- * off (rate 0) or the amount is not positive.
- */
+/** Fee for $amount: configured %, rounded, minimum ₱0.01. 0 when off. */
 function gjc_maintenance_fee_for_amount(PDO $db, float $amount): float
 {
     $pct = gjc_setting($db, 'maintenance_fee_rate_pct');
@@ -572,11 +487,7 @@ function gjc_fee_rate_label(float $pct): string
     return rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.') . '%';
 }
 
-/**
- * Accrue the maintenance fee for one student transaction. Runs inside the
- * caller's transaction so the fee exists if and only if the payment committed.
- * Idempotent per (reference, student). Returns the fee accrued (0.0 when off).
- */
+/** Accrue the fee inside the caller's transaction. Idempotent per (reference, student). */
 function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referenceNo, string $sourceType, float $txnAmount): float
 {
     $fee = gjc_maintenance_fee_for_amount($db, $txnAmount);
@@ -584,8 +495,7 @@ function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referen
         return 0.0;
     }
 
-    // The fee is a line on its ledger row: student, type, amount and school year
-    // are that row's (3NF) and are copied here only until the contract drops them.
+    // Legacy copies are written until the 3NF contract drops them.
     if (gjc_maintenance_fees_has_legacy_copies($db)) {
         $db->prepare(
             "INSERT IGNORE INTO maintenance_fees
@@ -600,10 +510,7 @@ function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referen
     return $fee;
 }
 
-/**
- * Void the still-accrued fee attached to a reversed sale. A fee finance has
- * already collected is left alone — that is a billing correction, not automatic.
- */
+/** Void the accrued fee of a reversed sale; collected fees are left alone. */
 function gjc_void_maintenance_fee(PDO $db, string $referenceNo): int
 {
     $stmt = $db->prepare(

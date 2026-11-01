@@ -1,46 +1,14 @@
 <?php
 
 /**
- * Hardens `systemic_audit_trail` so it can actually be trusted as an audit log.
+ * Make systemic_audit_trail append-only and tamper-evident. Idempotent; CLI only (root).
  *
  *   php database/migrations/audit_hardening.php            apply
  *   php database/migrations/audit_hardening.php --dry-run  show, change nothing
  *
- * CLI only, and it needs the root connection from connection/pdo.php because it
- * issues DDL, creates a MySQL account and installs triggers. Nothing in the
- * request path does any of that any more — that was the point.
- *
- * It is idempotent: every step checks the live schema first, so re-running it
- * after a partial failure (or on a fresh clone) is safe and cheap.
- *
- * What it does, in order — the order matters:
- *
- *   1. Adds the columns in gjc_audit_required_columns() plus the ones that make
- *      an entry attributable: target_id, outcome, reason, sub_role,
- *      correlation_id, endpoint, http_method, session_ref, prev_hash, entry_hash.
- *   2. Makes user_id nullable (keeping the FK) so pre-auth and system events can
- *      be recorded instead of silently dropped, and widens user_role to cover
- *      'System', 'Anonymous', 'Parent' and 'Unknown'.
- *   3. Converts action_type from ENUM to VARCHAR(64), preserving every live
- *      label. The PHP-side AUDIT_ACTION_TYPES list becomes the authority; a new
- *      action type no longer needs an ALTER TABLE on the request path.
- *   4. Widens old_value/new_value to MEDIUMTEXT. They were TEXT (64 KB) with no
- *      truncation anywhere, so a large payload threw under STRICT_TRANS_TABLES
- *      and the entry vanished into a swallowed exception.
- *   5. Adds the indexes the audit viewer actually filters on.
- *   6. Redacts secrets already sitting in legacy rows, and relabels the parent
- *      entries that gjc_audit_role() used to file under 'Student'. Both MUST
- *      happen before step 7, because after that nothing can update the table.
- *   7. Installs BEFORE UPDATE / BEFORE DELETE triggers that SIGNAL. Append-only
- *      stops being a convention and becomes a database guarantee.
- *   8. Creates `gjc_audit_writer` with INSERT + SELECT on this one table, and
- *      writes its password to connection/audit_config.php.
- *
- * Note on step 7: triggers do not fire for TRUNCATE, and TRUNCATE needs DROP
- * privilege. gjc_audit_writer has neither DROP nor UPDATE nor DELETE, so the
- * application cannot get past them. A DBA with root still can — that is a
- * property of running your own database, and it is what the hash chain added in
- * connection/audit_logger.php is there to make detectable.
+ * Steps: add columns, nullable user_id, VARCHAR action_type, MEDIUMTEXT payloads,
+ * indexes, redact/relabel legacy rows, block UPDATE/DELETE with triggers, and
+ * create the insert-only gjc_audit_writer account.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -96,15 +64,7 @@ function columns(PDO $db): array
     return $out;
 }
 
-/**
- * Every index, as name => ordered column list.
- *
- * Compared by leading columns rather than by name, because the table already
- * carries indexes we did not name: `fk_systemic_audit_user` (auto-created for
- * the foreign key) already covers user_id, and `idx_audit_timestamp` already
- * covers timestamp. Adding our own copies of those would cost write throughput
- * and buy nothing.
- */
+/** Indexes as name => columns, compared by leading columns. */
 function indexes(PDO $db): array
 {
     $out = [];
@@ -189,14 +149,11 @@ echo "\n2. Actor columns\n";
 
 $live = columns($db);
 
-// user_id NULL means "no logged-in user": a pre-auth login attempt, or a
-// housekeeping pass triggered by a public page load. Those entries used to be
-// dropped on the floor by logAudit()'s `$user_id <= 0` early return.
+// NULL user_id = no logged-in user (pre-auth or system).
 if (strtoupper((string) ($live['user_id']['Null'] ?? 'NO')) === 'YES') {
     step("user_id nullable", false);
 } else {
-    // The FK has to come off to change nullability, then straight back on with
-    // the same name and the same RESTRICT behaviour.
+    // Drop and re-add the FK to change nullability.
     run($db, "ALTER TABLE " . AUDIT_TABLE . " DROP FOREIGN KEY fk_systemic_audit_user");
     run($db, "ALTER TABLE " . AUDIT_TABLE . " MODIFY user_id INT NULL");
     run($db, "ALTER TABLE " . AUDIT_TABLE . " ADD CONSTRAINT fk_systemic_audit_user
@@ -211,8 +168,7 @@ $missingRoles = array_diff($wantRoles, $roleLabels);
 if (!$missingRoles) {
     step("user_role covers System/Anonymous", false);
 } else {
-    // Widen from whatever is live rather than a hardcoded list, so a label added
-    // by some later migration is not silently dropped on the floor here.
+    // Merge with live labels so later ones aren't lost.
     $merged = array_values(array_unique(array_merge($roleLabels, $wantRoles)));
     $sql = implode(', ', array_map(
         static fn(string $l): string => "'" . str_replace("'", "\\'", $l) . "'",
@@ -232,9 +188,7 @@ if (str_starts_with($actionType, 'varchar')) {
     step("action_type is VARCHAR", false);
 } else {
     $preserved = enumLabels((string) $live['action_type']['Type']);
-    // VARCHAR is a widening conversion from ENUM — MySQL rewrites each row to
-    // its label text, so nothing is lost. Print the list so the operator can see
-    // what survived.
+    // ENUM -> VARCHAR keeps every label.
     run($db, "ALTER TABLE " . AUDIT_TABLE . " MODIFY action_type VARCHAR(64) NOT NULL");
     step("action_type ENUM(" . count($preserved) . " labels) → VARCHAR(64)");
     echo "         preserved: " . implode(', ', $preserved) . "\n";
@@ -316,10 +270,7 @@ foreach ($rows as $row) {
     }
 }
 
-// On a re-run the append-only trigger from step 7 is already in place and would
-// block the redaction UPDATE — including this migration's own. Lift it for the
-// duration and let step 7 put it straight back. Nothing else can do this: root
-// is required to drop a trigger, and root only gets here from the CLI.
+// Lift the append-only trigger on re-runs; step 7 restores it.
 $liftedTrigger = false;
 if ($redactedIds && !$dryRun && triggerExists($db, 'trg_audit_no_update')) {
     $db->exec("DROP TRIGGER trg_audit_no_update");
@@ -338,10 +289,7 @@ if (!$redactedIds) {
 } else {
     step(count($redactedIds) . " row(s) redacted: " . implode(', ', $redactedIds));
 
-    // Record the redaction in the log it just modified. This is the last write
-    // this table will ever accept that is not an append, and it exists so the
-    // edit is not invisible: anyone auditing the auditor sees exactly which
-    // log_ids were touched and when.
+    // Log which rows the redaction touched.
     if (!$dryRun) {
         $db->prepare(
             "INSERT INTO " . AUDIT_TABLE . "
@@ -366,19 +314,7 @@ if (!$redactedIds) {
 
 echo "\n6b. Parent role relabel\n";
 
-// gjc_audit_role() had no 'parent' case, so it fell through to a default of
-// 'Student' and every parent action — logins, password changes, allowance
-// transfers, wallet controls — was filed under the wrong role. Filtering the
-// audit log by Student returned a guardian's activity.
-//
-// roleID 7 is unambiguous, so these rows can be corrected rather than left
-// misattributed. Two constraints shape how:
-//   - Only rows whose entry_hash is NULL are touched. A chained row's hash
-//     covers user_role, so rewriting one would break the chain — and a broken
-//     chain is exactly the signal we do not want to spend. Chained rows are
-//     already correct anyway; the mapper was fixed before any were written.
-//   - The edit writes its own MIGRATION_ROLE_RELABEL entry naming every log_id
-//     it changed, so this correction is itself in the audit trail.
+// Relabel parent rows filed as 'Student'. Only unchained rows (entry_hash NULL), and log the change.
 
 $mislabelled = $db->query(
     "SELECT s.log_id
@@ -434,9 +370,6 @@ if (!$mislabelled) {
 }
 
 if ($chainedMislabelled > 0) {
-    // Should be impossible — the mapper was fixed before any chained row could
-    // be written with the wrong label — but say so loudly rather than silently
-    // breaking a chain to tidy it.
     echo "  [warn] {$chainedMislabelled} chained row(s) also carry the wrong role.\n";
     echo "         Left untouched on purpose: rewriting them would break the hash chain.\n";
 }
@@ -487,8 +420,7 @@ if (!$dryRun) {
     // Re-assert on every run so the account and the config file cannot drift apart.
     $db->exec("ALTER USER '" . AUDIT_DB_USER . "'@'" . AUDIT_DB_HOST . "'"
         . " IDENTIFIED BY " . $db->quote($password));
-    // INSERT + SELECT on one table. No UPDATE, no DELETE, no DROP, no ALTER —
-    // so the running application physically cannot rewrite its own audit trail.
+    // INSERT + SELECT only, so the app can't rewrite the audit trail.
     $db->exec("GRANT INSERT, SELECT ON `{$schema}`.`" . AUDIT_TABLE . "`"
         . " TO '" . AUDIT_DB_USER . "'@'" . AUDIT_DB_HOST . "'");
     $db->exec("FLUSH PRIVILEGES");

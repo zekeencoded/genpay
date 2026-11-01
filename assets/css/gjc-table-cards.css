@@ -1,59 +1,7 @@
-/* ============================================================
-   GenPay — RESPONSIVE TABLE CARDS
-   One canonical answer to "the table doesn't fit on a phone".
-
-   The listing tables in the student / merchant / parent shells run
-   up to nine columns. Inside .table-responsive that meant the
-   amount, the status and — worst of all — the View button sat off
-   the right edge on a phone, so reading a row took a sideways
-   scroll and tapping through took another.
-
-   Here each row becomes a list row, not a small table: the thing
-   it is on the left of the first line, the figure on the right,
-   and the supporting detail muted underneath. Tapping the row
-   opens its full details.
-
-       Banana Cue                     ₱15.00  ›
-       Low · Available
-
-   Which columns make the row is declared on the <th>:
-     data-card="title"   first line, left — the row's identity
-     data-card="amount"  first line, right — the figure
-     data-card="hide"    detail-only; off the row
-     (unmarked)          the muted second line, dot-separated
-
-   A table that declares no title keeps the labelled layout — a
-   LABEL / value line per field. That is the right presentation
-   when the values do not describe themselves (the parent's
-   school-year balances are three money columns that would be
-   unreadable stripped of their headings), and it is also how the
-   detail-only fields render when a row expands.
-
-   How it turns on
-     gjc_table_cards.js tags each listing table with .gjc-cards and
-     flips .gjc-cards--on when the viewport is narrow enough. The
-     rules below only bite once that class is present, so a page
-     with JS off keeps exactly the scrolling table it has today.
-     The script reads data-card off each <th> and classes each cell
-     by the job it does.
-
-   Breakpoints (owned by the script, mirrored here for reference)
-     <  768px  every tagged table stacks
-     <  992px  tables of 7+ columns stack — they cannot fit a tablet
-               either — via .gjc-cards--wide
-
-   Why the selectors carry table.gjc-cards.gjc-cards--on
-     The canonical table system in theme.css addresses cells as
-     "body.gp-theme .table tbody td" — specificity (0,2,3). A card
-     rewrites the padding and borders that rule owns, so it has to
-     outrank it. Naming both classes plus the element gets (0,2,4)
-     and wins on merit rather than on !important. The !important
-     that remain are aimed at three specific things, noted where
-     they appear: inline style attributes, Bootstrap's text/width
-     utilities, and responsive.css?v=2's blanket button width.
-
-   Opt a table out with data-cards="false".
-   ============================================================ */
+/* ═══ Responsive table cards: listing tables become list rows on phones.
+   Mark columns on <th>: data-card="title" | "amount" | "hide"; unmarked = muted second line.
+   No title column = LABEL / value layout. gjc_table_cards.js adds .gjc-cards--on
+   (<768px, or <992px for 7+ columns). Opt out with data-cards="false". ═══ */
 
 /* ---- The wrapper stops being a scroll port ------------------ */
 .gjc-cards-wrap--on {
@@ -62,10 +10,7 @@
 
 /* ---- Table / head / body ------------------------------------ */
 table.gjc-cards.gjc-cards--on {
-  /* The label column of the labelled layout: proportional on a phone and
-     capped on a tablet, past which a percentage just strands the value
-     against the far edge. The widest header in these tables is "Starting
-     Balance", about 118px at --gp-text-2xs, so 150px clears every one. */
+  /* Label column width; 150px fits the widest header. */
   --gjc-label-col: min(41%, 150px);
   display: block;
   width: 100%;
@@ -116,12 +61,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr[role]:focus-visible {
   box-shadow: var(--gp-focus-ring);
 }
 
-/* ============================================================
-   LIST LAYOUT — rows whose table declares a title column.
-   A wrapping flex line, ordered so the DOM order of the columns
-   stops mattering: identity and figure first, then a zero-height
-   full-width break, then the muted run.
-   ============================================================ */
+/* ═══ LIST LAYOUT — tables with a title column ═══ */
 table.gjc-cards.gjc-cards--on > tbody > tr.gjc-row-list {
   display: flex;
   flex-wrap: wrap;
@@ -168,8 +108,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-meta {
   color: var(--gp-muted);
 }
 
-/* Sits on DOM order, which the meta run preserves — so this is every meta
-   but the first, and each gets a separator in front of it. */
+/* Separator before every meta value but the first. */
 table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-meta ~ td.gjc-cell-meta::before {
   content: "·";
   margin-right: var(--gp-space-1);
@@ -200,11 +139,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr.gjc-row-list.gjc-row-open::after {
   transform: rotate(-135deg);
 }
 
-/* ============================================================
-   LABELLED LAYOUT — a LABEL / value line per field.
-   Used by tables that declare no title, and by the detail-only
-   fields of a list row once it is expanded.
-   ============================================================ */
+/* ═══ LABELLED LAYOUT — LABEL / value per field ═══ */
 table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-labelled {
   order: 6;
   /* Own line, below the two the list layout builds. */
@@ -233,9 +168,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-labelled::before {
   color: var(--gp-muted);
 }
 
-/* The first labelled line of a labelled-layout card carries no rule above
-   it; in a list row every labelled line does, because it follows the
-   identity and meta lines. */
+/* No top rule on the first labelled line of a labelled card. */
 table.gjc-cards.gjc-cards--on > tbody > tr:not(.gjc-row-list) > td.gjc-cell-labelled:first-child {
   border-top: 0;
   padding-top: 0;
@@ -243,15 +176,10 @@ table.gjc-cards.gjc-cards--on > tbody > tr:not(.gjc-row-list) > td.gjc-cell-labe
 
 /* ---- Every cell, whichever layout it lands in --------------- */
 table.gjc-cards.gjc-cards--on > tbody > tr > td {
-  /* A card draws its own spacing and rules; theme.css's cell padding and
-     row hairline belong to a table. The layouts below re-add what they
-     need. */
+  /* Cards draw their own spacing. */
   padding: 0;
   border: 0;
-  /* Inline style attributes beat any selector, so the four below need the
-     weight: parent activity's Items column ships max-width, nowrap and
-     ellipsis inline, which is right for a narrow cell and wrong for a card
-     where the value simply gets to wrap. */
+  /* !important to beat inline styles. */
   max-width: none !important;
   width: auto !important;
   white-space: normal !important;
@@ -275,8 +203,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr.gjc-row-open > td.gjc-cell-hidden {
 
 /* The cell's own content, moved into a span by the script. */
 table.gjc-cards.gjc-cards--on > tbody > tr > td > .gjc-value {
-  /* An email or a reference number has no break opportunity in it; without
-     this it would push the card wider than the phone. */
+  /* Break long emails/references. */
   overflow-wrap: break-word;
 }
 
@@ -299,8 +226,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-full > .gjc-value {
 }
 
 /* ---- Cells that hold their own controls --------------------- */
-/* A form control is a value, not an action — the staff roster's Active
-   switch keeps its own labelled line rather than joining the meta run. */
+/* Form switches keep their own labelled line. */
 table.gjc-cards.gjc-cards--on > tbody > tr > td .form-check.form-switch {
   display: inline-block;
   min-height: 0;
@@ -334,9 +260,7 @@ table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-actions > .gjc-value {
   gap: var(--gp-space-2);
 }
 
-/* A wrapper div (inventory and merchant history keep their buttons in one)
-   spans the row and is allowed to wrap — flex-nowrap would push five
-   buttons off the card. */
+/* Button wrappers span the row and wrap. */
 table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-actions .gjc-value > div {
   display: flex;
   flex-basis: 100%;
@@ -348,8 +272,7 @@ table.gjc-cards.gjc-cards--on td.gjc-cell-actions .btn,
 table.gjc-cards.gjc-cards--on td.gjc-cell-actions .gjc-value > a,
 table.gjc-cards.gjc-cards--on td.gjc-cell-actions button,
 table.gjc-cards.gjc-cards--on td.gjc-cell-actions a[class*="-btn"] {
-  /* responsive.css sends every .btn to width:100% under 768px; inside a card
-     they share a row instead, so hand the sizing back to flex. */
+  /* Undo responsive.css's full-width buttons. */
   width: auto !important;
   margin: 0 !important;
   flex: 1 1 auto;
@@ -357,14 +280,12 @@ table.gjc-cards.gjc-cards--on td.gjc-cell-actions a[class*="-btn"] {
   align-items: center;
   justify-content: center;
   gap: var(--gp-space-1);
-  /* Comfortable thumb target; the shells use 52px for their standalone
-     mobile buttons, but these sit two and three to a row. */
+  /* Thumb-sized target. */
   min-height: 44px;
   white-space: nowrap;
 }
 
-/* The lone View control the card tap has replaced. Must stay after the
-   .gjc-cell-actions rules above — same weight, so source order decides. */
+/* Hidden View button (row tap replaces it). Keep after the actions rules. */
 table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-absorbed {
   display: none;
 }

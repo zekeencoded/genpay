@@ -33,9 +33,7 @@ function lease_when(?string $date, string $today): array
 $today     = date('Y-m-d');
 $thisMonth = date('Y-m');
 
-// ── Filters ──────────────────────────────────────────────────────────────
-// One "Show" control instead of the old status dropdown + overdue checkbox,
-// which could be combined into states that returned nothing.
+// ── Filters ──
 $q    = trim((string) ($_GET['q'] ?? ''));
 $view = (string) ($_GET['view'] ?? 'all');
 $views = [
@@ -52,18 +50,14 @@ if (!isset($views[$view])) {
 $page    = max(1, (int) ($_GET['page'] ?? 1));
 $perPage = 20;
 
-// ── Load the rent roll ───────────────────────────────────────────────────
-// Rent standing is computed in PHP from each lease's payment schedule, so the
-// roll is built in full and then filtered/sorted/paged here rather than in SQL.
+// ── Load the rent roll (filtered/sorted/paged in PHP; standing is computed per lease) ──
 $rows            = [];
 $leasesExist     = gjc_table_exists($db, 'merchant_leases');
 $collectedMonth  = 0.0;
 $unleased        = $directory->merchantsWithoutLease();
 
 if ($leasesExist) {
-    // No cron in this app, so the "rent due soon" notice rides page loads — see
-    // dispatchRentReminders(). Once per tenant per billing period, whichever of
-    // finance or the tenant themselves opens a page first.
+    // Send due-soon reminders (no cron; once per tenant per period).
     $directory->dispatchRentReminders();
 
     $where  = [];
@@ -88,10 +82,7 @@ if ($leasesExist) {
     // One grouped query for every lease on screen instead of one per row.
     $directory->primePaymentCache(array_column($rows, 'id'));
 
-    // Rebuild each lease's standing, and repair the stored next_due_date while
-    // we are here — older payments bumped that column by a flat month each time
-    // they were recorded, so it had drifted away from the actual receipts. Other
-    // pages (merchant/dashboard.php) read the column directly.
+    // Recompute each lease's standing and repair next_due_date.
     $hasDueCache = in_array('next_due_date', gjc_table_columns($db, 'merchant_leases'), true);
     $dueFix = $hasDueCache ? $db->prepare("UPDATE merchant_leases SET next_due_date = ? WHERE id = ?") : null;
     foreach ($rows as $i => $row) {
@@ -115,9 +106,7 @@ if ($leasesExist) {
     }
 }
 
-// ── Summary (whole roll, not just the current filter) ────────────────────
-// Each count uses the same test as the view filter its card links to, so the
-// number on the card always matches the number of rows you land on.
+// ── Summary (whole roll; same tests as the filters) ──
 $activeCount  = 0;
 $activePaidUp = 0;
 $owingCount   = 0;
@@ -222,11 +211,7 @@ function gjc_lease_qs_raw(array $overrides = []): string
     return http_build_query($merged);
 }
 
-/**
- * Link to one lease's own page, on the section the button means. `ret` carries
- * the roll's current filter so the Back link lands the user exactly where they
- * left off.
- */
+/** Link to a lease page section; `ret` keeps the roll's filters for Back. */
 function gjc_lease_link(int $leaseId, string $tab = ''): string
 {
     $url = ADMIN_URL . '/lease_details.php?token=' . rawurlencode(gjc_make_view_token($leaseId, 'lease'));

@@ -1,8 +1,4 @@
-/* merchant/settings.php — Business Profile.
-   The listing panel is a form on the left and a preview of the public
-   Stall Directory tile on the right. The tile copies stalls.css
-   (.stall--occupied / .stall--has-logo) at the directory's real column
-   width, so a name that gets cut off here gets cut off there too. */
+/* merchant/settings.php: form plus a live preview of the Stall Directory tile. */
 
 .bp-edit {
     display: grid;
@@ -41,8 +37,7 @@
 }
 .bp-logo-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .bp-logo-actions .merchant-view-btn { cursor: pointer; }
-/* Phones give .merchant-view-btn a 52px min-height as a block-ish inline
-   element, which strands the label at the top; centre it instead. */
+/* Centre the label vertically on phones. */
 .bp-listing .merchant-view-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
@@ -115,8 +110,7 @@
     .bp-logo-actions .merchant-view-btn { min-height: 44px; }
 }
 
-/* The listing now sits in a profile_hub.css card (.ph-card), which has no
-   padding of its own. */
+/* .ph-card has no padding of its own. */
 .ph-card .bp-edit { margin-top: 0; padding: 4px 20px 20px; }
 @media (max-width: 767.98px) {
     .ph-card .bp-edit { padding: 4px 16px 16px; }

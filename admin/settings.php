@@ -666,12 +666,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
         document.getElementById("sidebar").classList.toggle("collapsed");
     }
 
-    // ── Section tabs ─────────────────────────────────────────────────────
-    // One pane on screen at a time. Each of the four editable sections is its
-    // own pane: they are independent forms with their own Save button, and
-    // showing them together let an edit in one be silently discarded by a save
-    // in another. The three read-only sections carry no form, so they share the
-    // Info pane rather than spending three tabs.
+    // ── Section tabs: one pane at a time; read-only sections share the Info pane ──
     (function () {
         var page = document.querySelector(".settings-page");
         if (!page) return;
@@ -709,10 +704,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                 if (on && moveFocus) tab.focus();
             });
 
-            // Keep the URL on the open pane so it stays linkable. replaceState
-            // rather than a real fragment navigation: that would fire popstate,
-            // and the global back-guard in includes/partials/back_to_dashboard.php
-            // answers popstate by replacing the page with the dashboard.
+            // replaceState, not a hash change: popstate triggers the back-to-dashboard guard.
             history.replaceState(null, document.title, "#" + target.id);
         }
 

@@ -7,16 +7,7 @@ gjc_require_role(['parent']);
 gjc_ensure_parent_schema($db);
 gjc_ensure_parent_wallet_schema($db);
 
-/**
- * CRUD "Read": one row from the parent's activity trail, in the shared .uv-*
- * record chrome (assets/css/detail_view.css).
- *
- * The id travels as a signed HMAC token so the URL can't be walked, and the
- * lookup is still constrained to the same scope activity.php lists: the
- * linked students' wallets, plus the parent's own wallet (Scan & Pay). A
- * transaction outside that scope reads as "not available", exactly like one
- * that never existed — the page can't be used to probe other families.
- */
+/** View one activity row by signed token, scoped to linked students and the parent's wallet. */
 $parentUserId = gjc_user_id();
 $currentUser = gjc_current_user($db);
 $parentId = gjc_parent_id_for_user($db, $parentUserId);
@@ -118,9 +109,7 @@ if (!$record) {
     http_response_code(404);
 }
 
-// Maintenance fee charged on this payment/transfer (tuition-only, so a line on
-// the record rather than part of the wallet amount). The transaction itself was
-// already scope-checked above, so its reference is safe to look up.
+// Maintenance fee for this transaction.
 $maintFee = $record ? gjc_maintenance_fee_for_reference($db, (string) $record['ref']) : null;
 
 $e = gjc_e(...);

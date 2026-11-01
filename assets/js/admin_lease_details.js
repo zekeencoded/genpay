@@ -1,12 +1,4 @@
-/* ============================================================
-   admin/lease_details.php — the interactive bits of one lease.
-
-   The page itself is rendered server-side; this only wires the
-   three write actions to admin/api/leases.php and reloads once
-   the server has the change, so what you read is always what is
-   stored. The result message survives the reload in
-   sessionStorage.
-   ============================================================ */
+/* admin/lease_details.php: wires the write actions to admin/api/leases.php, then reloads. */
 (function () {
     const config = window.leaseDetailConfig || {};
     const endpoint = config.endpoint;

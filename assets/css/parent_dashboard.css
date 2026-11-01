@@ -1,6 +1,4 @@
-/* Parent Dashboard page-specific components. Shell components
-   (.parent-card, .parent-card-head, buttons, badges) live in
-   parent_shell.css, which this page also links. */
+/* Parent Dashboard page; shell styles are in parent_shell.css. */
 
 .student-row {
     display: flex;
@@ -66,64 +64,7 @@
 .alert-settings-box { background: var(--gp-cream); border: 1.5px solid var(--gp-line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
 .alert-settings-box p { font-size: 12px; font-weight: 700; color: var(--gp-muted); text-transform: uppercase; letter-spacing: .04em !important; margin: 0 0 10px; }
 
-/* My Wallet card — the parent's own GenCoin balance. Added 2026-08-28 when
-   parent/wallet.php was replaced by parent/cart.php; the balance now shows
-   where it is used (the cart) and here on the dashboard. Deliberately uses
-   the dashboard's own .parent-card idiom rather than importing the student
-   .sd-balance hero, so the page keeps one visual language. */
-.pd-wallet-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gp-space-4);
-  flex-wrap: wrap;
-}
-
-.pd-wallet-amount {
-  font-family: var(--gp-mono);
-  font-size: var(--gp-text-3xl);
-  font-weight: 700;
-  line-height: var(--gp-leading-none);
-  color: var(--gp-ink);
-}
-
-.pd-wallet-amount span {
-  font-family: var(--gp-mono);
-  font-size: var(--gp-text-md);
-  font-weight: 600;
-  color: var(--gp-muted);
-  margin-left: var(--gp-space-2);
-}
-
-.pd-wallet-php {
-  margin-top: var(--gp-space-2);
-  font-size: var(--gp-text-xs);
-  font-weight: 600;
-  color: var(--gp-muted);
-}
-
-.pd-wallet-cta {
-  background: var(--gp-grad-forest-btn);
-  color: #fff;
-  border: none;
-  border-radius: var(--gp-radius-pill);
-  min-height: 40px;
-  padding: 0 var(--gp-space-6);
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--gp-text-sm);
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: filter var(--gp-transition);
-}
-
-.pd-wallet-cta:hover { filter: brightness(1.12); color: #fff; }
-
-/* Phone reflow. The rows below already wrap, so this only handles the two
-   cases wrapping cannot fix: fixed-width inputs that overflow a ~310px
-   content column, and the student row's action buttons which are
-   flex-shrink:0 and would squeeze the name to nothing. */
+/* Phone reflow for fixed-width inputs and the student row actions. */
 @media (max-width: 576px) {
   .student-row {
     flex-wrap: wrap;
@@ -143,16 +84,9 @@
     width: 100%;
     min-width: 0;
   }
-
-  .pd-wallet-row { gap: var(--gp-space-3); }
-  .pd-wallet-amount { font-size: var(--gp-text-2xl); }
-  .pd-wallet-cta { flex: 1 1 100%; justify-content: center; }
 }
 
-/* Inside a .parent-grid column (>=1200px, parent_shell.css) the student row
-   has roughly a phone's width to work with — 44px avatar, a balance chip and
-   two pill buttons leave the name almost nothing — so it takes the same
-   wrapped shape as the <=576px reflow above. */
+/* In the two-column grid the student row is phone-width; reuse the phone layout. */
 @media (min-width: 1200px) {
   .parent-grid-col .student-row {
     flex-wrap: wrap;
@@ -165,107 +99,236 @@
   .parent-grid-col .student-actions .btn-controls { flex: 1; text-align: center; }
 }
 
-/* ===== MY PURCHASES (the parent's own wallet) =====
-   Kept deliberately apart from Linked Students: this panel is only ever the
-   parent's own spending, and their children's only ever appears in the
-   student rows and on activity.php. Same row idiom as .alert-row above so
-   the panels read as one family. */
-.pd-viewall {
+/* Link form sits at the foot of the Linked Students card. */
+.link-student {
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gp-line);
+}
+.link-student h6 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gp-ink);
+}
+.link-student > p,
+.link-intro {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--gp-muted);
+}
+
+/* ── Buttons on the sub-pages ──────────────────────────────── */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 5px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--gp-ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.back-link:hover { background: var(--gp-cream); color: var(--gp-ink); }
+
+/* Filled action in a card header, e.g. Link a student. */
+.page-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: var(--gp-green-950);
+  color: #fff;
   font-size: 12px;
   font-weight: 700;
-  color: var(--gp-green-700);
   text-decoration: none;
   white-space: nowrap;
 }
 
-.pd-viewall:hover { text-decoration: underline; }
+.page-action:hover { color: #fff; filter: brightness(1.15); }
+.page-action:focus-visible { outline: none; box-shadow: var(--gp-focus-ring); }
 
-.pd-txn {
+/* ── Link a Student page ───────────────────────────────────── */
+.link-page-wrap { max-width: 520px; }
+
+.link-page {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 20px;
+}
+
+.link-page-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #dcf3e4;
+  color: #15803d;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.link-page-label {
+  margin-top: 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gp-ink);
+}
+
+.link-page-input {
+  margin-top: 8px;
+  height: 52px;
+  border: 1.5px solid var(--ad-line);
+  border-radius: 14px;
+  padding: 0 14px;
+  font-family: var(--gp-mono);
+  font-size: 16px;
+  letter-spacing: 0.03em;
+  color: var(--gp-ink);
+  background: #fff;
+}
+
+.link-page-input:focus {
+  outline: none;
+  border-color: var(--gp-focus-border);
+  box-shadow: var(--gp-focus-ring);
+}
+
+.link-page-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gp-muted);
+}
+
+.link-page-submit {
+  margin-top: 20px;
+  height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--gp-green-950);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.link-page-submit:hover { filter: brightness(1.15); }
+.link-page-submit:focus-visible { outline: none; box-shadow: var(--gp-focus-ring); }
+.link-page-submit:disabled { opacity: 0.6; cursor: default; }
+
+.link-page-msg { margin-top: 12px; font-size: 13px; }
+.link-page-msg:empty { display: none; }
+
+.link-page-pending {
+  display: block;
+  margin-top: 14px;
+  padding: 16px 20px;
+  max-width: 520px;
+}
+
+.link-page-pending h6 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--gp-ink);
+}
+
+.link-page-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--gp-line);
+  border-top: 1px solid var(--gp-line-soft);
 }
 
-.pd-txn:last-child { border-bottom: none; }
+.link-page-row .student-info { flex: 1; min-width: 0; }
 
-.pd-txn-icon {
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  border: 1px solid var(--gp-line);
-  background: var(--gp-cream);
-  color: var(--gp-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-}
-
-.pd-txn-icon.is-in {
-  background: var(--gp-success-bg);
-  border-color: #a8dcbe;
-  color: var(--gp-success);
-}
-
-.pd-txn-info { flex: 1; min-width: 0; }
-.pd-txn-info strong { display: block; font-size: 14px; font-weight: 700; color: var(--gp-ink); }
-.pd-txn-info small {
-  display: block;
+.link-page-status {
   font-size: 12px;
-  color: var(--gp-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pd-txn-amount {
-  flex-shrink: 0;
-  font-family: var(--gp-mono);
-  font-size: 14px;
   font-weight: 700;
-  color: var(--gp-ink);
+  color: var(--gp-warning);
+  background: var(--gp-warning-bg);
+  border-radius: 999px;
+  padding: 4px 10px;
   white-space: nowrap;
 }
 
-.pd-txn-amount.is-in { color: var(--gp-success); }
+/* Phone quick-access squares (GCash-style service grid). Desktop shows the cards directly. */
+.parent-quick { display: none; }
 
-/* ===== MOBILE (<768px) ===== */
 @media (max-width: 767.98px) {
-  /* The meta line — "TXN-2026-000481 · Aug 27, 2026" — shares the row with
-     the amount on a phone, so it ran out of width and truncated the
-     reference to "TXN-2026-000481 · Aug 27, …". Giving it its own full-width
-     line under the label fixes that without dropping anything:
-
-         [icon]  Payment                     -P85.00
-                 TXN-2026-000481 · Aug 27, 2026
-
-     display:contents on .pd-txn-info lets its <strong> and <small> sit on
-     this grid directly; the markup is shared with the desktop layout. */
-  .pd-txn {
+  .parent-quick {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      "icon label amount"
-      "icon meta  meta";
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .parent-quick-tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    column-gap: 12px;
-    row-gap: 2px;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 6px;
+    background: #fff;
+    border: 1px solid var(--gp-line);
+    border-radius: 14px;
+    color: var(--gp-ink);
+    text-decoration: none;
   }
 
-  .pd-txn-icon { grid-area: icon; }
-  .pd-txn-info { display: contents; }
-  .pd-txn-info strong { grid-area: label; }
-
-  .pd-txn-info small {
-    grid-area: meta;
-    /* It has the whole width now, so it no longer has to cut itself short. */
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+  .parent-quick-tile:focus-visible {
+    outline: none;
+    box-shadow: var(--gp-focus-ring);
   }
 
-  .pd-txn-amount { grid-area: amount; }
+  .parent-quick-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+  }
+
+  .parent-quick-icon--students { background: #e3edfd; color: #2563eb; }
+  .parent-quick-icon--alerts   { background: #fdf1d8; color: #b45309; }
+  .parent-quick-icon--link     { background: #dcf3e4; color: #15803d; }
+
+  .parent-quick-label {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* Count sits in the corner, so the label and icon stay centred. */
+  .parent-quick-count {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--gp-red);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 20px;
+    text-align: center;
+  }
+
+  .parent-quick-count[hidden] { display: none; }
+
+  /* The phone dashboard shows the quick squares instead of these cards. */
+  .dash-desk-only { display: none !important; }
 }

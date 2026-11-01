@@ -1,24 +1,8 @@
 <?php
-// Partial: merchant topbar (shared header for all merchant pages).
-// Exact copy of includes/partials/topbar_student.php — same markup, classes,
-// ids, and JS shape. Only the merchant-specific bits differ:
-//   - $currentUser['name'] stands in for student's $studentName (every
-//     merchant page already sets $currentUser = gjc_current_user($db)).
-//   - NOTIF_API points at MERCHANT_URL instead of STUDENT_URL.
-//   - The ICONS map is keyed to the notification types merchants actually
-//     receive (sale/topup/encashment/compliance/rent) instead of student's
-//     (welcome/transfer_in/transfer_out/withdraw/payment/fee_waiver).
-// Including pages must set, before requiring this file:
-//   $currentUser    (array)  - ['name'] used for the greeting/avatar initial
-//   $topbarTitle    (string) - final <h1> HTML (pre-escaped by the caller)
-//   $topbarSubtitle (string) - final <p> HTML (pre-escaped by the caller)
-// Optional:
-//   $topbarShowBell        (bool)   - show the notification bell (defaults to true — every merchant page)
-//   $topbarAvatarPhotoUrl  (string) - profile photo URL; falls back to the initial avatar
-//   $topbarSubtitleMobile  (bool)   - keep the subtitle on a phone. It is hidden
-//       there by default: it restates what the title and the page itself
-//       already say, and it cost a line above the fold. Set it only where the
-//       subtitle is the sole on-screen home of something.
+// Partial: merchant topbar (same as topbar_student.php, merchant notifications).
+// Required: $currentUser, $topbarTitle, $topbarSubtitle (pre-escaped HTML).
+// Optional: $topbarShowBell (default true), $topbarAvatarPhotoUrl,
+//           $topbarSubtitleMobile (show the subtitle on phones; hidden by default).
 $topbarShowBell = $topbarShowBell ?? true;
 $topbarSubtitleMobile = $topbarSubtitleMobile ?? false;
 $topbarAvatarPhotoUrl = $topbarAvatarPhotoUrl ?? (
@@ -34,9 +18,7 @@ $__topbar_schoolYear = (isset($db) && $db instanceof PDO && function_exists('gjc
     : null;
 ?>
 <header class="sd-topbar<?= $topbarSubtitleMobile ? ' is-subtitle-mobile' : '' ?>">
-    <!-- Collapses the desktop rail (toggleSdSidebar() lives in the sidebar
-         partial, next to the element it owns). Hidden under 768px, where the
-         rail is display:none and the bottom nav takes over. -->
+    <!-- Desktop rail toggle (toggleSdSidebar() is in the sidebar partial). -->
     <button type="button" class="sd-menu-btn" aria-label="Toggle navigation" onclick="toggleSdSidebar()">
         <i class="fa-solid fa-bars"></i>
     </button>
@@ -215,11 +197,7 @@ $__topbar_schoolYear = (isset($db) && $db instanceof PDO && function_exists('gjc
         if (open && !panel.contains(e.target) && !btn.contains(e.target)) closePanel();
     });
 
-    // The panel is fixed-positioned (on mobile) from where the bell was at
-    // open-time — the topbar isn't sticky, so scrolling the page leaves it
-    // visually stranded instead of tracking the bell. Close on page scroll
-    // instead of trying to re-track it; scrolling *inside* the notification
-    // list itself (its own overflow-y:auto) must not trigger this.
+    // Close the panel on page scroll (not on scrolling inside the list).
     window.addEventListener('scroll', function (e) {
         if (open && e.target !== list && !list.contains(e.target)) closePanel();
     }, true);

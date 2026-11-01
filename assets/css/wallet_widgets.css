@@ -1,0 +1,387 @@
+/* Wallet widgets shared by student, parent and merchant dashboards: balance card (sd-balance) and transaction list (sd-panel / sd-txn). */
+
+/* sd-* tokens alias theme.css. */
+:root {
+  --sd-forest-950: var(--gp-green-950);
+  --sd-forest-900: var(--gp-green-900);
+  --sd-forest-850: var(--gp-green-850);
+  --sd-forest-700: var(--gp-green-700);
+  --sd-mint: var(--gp-cream);
+  --sd-gold: var(--gp-gold);
+  --sd-gold-soft: var(--gp-gold-soft);
+  --sd-line: var(--gp-line);
+  --sd-ink: var(--gp-ink);
+  --sd-muted: var(--gp-muted);
+  --sd-green: var(--gp-green);
+  --sd-red: var(--gp-red);
+  --sd-radius: var(--gp-radius);
+  --sd-radius-sm: var(--gp-radius);
+  --sd-mono: var(--gp-mono);
+}
+
+/* ===== BALANCE CARD ===== */
+.sd-balance {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--sd-radius);
+  background: var(--sd-forest-950);
+  color: #fff;
+  padding: 26px 28px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  box-shadow: 0 18px 40px rgba(13, 36, 24, 0.22);
+}
+
+.sd-balance-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sd-balance-amount {
+  font-family: var(--sd-mono);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  margin: 8px 0 12px;
+}
+
+.sd-balance-amount .sd-unit {
+  font-size: 22px;
+  font-weight: 700;
+  margin-left: 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sd-gc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sd-gc-badge {
+  background: rgba(240, 165, 0, 0.16);
+  border: 1px solid rgba(240, 165, 0, 0.45);
+  border-radius: var(--gp-radius);
+  color: var(--sd-gold);
+  font-family: var(--sd-mono);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+}
+
+.sd-gc-rate {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sd-balance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.sd-btn-solid,
+.sd-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: var(--gp-radius-pill);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.18s ease;
+}
+
+.sd-btn-solid {
+  background: #2fbf5f;
+  border: 1px solid transparent;
+  color: var(--sd-forest-950);
+  font-weight: 800;
+}
+
+.sd-btn-solid:hover {
+  background: #3ed172;
+  color: var(--sd-forest-950);
+}
+
+.sd-btn-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-weight: 700;
+}
+
+.sd-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.sd-balance-holder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.sd-balance-holder strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.sd-holder-id {
+  font-family: var(--sd-mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sd-role-badge {
+  background: rgba(240, 165, 0, 0.14);
+  border: 1px solid rgba(240, 165, 0, 0.5);
+  border-radius: var(--gp-radius);
+  color: var(--sd-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em !important;
+  padding: 4px 10px;
+  margin-top: 4px;
+}
+
+/* ===== RECENT TRANSACTIONS ===== */
+.sd-panel {
+  background: #fff;
+  border: 1px solid var(--sd-line);
+  border-radius: var(--sd-radius);
+  padding: 20px 22px;
+}
+
+.sd-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.sd-panel-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--sd-ink);
+}
+
+.sd-panel-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+
+.sd-viewall {
+  background: #dcf3e4;
+  border-radius: var(--gp-radius-pill);
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 16px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sd-viewall:hover {
+  background: #c9ecd6;
+  color: #116232;
+}
+
+.sd-txn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sd-txn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 2px;
+  border-bottom: 1px solid #eef3ee;
+}
+
+.sd-txn:last-child {
+  border-bottom: 0;
+}
+
+.sd-txn-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--gp-radius);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.sd-txn--payment .sd-txn-icon { background: #fdf1d8; color: #b45309; }
+.sd-txn--payment .sd-txn-type { color: #b45309; }
+.sd-txn--topup .sd-txn-icon { background: #dcf3e4; color: #15803d; }
+.sd-txn--topup .sd-txn-type { color: #15803d; }
+.sd-txn--voucher .sd-txn-icon { background: #efe7fb; color: #7c3aed; }
+.sd-txn--voucher .sd-txn-type { color: #7c3aed; }
+.sd-txn--transfer .sd-txn-icon { background: #e3edfd; color: #2563eb; }
+.sd-txn--transfer .sd-txn-type { color: #2563eb; }
+.sd-txn--other .sd-txn-icon { background: var(--gp-line-soft); color: var(--gp-muted); }
+.sd-txn--other .sd-txn-type { color: var(--gp-muted); }
+
+.sd-txn-info {
+  min-width: 0;
+}
+
+.sd-txn-ref {
+  font-family: var(--sd-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sd-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-txn-type {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+.sd-txn-right {
+  margin-left: auto;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.sd-txn-amount {
+  font-family: var(--sd-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #21362a;
+}
+
+.sd-txn-amount.is-in {
+  color: var(--sd-green);
+}
+
+.sd-txn-date {
+  font-size: 12px;
+  color: var(--sd-muted);
+  margin-top: 3px;
+}
+
+.sd-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--sd-muted);
+  font-size: 14px;
+}
+
+.sd-empty i {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 10px;
+  color: #b9c9be;
+}
+
+/* Peso equivalence line under a GC amount in transaction rows */
+.sd-txn-php {
+  font-family: var(--sd-mono);
+  font-size: 11px;
+  color: var(--sd-muted);
+}
+
+/* ===== MOBILE (<768px) ===== */
+@media (max-width: 767.98px) {
+  .sd-balance {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 22px 18px;
+  }
+
+  .sd-balance-amount {
+    font-size: 36px;
+  }
+
+  .sd-gc-row,
+  .sd-balance-actions {
+    justify-content: center;
+  }
+
+  /* Name + ID already live in the mobile header; drop the duplicate column. */
+  .sd-balance-holder {
+    display: none;
+  }
+
+  .sd-panel {
+    padding: 16px 14px;
+  }
+
+  /* Phone layout: two balanced lines per row (date moves left). */
+  .sd-txn {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon ref  ref  amount"
+      "icon type date php";
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 2px;
+    padding: 12px 2px;
+  }
+
+  .sd-txn-icon { grid-area: icon; }
+  .sd-txn-info,
+  .sd-txn-right { display: contents; }
+
+  .sd-txn-ref {
+    grid-area: ref;
+    font-size: 12px;
+  }
+
+  .sd-txn-type {
+    grid-area: type;
+    margin-top: 0;
+  }
+
+  .sd-txn-date {
+    grid-area: date;
+    margin-top: 0;
+    /* text-align:right still inherits through .sd-txn-right's absent box. */
+    text-align: left;
+  }
+
+  .sd-txn-date::before {
+    content: "·";
+    margin-right: 5px;
+    color: var(--gp-subtle);
+  }
+
+  /* Hide the year on phones so the meta line fits. */
+  .sd-txn-year {
+    display: none;
+  }
+
+  .sd-txn-amount {
+    grid-area: amount;
+    text-align: right;
+  }
+
+  .sd-txn-php {
+    grid-area: php;
+    text-align: right;
+  }
+
+}

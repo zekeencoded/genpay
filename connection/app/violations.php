@@ -1,12 +1,8 @@
 <?php
 
 // Restricted-product violation strikes against merchants.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * Optional current restricted-product state. Audit history remains separate.
- * Existing legacy fields remain until a separately approved CONTRACT.
- */
+/** Restricted-product state per user. */
 function gjc_ensure_user_violations_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, 'users')) {
@@ -235,10 +231,7 @@ function gjc_product_violators(PDO $db): array
     return $result;
 }
 
-/**
- * Idempotent self-healer for the restricted-product violation counter —
- * see references/schema.md's gjc_ensure_<feature>_schema() convention.
- */
+/** Self-healer for the violation counter. */
 function gjc_ensure_product_violation_schema(PDO $db): void
 {
     if (!gjc_table_exists($db, 'users')) {
@@ -247,14 +240,7 @@ function gjc_ensure_product_violation_schema(PDO $db): void
     gjc_ensure_user_violations_schema($db);
 }
 
-/**
- * Returns the datetime until which this merchant account — or, for staff
- * accounts, their owner's whole stall — is suspended over restricted-product
- * strikes, or null when not suspended. Resolves merchant_owner_id from the
- * DB row (not the session) so it works at login time and for student-facing
- * checks alike, and lazily clears suspensions that already served their days
- * (no cron needed) so admin views never show stale ones.
- */
+/** End of a merchant's (or staff owner's) strike suspension, or null. Clears expired ones. */
 function gjc_merchant_suspended_until(PDO $db, int $userId): ?string
 {
     if ($userId <= 0 || !gjc_table_exists($db, 'users')) {
@@ -292,17 +278,8 @@ function gjc_merchant_suspended_until(PDO $db, int $userId): ?string
 }
 
 /**
- * Records one blocked-restricted-product attempt (add or edit — both call
- * this) against the merchant admin who tried it. At the 'violation_warn_at'
- * threshold the merchant gets an "approaching suspension" warning; hitting
- * 'violation_risk_at' auto-suspends the whole stall for
- * 'violation_suspend_days' days (owner + staff logins, student purchases —
- * enforced via gjc_merchant_suspended_until), notifies the merchant plus
- * every finance/admin user, and spends the strikes: the counter restarts at
- * 0 so reinstatement gets a clean slate. The full history stays in the
- * PRODUCT_RESTRICTION audit trail, and finance can lift a live suspension
- * early from admin/restricted_products.php. Returns the count reached by
- * this attempt — the inventory UI escalates its blocked-attempt modals off it.
+ * Record a blocked restricted-product attempt. Warns at violation_warn_at; at
+ * violation_risk_at suspends the stall and resets the count. Returns the count.
  */
 function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reason): int
 {
@@ -344,9 +321,7 @@ function gjc_record_product_violation(PDO $db, int $merchantUserId, string $reas
     $count = (int) $transition['count'];
 
 
-    // >= not ===: if finance lowers the threshold below a merchant's current
-    // tally, the warning still fires on the next strike instead of being
-    // skipped forever. Bounded above by $riskAt so it can't fire post-suspension.
+    // >= so lowering the threshold still warns.
     if ($count >= $warnAt && $count < $riskAt) {
         $strikesLeft = $riskAt - $count;
         gjc_notify(

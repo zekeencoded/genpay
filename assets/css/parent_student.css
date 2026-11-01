@@ -1,36 +1,237 @@
-/* Transaction Ledger page-specific components. Shell components
-   (.parent-card, .parent-table, buttons, badges) live in parent_shell.css. */
+/* Transaction ledger. Shell styles live in parent_shell.css. */
 
-.ledger-header { background: var(--gp-grad-hero); border-radius: var(--ad-radius); padding: 24px 28px; color: #fff; margin-bottom: 22px; box-shadow: var(--gp-shadow-hero); }
-.ledger-header h2 { font-weight: 800; font-size: 20px; margin: 0 0 4px; }
-.ledger-header .balance-big { font-family: var(--gp-mono); font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
-.ledger-header small { opacity: .75; font-size: 13px; }
-.status-chips { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.status-chip { background: rgba(255,255,255,.15); border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 600; }
-.status-chip.frozen { background: rgba(220,38,38,.28); }
-.filter-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.filter-tab { background: var(--gp-cream); border: 1.5px solid var(--ad-line); color: var(--gp-ink); border-radius: 999px; padding: 5px 16px; font-size: 13px; font-weight: 600; text-decoration: none; }
-.filter-tab.active, .filter-tab:hover { background: var(--gp-green-700); border-color: var(--gp-green-700); color: #fff; }
-/* .txn-table base styling now comes from the canonical table system in
-   theme.css; only cell-level accents remain here. */
+/* ── Hero: who, how much, and the two things a parent changes here ── */
+.ledger-hero {
+  background: var(--gp-green-950);
+  color: #fff;
+  border-radius: var(--ad-radius);
+  padding: 20px 20px 18px;
+  margin-bottom: 14px;
+}
+
+.ledger-hero-id strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ledger-hero-id span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ledger-balance {
+  margin-top: 18px;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-caption {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ledger-hero-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ledger-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+}
+
+a.ledger-pill:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.ledger-pill--alert {
+  border-color: transparent;
+  background: rgba(220, 38, 38, 0.35);
+}
+
+/* ── Fees: two items in one card, each with one action ───────────── */
+.ledger-fees {
+  background: #fff;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-radius);
+  margin-bottom: 14px;
+}
+
+.fee-item { padding: 16px 18px; }
+
+.fee-item + .fee-item { border-top: 1px solid var(--gp-line-soft); }
+
+.fee-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fee-item-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gp-ink);
+}
+
+.fee-amount {
+  margin: 10px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-amount--credit { color: var(--gp-success); }
+
+.fee-hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gp-muted);
+}
+
+.fee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+
+.fee-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gp-green-700);
+  text-decoration: none;
+}
+
+.fee-link:hover { text-decoration: underline; }
+
+/* ── Transactions: filter row, then one flat list ───────────────── */
+.ledger-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ledger-filters::-webkit-scrollbar { display: none; }
+
+.filter-tab {
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid var(--ad-line);
+  color: var(--gp-ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.filter-tab.active,
+.filter-tab:hover {
+  background: var(--gp-green-950);
+  border-color: var(--gp-green-950);
+  color: #fff;
+}
+
+.ledger-list {
+  background: #fff;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-radius);
+  padding: 4px 18px;
+}
+
+.ledger-list .table-responsive { margin: 0; }
+
+/* Base table styles come from theme.css. */
 .txn-table thead th.num { text-align: right; }
-.txn-row .txn-time { color: var(--gp-muted); }
-.txn-row .txn-desc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gp-muted); }
+.txn-row .txn-desc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gp-ink); }
 .type-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
-.txn-amount { text-align: right; }
+.txn-amount { text-align: right; white-space: nowrap; }
 .txn-amount.credit { color: var(--gp-success); font-weight: 700; }
 .txn-amount.debit  { color: var(--gp-danger); font-weight: 700; }
 .txn-balance { text-align: right; font-weight: 700; color: var(--gp-ink); }
-.back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--gp-green-700); font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 18px; }
-.back-link:hover { text-decoration: underline; }
+.txn-bal-lead { display: none; }
+.txn-row .txn-date { color: var(--gp-muted); white-space: nowrap; }
+
+.back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 5px 12px; border: 1px solid var(--ad-line); border-radius: 999px; background: #fff; color: var(--gp-ink); font-size: 13px; font-weight: 700; text-decoration: none; }
+.back-link:hover { background: var(--gp-cream); color: var(--gp-ink); }
 .empty-state { text-align: center; padding: 40px 16px; color: var(--gp-muted); }
 
-/* Phone reflow. The ledger hero and its big number dominate a 390px screen
-   otherwise, and .txn-desc's fixed 200px max-width fights the table's own
-   horizontal scroll container. */
-@media (max-width: 576px) {
-  .ledger-header { padding: var(--gp-space-5) var(--gp-space-4); }
-  .ledger-header h2 { font-size: var(--gp-text-lg); }
-  .ledger-header .balance-big { font-size: var(--gp-text-2xl); }
-  .txn-row .txn-desc { max-width: 140px; }
+/* ── Phones ──────────────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  .ledger-list { padding: 0 14px; }
+
+  /* Rows sit in one list inside the card, separated by hairlines, not stacked boxes. */
+  .ledger-list table.gjc-cards.gjc-cards--on > tbody > tr {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--gp-line-soft);
+    border-radius: 0;
+    box-shadow: none;
+    margin-bottom: 0;
+    padding: 14px 0;
+  }
+
+  .ledger-list table.gjc-cards.gjc-cards--on > tbody > tr:last-child { border-bottom: 0; }
+
+  /* No expand chevron; a tap still reveals the running balance. */
+  .ledger-list table.gjc-cards.gjc-cards--on > tbody > tr.gjc-row-list[role]::after { content: none; }
+
+  /* Description: two lines at most, so a long note cannot push the amount off the row. */
+  .ledger-list table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-title > .gjc-value {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* Type reads as coloured text in the muted line, without the pill or icon. */
+  .ledger-list .type-chip {
+    background: transparent !important;
+    padding: 0;
+    font-size: 12px;
+  }
+
+  .ledger-list .type-chip i { display: none; }
+
+  /* Expanded fields keep sentence case, not the table-header caps. */
+  .ledger-list table.gjc-cards.gjc-cards--on > tbody > tr > td.gjc-cell-labelled::before {
+    text-transform: none;
+    letter-spacing: 0 !important;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Balance is a visible line on phones, so no tap is needed to see it. */
+  .ledger-list .txn-bal-lead { display: inline; font-weight: 600; color: var(--gp-muted); }
+  .ledger-list .txn-balance { font-size: 12px; }
+
+  .ledger-hero { padding: 18px 18px 16px; }
+  .ledger-balance { font-size: 32px; }
 }

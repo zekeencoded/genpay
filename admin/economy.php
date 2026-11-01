@@ -3,19 +3,11 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 
-// Every other admin page gates here and this one did not, so the vault balance,
-// every wallet-pool total, the minting report and the full wallet-user list were
-// readable by anyone who knew the URL. The mint *form* was correctly hidden
-// behind sub_role and admin/api/mint.php enforces it server-side, but the read
-// surface was open. circulation_widget.php is included only by this page, so
-// gating here covers it.
+// Finance only; also covers circulation_widget.php.
 gjc_require_role(['finance']);
 
 $currentUser = gjc_current_user($db);
 
-// Circulation figures (cap/vault/distributed/drift) are computed once,
-// inside includes/circulation_widget.php below - this page used to compute
-// them a second time just to render a duplicate set of summary cards.
 $currentPage = 'economy';
 ?>
 

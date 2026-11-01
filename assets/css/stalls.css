@@ -2,10 +2,7 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Page-local names over the shared gp-* palette. Chrome (navbar, hero,
-   footer) comes from gjc-clear.css + public_shell.css so this page matches
-   index.php; this file only styles the stall directory itself. The
-   vacant/occupied/pending colours are the app's standard status tokens. */
+/* Stall directory tokens over the gp-* palette. */
 :root {
     --green-950: var(--gp-green-950);
     --green-800: var(--gp-green-850);
@@ -121,10 +118,7 @@ body {
     cursor: default;
 }
 
-/* Occupied cards with a merchant logo use it as the card's full
-   background (set inline via style="background-image:...") with a
-   soft dark veil so the centered ID circle and name stay legible
-   over any logo's colors. */
+/* Logo background with a dark veil for legibility. */
 .stall--occupied.stall--has-logo {
     background-size: cover;
     background-position: center;
@@ -155,8 +149,7 @@ body {
 .stall--occupied .stall-id-badge { color: var(--bad); }
 .stall--pending  .stall-id-badge { color: var(--warn); }
 
-/* Occupied cards use the merchant logo as the card background; the
-   stall ID sits on top inside a circular badge, like a sticker. */
+/* Circular stall ID badge over the logo. */
 .stall-id-badge--circle {
     width: 48px; height: 48px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;

@@ -5,8 +5,7 @@
   align-items: center;
 }
 
-/* The topbar is full-bleed (admin.css uses negative margins to undo the
-   .admin-main padding) — stretch it past the centered 1080px column. */
+/* Stretch the full-bleed topbar past the 1080px column. */
 .settings-page .topbar {
   align-self: stretch;
 }
@@ -371,12 +370,7 @@
   }
 }
 
-/* ── Section tabs ────────────────────────────────────────────────────────
-   The seven panels used to sit open in one ~3,300px stack. Four of them are
-   independent forms with their own Save button, so having them all on screen
-   let an edit in one section be thrown away by a save in another. The bar
-   shows one panel at a time; tab labels are short because the panel header
-   underneath already carries the full section name. */
+/* ── Section tabs: one panel at a time ── */
 .settings-tabs {
   width: 100%;
   max-width: 1080px;
@@ -389,8 +383,7 @@
   border: 1px solid #e3ece6;
   border-radius: 18px;
   box-shadow: 0 14px 34px rgba(5, 41, 22, 0.08);
-  /* Five tabs sit on one row at any desktop width; wrapping is the phone-width
-     fallback so the bar never clips. */
+  /* Wrap on phones. */
   flex-wrap: wrap;
 }
 
@@ -414,9 +407,7 @@
   color: var(--gp-ink);
 }
 
-/* Gold is the app's active-nav accent, but the sidebar's gold-on-dark text
-   fails on a white surface — --gp-gold-deep is the token theme.css provides
-   for gold text on light. */
+/* Gold text on light uses --gp-gold-deep. */
 .settings-tab.is-active {
   background: var(--gp-gold-soft);
   color: var(--gp-gold-deep);
@@ -435,8 +426,7 @@
   background: var(--gp-line);
 }
 
-/* Hiding is gated on .js-tabs, which only the script adds — without it the
-   page degrades to the plain stack of open panels it was before. */
+/* Panels hide only when JS adds .js-tabs. */
 .settings-page.js-tabs .settings-pane {
   display: none;
 }
@@ -445,8 +435,7 @@
   display: block;
 }
 
-/* The Info pane stacks three read-only panels; the last one should not
-   leave a trailing gap under the pane. */
+/* No trailing gap under the last panel. */
 .settings-pane > .settings-panel:last-child {
   margin-bottom: 0;
 }

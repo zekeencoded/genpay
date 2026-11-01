@@ -29,8 +29,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=23">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=4">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=18">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/public_shell.css?v=6">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/index.css?v=20">
 </head>
 <body>
 
@@ -134,6 +134,44 @@
 
             <div class="how-to-apply-cta">
                 <a href="<?= BASE_URL ?>/apply" class="btn-primary-custom">Start Your Application</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="faq" id="faq">
+        <div class="container">
+            <div class="section-title">Frequently Asked Questions</div>
+            <p class="section-sub">Everything you need to know about GenPay, the cashless wallet of General de Jesus College.</p>
+
+            <div class="faq-list">
+                <details>
+                    <summary>What is GenPay?</summary>
+                    <p>GenPay is the cashless wallet system of General de Jesus College. Your wallet holds GenCoin, which you load with cash and spend at campus stalls by scanning the QR code on the merchant's bill.</p>
+                </details>
+                <details>
+                    <summary>Who can use GenPay?</summary>
+                    <p>Students, parents and campus merchants. Students pay at stalls and send GenCoin to other students. Parents can pay at stalls too, send allowance to their child, and manage their child's wallet. Merchants accept payments, sell top-ups and cash out their earnings.</p>
+                </details>
+                <details>
+                    <summary>Is my money safe in GenPay?</summary>
+                    <p>Every top-up, payment and transfer is recorded and shows in your transaction history. A payment QR works only once and expires, and accounts are created and managed by GJC Finance staff.</p>
+                </details>
+                <details>
+                    <summary>How do I add money to my wallet?</summary>
+                    <p>Pay cash at the Finance counter or at a participating campus stall, and the GenCoin is loaded to your wallet right away. A service fee is added on top of the amount (1% at the Finance counter, 3% at a stall), so you receive the full amount you asked for.</p>
+                </details>
+                <details>
+                    <summary>How do I pay at a stall?</summary>
+                    <p>The merchant creates your bill and shows a payment QR code. Log in to GenPay, scan the code, check the items and amount, and confirm. The payment goes through instantly.</p>
+                </details>
+                <details>
+                    <summary>I forgot my password. What should I do?</summary>
+                    <p>Visit the Finance Office with your ID and request a password reset. A temporary password will be emailed to you, and you'll be asked to set a new one when you sign in.</p>
+                </details>
+                <details>
+                    <summary>Can parents monitor their child's spending?</summary>
+                    <p>Yes. A parent linked to a student can see the wallet balance and transaction history, set a daily spending limit, and freeze the wallet to block purchases and transfers.</p>
+                </details>
             </div>
         </div>
     </div>

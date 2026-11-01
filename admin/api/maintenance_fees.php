@@ -1,16 +1,7 @@
 <?php
-// ============================================================
-//  admin/api/maintenance_fees.php
-//  JSON API for the Admin Wallet's maintenance-fee ledger. Like the Fee Waiver
-//  Credit this is a non-wallet tuition-assessment line: it never touches
-//  CirculationEngine, student_wallets, or system_settings.
-//
-//  Actions:
-//    collect_student   accrued -> collected, every accrued row for one student,
-//                      under one receipt (maintenance_fee_collections)
-//    collect_all       the same for every student with accrued fees — one
-//                      receipt per student, all in one transaction
-// ============================================================
+// Maintenance-fee ledger API (non-wallet):
+//   collect_student   settle one student's accrued fees under one receipt
+//   collect_all       same for every student, one transaction
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

@@ -1,16 +1,6 @@
 <?php
-// ============================================================
-//  merchant/doc.php — Merchant-scoped compliance document
-//  Serves one of the permits/clearances the merchant submitted
-//  with their stall application, but ONLY to the merchant it
-//  belongs to. Same shape as merchant/contract.php: there is no
-//  ?f= path parameter — the caller names a *column*, which is
-//  matched against a fixed whitelist, and the path is then read
-//  from that merchant's own awarded application. A merchant can
-//  never reach another stall's documents.
-//  Usage: /merchant/doc.php?t=business_permit          (inline)
-//         /merchant/doc.php?t=business_permit&dl=1     (download)
-// ============================================================
+// Serves one of the owner's compliance documents by whitelisted column name.
+// Usage: /merchant/doc.php?t=business_permit (inline) or &dl=1 (download)
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -44,9 +34,7 @@ if (!isset($documents[$key])) {
     exit('Unknown document.');
 }
 
-// The newest copy wins: one the owner uploaded from the Business Profile, else
-// the one captured with their awarded stall application. The column name is
-// one of our own literals, chosen by the whitelist above — never the request.
+// Newest copy wins: owner upload, else the application's copy.
 $appRow = null;
 if (gjc_table_exists($db, 'stall_applications')) {
     $appStmt = $db->prepare(

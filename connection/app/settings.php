@@ -1,19 +1,10 @@
 <?php
 
 // App settings stored in app_settings.
-// Loaded by connection/app.php; defines functions and constants only.
 
-// ── App settings: finance-editable policy knobs ────────────────────────────
-// Deliberately NOT the `system_settings` table — that one is the economy
-// singleton (circulation cap + cashier vault), guarded by CHECK constraints and
-// DB triggers, and writable only by CirculationEngine. These are plain policy
-// numbers finance can retune without a deploy.
+// ── Finance-editable policy settings (not system_settings, the economy singleton) ──
 
-/**
- * Canonical keys + fallbacks. A key absent from the DB reads as its default.
- * The GJC_VIOLATION_* constants stay the single source of truth for their own
- * defaults — the settings row only overrides them at runtime.
- */
+/** Setting keys and defaults; missing keys read as the default. */
 function gjc_app_setting_defaults(): array
 {
     return [
@@ -31,8 +22,7 @@ function gjc_app_setting_defaults(): array
         // Fee waiver credits (panel 4)
         'fee_waiver_max_amount' => 50000.00,
 
-        // Maintenance fee (panel 5) — a percentage of each student POS payment /
-        // P2P transfer, billed to tuition (0.1 = 0.1%, not 10%). 0 switches it off.
+        // Percent of each student payment/transfer billed to tuition (0.1 = 0.1%). 0 = off.
         'maintenance_fee_rate_pct' => 0.10,
     ];
 }
@@ -57,11 +47,7 @@ function gjc_ensure_app_settings_schema(PDO $db): void
     );
 }
 
-/**
- * All settings, defaults merged under whatever the DB overrides. Cached per
- * request. If the table is unreachable the defaults still come back, so a
- * schema problem loosens nothing — enforcement keeps running on the built-ins.
- */
+/** All settings (defaults + DB overrides), cached. Falls back to defaults if the table fails. */
 function gjc_settings_all(PDO $db, bool $refresh = false): array
 {
     static $cache = null;

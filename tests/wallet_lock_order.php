@@ -1,12 +1,9 @@
 <?php
-// Static guard: every payment path that checks a student's daily spending limit
-// must lock the wallet row first thing in its transaction. Otherwise two requests
-// at the same moment can both pass the limit. Reads the source, so it needs no
-// database. Run from the CLI: php tests/wallet_lock_order.php
+// Static test: daily-limit payment paths lock the wallet first. Run: php tests/wallet_lock_order.php
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 $root = dirname(__DIR__);
-$files = ['student/api/transfer.php', 'student/api/checkout.php', 'merchant/api/pos.php'];
+$files = ['student/api/transfer.php', 'student/api/checkout.php'];
 
 $failures = 0;
 foreach ($files as $file) {

@@ -1,9 +1,5 @@
 <?php
-// ============================================================
-//  api/profile_photo.php
-//  AJAX endpoint — upload / remove a profile photo for the
-//  currently logged-in user (any role).
-// ============================================================
+// Upload or remove the current user's profile photo (AJAX).
 session_start();
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';

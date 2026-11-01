@@ -1,15 +1,6 @@
 <?php
-// ============================================================
-//  admin/stall_applications.php
-//  ONE-STOP stall application management.
-//
-//  Submit -> meeting auto-scheduled at submission -> single in-person meeting
-//  (verify docs + sign contract + pay) -> Awarded.
-//
-//  Two visible statuses: Pending for Verification and Awarded. Rejected,
-//  Cancelled, and Expired (no-show past the meeting date) are kept as
-//  records (daily log / history) but are internal.
-// ============================================================
+// One-stop stall application management.
+// Visible statuses: Pending for Verification, Awarded. Rejected/Cancelled/Expired are history.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -231,9 +222,7 @@ function sa_meeting_label(?string $dt): string
     .sa-section h6 { font-weight:800; margin-bottom:12px; }
     .sa-done-pill { font-size:11px; font-weight:800; color:#166534; background:var(--gp-success-bg); border-radius:999px; padding:3px 10px; }
 
-    /* What has to be true before a stall can be awarded. Previously the user
-       found this out by clicking Award and being refused, one condition at a
-       time, with the requirements written nowhere on the page. */
+    /* Award checklist. */
     .sa-checklist { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
     .sa-checklist li { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--gp-muted); }
     .sa-checklist li i { font-size:11px; color:var(--gp-subtle); }

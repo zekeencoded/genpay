@@ -1,7 +1,6 @@
 <?php
 
 // Stall applications: details, workflow, draft uploads and meeting scheduling.
-// Loaded by connection/app.php; defines functions and constants only.
 
 /** D2 application-owned detail schemas. No live routing change during EXPAND. */
 function gjc_stall_application_detail_definitions(): array
@@ -516,10 +515,7 @@ function gjc_ensure_stall_application_details_schema(PDO $db, bool $apply = fals
     return $plan;
 }
 
-/**
- * Pipeline status vocabulary: review -> meeting -> down_payment -> approval -> active.
- * Maps 1:1 to the 4-step application pipeline (current_step 1-4).
- */
+/** Exact legacy output layout with normalized reads and byte-sensitive fallback. */
 /** Exact legacy output layout with normalized reads and byte-sensitive fallback. */
 function gjc_stall_application_projection_metadata(): array
 {
@@ -991,24 +987,8 @@ function gjc_ensure_stall_application_workflow_schema(PDO $db): void
 }
 
 /**
- * Lazy expiry (there is no background cron in this app, so every touch point
- * re-checks — see also gjc_account_suspension()). A
- * pending_verification application whose one-stop meeting time has already
- * passed with no award/reject decision means the applicant never showed up;
- * flip it to 'expired' so it stops blocking that email/name/business from a
- * fresh re-application (see apply.php's duplicate check) and stops occupying
- * the meeting slot.
- *
- * Cutoff is the *calendar date*, not the exact time-of-day: a meeting slot
- * only marks its hour, and finance may still be mid-walk-in (uploading the
- * contract, recording payment) well after that hour on the same day. Waiting
- * until the day is over avoids yanking an application out from under an
- * admin who is actively awarding/rejecting it.
- *
- * $triggeredBy is whoever's page load caught it (0 from the public apply
- * form, which has no logged-in admin) — logAudit() already no-ops for a
- * non-positive user id, so passing 0 just means the transition happens
- * without an audit entry in that case.
+ * Expire pending applications whose meeting date has passed (no cron; checked lazily).
+ * $triggeredBy is 0 from the public apply form.
  */
 function gjc_expire_overdue_stall_applications(PDO $db, int $triggeredBy = 0): int
 {
@@ -1065,12 +1045,7 @@ function gjc_expire_overdue_stall_applications(PDO $db, int $triggeredBy = 0): i
     return $expiredCount;
 }
 
-/**
- * Per-field validation rules for apply.php's 5 upload tiles — the single
- * source of truth shared by apply.php's final form submit and
- * apply_upload.php's eager per-file AJAX upload, so both enforce identical
- * whitelists.
- */
+/** Upload rules for apply.php's 5 file fields (shared with apply_upload.php). */
 function gjc_stall_application_upload_rules(): array
 {
     $docMimes = ["image/jpeg", "image/png", "application/pdf"];
@@ -1090,15 +1065,7 @@ function gjc_stall_application_upload_rules(): array
 /** Upload attempts allowed per network address per hour on the public apply form. */
 const GJC_APPLY_UPLOADS_PER_HOUR = 60;
 
-/**
- * A not-yet-submitted stall application has no id to key an upload folder on,
- * so each visitor gets a random per-session token (not the raw PHP session
- * id, to avoid tying a filesystem name to the session identity) the first
- * time they attach a file. Every file attached before the final submit lands
- * under this same folder, so it survives a page refresh or a validation
- * error on some other field — apply.php renames the whole folder to the
- * real `uploads/stall_applications/<id>/` once the row is actually inserted.
- */
+/** Random per-session draft folder token for uploads before the application exists. */
 function gjc_stall_application_draft_token(): string
 {
     if (empty($_SESSION["apply_draft_token"])) {
@@ -1119,18 +1086,13 @@ function gjc_stall_application_draft_files(): array
 }
 
 /**
- * Validate one uploaded file against $rule and, if valid, move it into this
- * session's draft folder immediately (replacing whatever was previously
- * staged for the same field) and record it in the session. Used by both
- * apply.php's full-form submit and apply_upload.php's eager per-file upload.
+ * Validate an upload and move it into the session's draft folder.
  *
  * @return array{success:bool,message?:string,name?:string}
  */
 function gjc_stage_stall_application_upload(PDO $db, string $field, ?array $file, array $rule): array
 {
-    // The form is public, so a script could start a new session per request and
-    // fill the disk. Every upload attempt counts; a full application needs 5, so
-    // this also caps applications at about 12 per hour from one network.
+    // Public form: throttle uploads per network to protect the disk.
     $throttleKey = gjc_throttle_key('apply', (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
     if (gjc_login_throttled($db, $throttleKey, GJC_APPLY_UPLOADS_PER_HOUR, 60)) {
         return ["success" => false, "message" => "Too many uploads from your network. Please try again later."];
@@ -1174,13 +1136,7 @@ function gjc_stage_stall_application_upload(PDO $db, string $field, ?array $file
     return ["success" => true, "name" => $file["name"]];
 }
 
-/**
- * Discards whatever is currently staged for this visitor. Called when the
- * browser tells us this page load is a fresh arrival at apply.php — not a
- * refresh of the form the visitor was already filling in — so documents
- * attached on an earlier, abandoned visit don't silently reappear (and don't
- * get silently reused for fields the visitor doesn't re-attach this time).
- */
+/** Discard this visitor's staged uploads (fresh visit to apply.php). */
 function gjc_clear_stall_application_draft(): void
 {
     if (!empty($_SESSION["apply_draft_token"])) {
@@ -1193,13 +1149,7 @@ function gjc_clear_stall_application_draft(): void
     unset($_SESSION["apply_draft_files"], $_SESSION["apply_draft_token"]);
 }
 
-/**
- * Opportunistic cleanup for draft folders whose visitor never finished
- * submitting (closed the tab, session expired) — there is no cron in this
- * app, so apply.php sweeps this on every load, same lazy-check philosophy as
- * gjc_expire_overdue_stall_applications(). A draft older than 48 hours is
- * treated as abandoned.
- */
+/** Delete draft folders older than 48 hours (no cron; run on page load). */
 function gjc_cleanup_stale_stall_application_drafts(): void
 {
     $base = BASE_PATH . "/uploads/stall_applications";
@@ -1220,16 +1170,11 @@ function gjc_cleanup_stale_stall_application_drafts(): void
 /** Fixed bookable times for stall application Step 2 meetings - one applicant per slot. */
 function gjc_meeting_time_slots(): array
 {
-    // One-hour meeting slots, 9:00 AM – 5:00 PM with a noon lunch break.
-    // The last slot starts at 4:00 PM so no meeting runs past the 5:00 PM close.
+    // One-hour slots 9–5 with a noon break.
     return ['09:00','10:00','11:00','13:00','14:00','15:00','16:00'];
 }
 
-/**
- * Holiday calendar (admin-managed) and default meeting location, used by the
- * auto-scheduler so it never books a weekend/holiday and always has a place
- * to put on the meeting email when no admin is filling the form by hand.
- */
+/** Holiday calendar and default meeting location for the auto-scheduler. */
 function gjc_ensure_meeting_scheduling_schema(PDO $db): void
 {
     if(gjc_table_exists($db,'meeting_holidays')&&gjc_table_exists($db,'meeting_settings')
@@ -1273,18 +1218,11 @@ function gjc_meeting_default_location(PDO $db): string
 }
 
 /**
- * Pure slot-finding core — no database, no clock, so it can be unit-tested
- * against the edge cases (Friday submission → Monday, full day rolls over,
- * weekend submission → Monday, day-before-holiday skip, etc.).
+ * Find the first free slot from the next business day on (pure; testable).
  *
- * Next-business-day model: a meeting is never booked the same day as
- * submission. Starting from the day AFTER `$now`, roll forward through business
- * days (skipping weekends and $holidays) and return the first free slot.
- *
- * @param DateTimeImmutable $now            The reference "now".
- * @param callable          $bookedProvider fn(string $ymd): string[] of taken 'H:i' times.
- * @param array             $holidays       Map of 'Y-m-d' => name to skip.
- * @param string[]          $slots          Ordered 'H:i' slot start times.
+ * @param callable $bookedProvider fn(string $ymd): string[] of taken 'H:i' times.
+ * @param array    $holidays       Map of 'Y-m-d' => name to skip.
+ * @param string[] $slots          Ordered 'H:i' slot start times.
  * @return array{date:string,time:string}|null
  */
 function gjc_compute_next_meeting_slot(
@@ -1294,8 +1232,7 @@ function gjc_compute_next_meeting_slot(
     array $slots,
     int $lookaheadDays = 180
 ): ?array {
-    // Never same-day: the earliest a meeting can land is the day after
-    // submission. Scan from tomorrow, rolling past weekends/holidays/full days.
+    // Never same-day; start from tomorrow.
     $cursor = $now->setTime(0, 0, 0)->modify('+1 day');
 
     for ($i = 0; $i < $lookaheadDays; $i++) {
@@ -1318,14 +1255,7 @@ function gjc_compute_next_meeting_slot(
     return null;
 }
 
-/**
- * Finds the earliest open meeting slot from now, skipping weekends,
- * admin-defined holidays, and times already held by another live application.
- * A slot is "held" by any application with a meeting date on that day whose
- * status is not cancelled/expired/rejected — so cancellations free their slot.
- * Returns ['date' => 'Y-m-d', 'time' => 'H:i'] or null if nothing is free
- * within the lookahead window.
- */
+/** Earliest free meeting slot, skipping weekends, holidays and held slots. */
 function gjc_find_next_meeting_slot(PDO $db, int $lookaheadDays = 180): ?array
 {
     $holidays = gjc_meeting_holiday_dates($db);
@@ -1353,15 +1283,7 @@ function gjc_find_next_meeting_slot(PDO $db, int $lookaheadDays = 180): ?array
 }
 
 /**
- * Atomically assign the next free meeting slot to an application and persist it.
- *
- * Concurrency guard: a named advisory lock (GET_LOCK) serialises the
- * find-then-write critical section so two near-simultaneous submissions can
- * never be handed the same slot — the second caller sees the first's committed
- * assignment and rolls to the next free slot.
- *
- * MUST be called outside an open transaction so the UPDATE autocommits and is
- * visible to the next lock holder before the lock is released.
+ * Assign the next free slot under a GET_LOCK. Call outside a transaction.
  *
  * @return array{date:string,time:string,datetime:string,location:string}|null
  */

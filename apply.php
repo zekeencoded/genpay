@@ -1,7 +1,5 @@
 <?php
-// ============================================================
-//  apply.php - Public Stall Application Form
-// ============================================================
+// Public stall application form.
 require_once __DIR__ . "/connection/config.php";
 require_once __DIR__ . "/connection/pdo.php";
 require_once __DIR__ . "/connection/app.php";
@@ -11,15 +9,12 @@ require_once __DIR__ . "/connection/audit_logger.php";
 
 gjc_ensure_stall_application_workflow_schema($db);
 
-// No-show sweep: without this, an applicant who missed their meeting stays
-// 'pending_verification' forever and the duplicate check below would block
-// them from ever re-applying with the same email/name/business.
+// Expire no-shows so they don't block re-applying.
 gjc_expire_overdue_stall_applications($db);
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-// Sweep abandoned draft upload folders (visitors who attached files, never
-// finished, and never came back) before touching this session's own draft.
+// Remove abandoned draft uploads.
 gjc_cleanup_stale_stall_application_drafts();
 
 $formErrors = [];
@@ -114,12 +109,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $formErrors["recaptcha"] = $recaptchaError;
     }
 
-    // ── Duplicate handling: the same email, contact number, business name, or
-    // proprietor name can only sit on ONE live application at a time. "Live"
-    // means pending verification or already awarded — rejected and cancelled
-    // applications never block, so those applicants can re-apply as the
-    // termination emails promise. Each duplicate lands on its own field so the
-    // applicant sees exactly which detail is already taken.
+    // ── Duplicates: email, contact, business or proprietor name may only be on one
+    // live (pending or awarded) application.
     $sameCI = fn($a, $b) => mb_strtolower(trim((string) $a)) === mb_strtolower(trim((string) $b));
     $proprietorName = trim(implode(" ", array_filter(
         [$old["first_name"], $old["middle_name"], $old["last_name"], $old["suffix"]],
@@ -127,8 +118,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     )));
 
     if (!isset($formErrors["email"])) {
-        // The email becomes the merchant login at award — block it up front if
-        // any GenPay account already uses it (the award step would refuse it).
+        // Email becomes the merchant login; must be unused.
         $userChk = $db->prepare("SELECT 1 FROM users WHERE email = ? LIMIT 1");
         $userChk->execute([$old["email"]]);
         if ($userChk->fetch()) {
@@ -160,8 +150,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
         if (!isset($formErrors["first_name"]) && !isset($formErrors["last_name"])
             && $proprietorName !== "" && $sameCI($dup["proprietor_name"], $proprietorName)) {
-            // Keyed on its own so the form shows one message spanning the whole
-            // name row — the duplicate is the full name, not just one part.
             $formErrors["proprietor_name"] = "This full name (first, middle, last, and suffix) already has an application in progress or an awarded stall.";
             $dupFound = true;
         }
@@ -189,10 +177,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             continue;
         }
 
-        // No new file this submission — an earlier attempt in this same
-        // session may already have this one staged (that's the whole point:
-        // a validation error on some OTHER field shouldn't force
-        // re-attaching documents that were already fine).
+        // No new file: reuse one staged earlier this session.
         $draftDir = gjc_stall_application_draft_dir();
         if (isset($stagedFiles[$field]) && is_file($draftDir . "/" . $stagedFiles[$field]["fname"])) {
             $fileData[$field] = $stagedFiles[$field];
@@ -201,18 +186,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $formErrors[$field] = $rule["label"] . " is required.";
     }
 
-    // Requirement 2 — hard filter: the Business Permit is mandatory. This is an
-    // explicit server-side gate (independent of the HTML 'required'/JS checks),
-    // so a submission can never be accepted without a valid business permit
-    // upload even if the client-side validation is bypassed.
+    // Business permit is required (server-side check).
     if (empty($fileData["business_permit"]) && !isset($formErrors["business_permit"])) {
         $formErrors["business_permit"] = "Business Permit is required.";
     }
 
     if (empty($formErrors)) {
-        // Every field in $fileData is already sitting in the draft folder —
-        // either staged by this request above, or carried over from an
-        // earlier attempt in this session.
+        // All files are already in the draft folder.
         $tmpDir = gjc_stall_application_draft_dir();
 
         try {
@@ -253,12 +233,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $db->commit();
 
-            // ── One-stop scheduling: assign the verification meeting slot the
-            // moment the application is submitted (clinic-appointment model) and
-            // email the confirmation immediately. Runs AFTER commit so the slot
-            // UPDATE autocommits and is visible to concurrent submissions under
-            // the advisory lock. Non-fatal: a scheduling/email hiccup never loses
-            // the submission — the applicant is told we will email the schedule.
+            // ── Assign the meeting slot and email the confirmation (after commit; non-fatal) ──
             $meetingInfo = null;
             try {
                 $slot = gjc_assign_meeting_slot($db, $appId);
@@ -285,12 +260,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $meetingInfo = null;
             }
 
-            // The draft folder is now the real application's folder — nothing
-            // left to reuse on a future attempt.
+            // Draft folder is now the application's folder.
             unset($_SESSION['apply_draft_files'], $_SESSION['apply_draft_token']);
 
-            // PRG: store confirmation in session, then redirect so a page
-            // refresh replays a GET instead of re-posting the form.
+            // PRG: redirect so refresh doesn't re-post.
             $_SESSION['apply_success'] = [
                 'app_id'  => $appId,
                 'email'   => $old['email'],
@@ -300,10 +273,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             exit;
         } catch (Throwable $e) {
             $db->rollBack();
-            // Deliberately NOT deleting $tmpDir here — it's the session's
-            // persistent draft folder, not a disposable one-off tmp dir, so a
-            // transient failure (e.g. the rename) shouldn't cost the visitor
-            // their already-attached documents on the next attempt.
+            // Keep the draft folder so the visitor's files survive a retry.
             error_log('[apply.php] ' . $e->getMessage());
             $formErrors["general"] = "A server error occurred. Please try again.";
         }
@@ -335,23 +305,13 @@ try {
     $activeRestrictions = [];
 }
 
-// Files already attached in this session's draft — populated on a plain GET
-// (including a page refresh) just as much as a POST, so a tile that was
-// attached earlier still shows as attached even if the visitor never
-// resubmitted the form.
+// Files already attached this session.
 $attachedFiles = gjc_stall_application_draft_files();
 
-// Release the session write-lock now that every read/write this request
-// needed is done. PHP holds an exclusive per-session file lock for a
-// script's whole lifetime by default — without closing it early here, the
-// page's own eager-upload/clear fetch() calls (same session cookie, fired
-// the instant the page loads) would block waiting for THIS request to fully
-// finish rendering, which can look like a hang.
+// Release the session lock so the page's own upload fetches don't block.
 session_write_close();
 
-/** Inline data-URI preview for the profile photo tile — the draft folder
- *  isn't web-reachable (uploads/.htaccess denies all), so this is the only
- *  way to show the already-attached photo without a new serving endpoint. */
+/** Data-URI preview of the staged photo (drafts aren't web-reachable). */
 function apply_photo_preview_data_uri(array $attached): ?string
 {
     if (empty($attached["profile_picture"]["fname"])) {
@@ -855,19 +815,12 @@ function apply_photo_preview_data_uri(array $attached): ?string
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <script>
-// reCAPTCHA state: the Submit button stays locked until the checkbox is ticked
-// and its token is still fresh (Google expires it after two minutes).
+// Submit stays locked until reCAPTCHA is ticked and fresh.
 let recaptchaDone = false;
 function gjcRecaptchaSet()   { recaptchaDone = true;  checkSubmitReady(); }
 function gjcRecaptchaUnset() { recaptchaDone = false; checkSubmitReady(); }
 
-// ── Draft documents: keep on a refresh, wipe on a fresh arrival ─────────────
-// This render's request method tells us whether we're redisplaying the form
-// after a POST (e.g. a validation error on some OTHER field) — the draft
-// must always survive that, regardless of how the browser classifies the
-// navigation. GJC_WAS_POST comes from the server because the browser's own
-// navigation-type signal (below) can't tell a form resubmission apart from a
-// plain page load — both report as "navigate".
+// ── Draft documents: keep on refresh or POST, wipe on a fresh arrival ──
 const GJC_WAS_POST = <?= $_SERVER['REQUEST_METHOD'] === 'POST' ? 'true' : 'false' ?>;
 
 function gjcResetAttachedTiles() {
@@ -891,9 +844,7 @@ function gjcMaybeClearStaleDraft() {
     const isReload = navEntry ? navEntry.type === 'reload' : false;
     if (isReload) return; // an actual refresh of this same form — keep it
 
-    // A fresh GET arrival (first visit, came back after leaving, or used
-    // back/forward) — the visitor left the form, so any previously attached
-    // documents from an earlier visit should not silently reappear.
+    // Fresh arrival: clear old draft documents.
     const fd = new FormData();
     fd.append('action', 'clear');
     fetch('<?= BASE_URL ?>/apply_upload.php', { method: 'POST', body: fd }).finally(gjcResetAttachedTiles);
@@ -901,11 +852,7 @@ function gjcMaybeClearStaleDraft() {
 gjcMaybeClearStaleDraft();
 window.addEventListener('pageshow', e => { if (e.persisted) gjcMaybeClearStaleDraft(); });
 
-// ── File upload handler ────────────────────────────────────────
-// Every attached file is eager-uploaded to apply_upload.php the moment it's
-// chosen (not held back for the final form submit), so it's already saved
-// to this session's draft folder and survives a refresh or a validation
-// error on some other field — see apply.php / apply_upload.php.
+// ── File upload: each file uploads immediately to apply_upload.php ──
 let uploadingCount = 0;
 
 function handleFile(input, field, isImage) {
@@ -961,8 +908,7 @@ function handleFile(input, field, isImage) {
         });
 }
 
-// The error box (if present) is always rendered as the next sibling of the
-// drop tile — see the profile_picture and $docFields blocks above.
+// Error box is the tile's next sibling.
 function showFieldError(field, message) {
     const drop = document.getElementById('drop-' + field);
     if (!drop) return;
@@ -1008,11 +954,7 @@ if (termsBox) {
 }
 if (termsChk) termsChk.addEventListener('change', checkSubmitReady);
 
-// ── Submit gating ─────────────────────────────────────────────
-// A field counts as satisfied once its tile shows 'has-file' — true for a
-// file picked just now (once its eager upload confirms) AND for a file
-// already attached in an earlier attempt this session (rendered server-side
-// with the class already on it, even before any JS runs).
+// ── Submit gating: every required tile must have 'has-file' ──
 function checkSubmitReady() {
     const submitBtn = document.getElementById('submitBtn');
     if (!submitBtn) return; // not on the form view (e.g. the post-submit success page)
@@ -1038,8 +980,7 @@ document.getElementById('applyForm')?.addEventListener('submit', function () {
     btn.textContent = 'Submitting… Please wait';
 });
 
-// ── On load: restore terms state after validation error, and reflect any
-// files already attached from an earlier attempt this session ────────────
+// ── On load: restore terms state and attached files ──
 if (termsChk?.checked) {
     termsChk.disabled = false;
     if (hint) hint.style.display = 'none';

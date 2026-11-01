@@ -124,7 +124,7 @@ $linkedCount   = (int) $linkedStmt->fetchColumn();
 
 // Open the tab whose form was just submitted, so its result is in view.
 $phTab  = ($_POST['profile_action'] ?? '') === 'password' ? 'password' : 'details';
-$phTabs = ['details' => 'Edit profile', 'password' => 'Change password'];
+$phTabs = ['details' => 'Personal Information', 'password' => 'Password &amp; Security', 'settings' => 'Settings'];
 
 $currentPage = 'profile';
 ?>
@@ -137,10 +137,10 @@ $currentPage = 'profile';
     <title>My Profile | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=6">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=10">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=13">
 </head>
 <body class="gp-theme">
 <div class="parent-layout">
@@ -219,9 +219,10 @@ $currentPage = 'profile';
             </section>
 
             <!-- One form at a time instead of both stacked. -->
-            <div class="ph-tabs" role="tablist" aria-label="Profile sections">
+            <?php // Phones hide the tabs: the Settings menu lists both forms, each with a back link. ?>
+            <div class="ph-tabs d-none d-md-flex" role="tablist" aria-label="Profile sections">
                 <?php foreach ($phTabs as $key => $label): ?>
-                <button type="button" class="ph-tab<?= $key === $phTab ? ' active' : '' ?>" id="ph-tab-<?= $key ?>"
+                                <button type="button" class="ph-tab<?= $key === $phTab ? ' active' : '' ?>" id="ph-tab-<?= $key ?>"
                         data-bs-toggle="tab" data-bs-target="#ph-pane-<?= $key ?>" role="tab"
                         aria-controls="ph-pane-<?= $key ?>" aria-selected="<?= $key === $phTab ? 'true' : 'false' ?>">
                     <?= $label ?>
@@ -233,8 +234,9 @@ $currentPage = 'profile';
 
                 <div class="tab-pane<?= $phTab === 'details' ? ' active' : '' ?>" id="ph-pane-details" role="tabpanel" aria-labelledby="ph-tab-details" tabindex="0">
                     <!-- Edit profile -->
+                    <button type="button" class="back-link d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
                     <div class="pcard">
-                        <h5><i class="fa-solid fa-pen me-2" style="color:var(--gp-green-700)"></i>Edit Profile</h5>
+                        <h5><i class="fa-solid fa-pen me-2" style="color:var(--gp-green-700)"></i>Personal Information</h5>
                         <p>Update your name, contact details and personal information.</p>
                         <form method="POST">
                             <input type="hidden" name="profile_action" value="profile">
@@ -272,8 +274,9 @@ $currentPage = 'profile';
 
                 <div class="tab-pane<?= $phTab === 'password' ? ' active' : '' ?>" id="ph-pane-password" role="tabpanel" aria-labelledby="ph-tab-password" tabindex="0">
                     <!-- Change password -->
+                    <button type="button" class="back-link d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
                     <div class="pcard">
-                        <h5><i class="fa-solid fa-lock me-2" style="color:var(--gp-green-700)"></i>Change Password</h5>
+                        <h5><i class="fa-solid fa-lock me-2" style="color:var(--gp-green-700)"></i>Password &amp; Security</h5>
                         <p>Keep your account secure by updating your password regularly.</p>
                         <form method="POST">
                             <input type="hidden" name="profile_action" value="password">
@@ -296,14 +299,118 @@ $currentPage = 'profile';
                     </div>
                 </div>
 
+                <div class="tab-pane" id="ph-pane-settings" role="tabpanel" aria-labelledby="ph-tab-settings" tabindex="0">
+                    <!-- Settings: same menu as student/profile.php; on phones this is the only Logout. -->
+                    <section class="ph-card">
+                        <div class="ph-card-head">
+                            <div><h3>Settings</h3></div>
+                        </div>
+                        <nav class="ph-menu" aria-label="Profile settings">
+                            <button type="button" class="ph-menu-item" data-ph-open-tab="details">
+                                <span class="ph-ic"><i class="fa-solid fa-user-pen"></i></span>
+                                <span class="ph-grow">
+                                    <span class="ph-t">Personal Information</span>
+                                    <span class="ph-s">Name, phone number and personal details</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right ph-chev"></i>
+                            </button>
+                            <button type="button" class="ph-menu-item" data-ph-open-tab="password">
+                                <span class="ph-ic"><i class="fa-solid fa-shield-halved"></i></span>
+                                <span class="ph-grow">
+                                    <span class="ph-t">Password &amp; Security</span>
+                                    <span class="ph-s">Change your login password</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right ph-chev"></i>
+                            </button>
+                            <a href="<?= PARENT_URL ?>/dashboard.php" class="ph-menu-item d-none d-md-flex">
+                                <span class="ph-ic"><i class="fa-solid fa-user-graduate"></i></span>
+                                <span class="ph-grow">
+                                    <span class="ph-t">Linked students</span>
+                                    <span class="ph-s">Link a child, view ledgers and set wallet controls</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right ph-chev"></i>
+                            </a>
+                            <button type="button" class="ph-menu-item" data-bs-toggle="modal" data-bs-target="#phHelpModal">
+                                <span class="ph-ic"><i class="fa-solid fa-circle-question"></i></span>
+                                <span class="ph-grow">
+                                    <span class="ph-t">Help &amp; FAQs</span>
+                                    <span class="ph-s">Linking, allowances and wallet controls</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right ph-chev"></i>
+                            </button>
+                            <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
+                                <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                                <span class="ph-grow"><span class="ph-t">Log out</span></span>
+                            </button>
+                        </nav>
+                    </section>
+                </div>
+
             </div>
+
+            <div class="ph-foot">GenPay v<?= htmlspecialchars(GJC_APP_VERSION) ?></div>
 
         </div>
     </main>
 </div>
 
-<?php require __DIR__ . '/../includes/partials/logout_modal.php'; ?>
+<!-- Help & FAQs (a bottom sheet on phones), same component as student/profile.php -->
+<div class="modal fade ph-sheet" id="phHelpModal" tabindex="-1" aria-labelledby="phHelpTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="phHelpTitle">Help &amp; FAQs</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <details class="ph-faq" open>
+                    <summary>What is GenCoin (GC)?</summary>
+                    <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. It's only a display of your peso balance &mdash; no separate balance is stored.</p>
+                </details>
+                <details class="ph-faq">
+                    <summary>How do I link my child?</summary>
+                    <p>On your <strong>Dashboard</strong>, enter your child's school-issued Student ID under <strong>Link a Student</strong>. Your child then approves the request from their own GenPay profile.</p>
+                </details>
+                <details class="ph-faq">
+                    <summary>How do I send an allowance?</summary>
+                    <p>Go to <strong>Send Allowance</strong>, pick a linked student and enter the amount. It moves from your wallet to theirs right away.</p>
+                </details>
+                <details class="ph-faq">
+                    <summary>Can I limit or pause my child's spending?</summary>
+                    <p>Yes. Open <strong>Controls</strong> for a linked student on your Dashboard to freeze their wallet or set a daily spending limit.</p>
+                </details>
+                <details class="ph-faq">
+                    <summary>What are low balance alerts?</summary>
+                    <p>Set a threshold under <strong>Low Balance Alerts</strong> on your Dashboard. You're alerted whenever a linked student's balance drops below it.</p>
+                </details>
+                <details class="ph-faq">
+                    <summary>I forgot my password. What do I do?</summary>
+                    <p>Visit the Finance Office with a valid ID and request a password reset. If you're already logged in, use <strong>Password &amp; Security</strong> in Settings instead.</p>
+                </details>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<script>
+// Settings shortcuts switch to the matching tab instead of duplicating its form.
+document.querySelectorAll('[data-ph-open-tab]').forEach(function (item) {
+    item.addEventListener('click', function () {
+        var tab = document.getElementById('ph-tab-' + item.getAttribute('data-ph-open-tab'));
+        if (!tab) return;
+        bootstrap.Tab.getOrCreateInstance(tab).show();
+        // The tabs are hidden on phones, so scroll to the panes.
+        document.querySelector('.tab-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+// Phones open on Settings unless a form was just submitted.
+<?php if (!isset($_POST['profile_action'])): ?>
+if (window.matchMedia('(max-width: 767.98px)').matches) {
+    bootstrap.Tab.getOrCreateInstance(document.getElementById('ph-tab-settings')).show();
+}
+<?php endif; ?>
+</script>
 <script>
 function toggleParentSidebar() {
     document.getElementById('parentSidebar').classList.toggle('collapsed');

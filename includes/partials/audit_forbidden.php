@@ -1,13 +1,6 @@
 <?php
 
-/**
- * Shown when a finance account that is not the super-admin opens the audit
- * trail. A plain redirect to login.php would be confusing for someone who IS
- * signed in and has every other finance page available, so this says plainly
- * what happened and why.
- *
- * Expects $currentUser from the caller.
- */
+/** Shown to finance users without audit access. Expects $currentUser. */
 
 $fe = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>

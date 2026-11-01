@@ -1,7 +1,4 @@
-/* admin/cash_management.php — the combined Top-ups & Encashments page.
-   Panels, tables and buttons come from topups.css + encashments.css; this
-   file only adds what the combination needs: a four-up stat row, the
-   pending-count badge on the Cash Out tab, and pane visibility. */
+/* admin/cash_management.php: stat row, Cash Out badge and pane visibility. */
 
 .cash-stats-grid {
   display: grid;

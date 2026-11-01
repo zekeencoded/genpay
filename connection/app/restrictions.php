@@ -1,16 +1,8 @@
 <?php
 
 // Restricted-product name matching and enforcement.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * Normalizes a product name so a ban can't be dodged by cosmetic tweaks.
- * Folds case, leetspeak/homoglyphs (0→o, 3→e, @→a …), strips every
- * non-alphanumeric character (spaces, dashes, dots), then collapses runs of a
- * repeated character. So "Piattos", "piatos", "Pi@tt0s", "P-i-a-t-t-o-s" and
- * "Piattoss" all normalize to the same "piatos" — closing the drop/add-a-letter,
- * spacing, punctuation, and leetspeak evasions.
- */
+/** Normalize a product name (case, leetspeak, punctuation, repeats) so bans can't be dodged. */
 function gjc_normalize_product_name(string $name): string
 {
     $s = function_exists('mb_strtolower')
@@ -28,12 +20,7 @@ function gjc_normalize_product_name(string $name): string
     return (string) $s;
 }
 
-/**
- * Folds common Unicode "confusable" characters — Cyrillic/Greek homoglyphs and
- * accented Latin letters — down to their plain ASCII look-alike. Catches
- * evasions like "Соbra" (Cyrillic с/о) or "Cóbrá" that survive plain lowercasing.
- * Keys are lowercase; run this after mb_strtolower().
- */
+/** Fold Unicode look-alikes to ASCII. Run after mb_strtolower(). */
 function gjc_fold_confusables(string $s): string
 {
     static $map = null;
@@ -60,11 +47,7 @@ function gjc_fold_confusables(string $s): string
     return strtr($s, $map);
 }
 
-/**
- * Generic filler words that carry no brand identity. When a ban is a multi-word
- * phrase, these are stripped so matching keys off the distinctive word(s) — e.g.
- * banning "Cobra Energy Drink" enforces on "cobra", not on every "energy"/"drink".
- */
+/** Generic words ignored when matching multi-word bans. */
 function gjc_restriction_stopwords(): array
 {
     static $stop = null;
@@ -87,11 +70,7 @@ function gjc_restriction_stopwords(): array
     return $stop;
 }
 
-/**
- * Breaks a ban name into its distinctive normalized word tokens (generic filler
- * and <3-char words dropped). Returns [] when the ban is made up entirely of
- * generic words, signalling callers to fall back to whole-phrase matching.
- */
+/** Distinctive normalized words of a ban name; [] means use whole-phrase matching. */
 function gjc_restriction_tokens(string $banName): array
 {
     $stop  = gjc_restriction_stopwords();
@@ -107,12 +86,7 @@ function gjc_restriction_tokens(string $banName): array
     return array_keys($tokens);
 }
 
-/**
- * True if $token appears in $hay as a clean substring, or — for longer tokens —
- * within a small edit distance of some window of $hay (catches typo evasions
- * like "kobra"/"coxbra"). Distance budget scales with length and stays 0 for
- * short tokens so generic 3-4 letter fragments don't over-match.
- */
+/** Whether $token is in $hay, allowing small typos for longer tokens. */
 function gjc_fuzzy_token_in_haystack(string $token, string $hay): bool
 {
     $tlen = strlen($token);
@@ -137,16 +111,7 @@ function gjc_fuzzy_token_in_haystack(string $token, string $hay): bool
     return false;
 }
 
-/**
- * Core decision: does a single restriction match a product name? Everything runs
- * on the normalized form so leetspeak/spacing/homoglyph tricks are neutralised.
- *
- *  - 'exact'    → the whole normalized names must be identical.
- *  - 'contains' → matches if the normalized ban sits inside the product name, OR
- *                 any distinctive word of the ban is found (exact or fuzzy). This
- *                 is what catches "C0br4" (→"cobra") against a "Cobra Energy Drink"
- *                 ban even though the merchant never typed the full phrase.
- */
+/** Does one restriction match a product name? 'exact' or 'contains' (also matches distinctive words). */
 function gjc_restriction_matches(string $banName, string $matchType, string $productName): bool
 {
     $normBan  = gjc_normalize_product_name($banName);
@@ -177,12 +142,7 @@ function gjc_restriction_matches(string $banName, string $matchType, string $pro
     return false;
 }
 
-/**
- * Cross-checks a product name against the admin-managed restricted_products
- * blacklist. Shared by inventory add/edit (and any future scanner) so every
- * enforcement point uses the exact same nutritional-compliance rule. Returns the
- * ban reason on the first match, or null when the product is clear.
- */
+/** Check a product name against restricted_products. Returns the ban reason or null. */
 function gjc_check_restricted(PDO $db, string $productName): ?string
 {
     if (!gjc_table_exists($db, 'restricted_products')) {
@@ -205,13 +165,7 @@ function gjc_check_restricted(PDO $db, string $productName): ?string
     return null;
 }
 
-/**
- * Re-scans currently-listed inventory against every active ban and disables any
- * item that now matches under the smart rules. Idempotent (only touches items
- * not already restricted), so it's safe to call on page load — this is what
- * retroactively closes evasions that were added before a rule tightened.
- * Returns the number of items newly disabled.
- */
+/** Disable listed items that now match a ban. Returns the count disabled. */
 function gjc_enforce_restrictions_on_inventory(PDO $db): int
 {
     if (!gjc_table_exists($db, 'merchant_inventory') || !gjc_table_exists($db, 'restricted_products')) {

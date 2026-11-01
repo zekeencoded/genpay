@@ -23,8 +23,7 @@
             : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
-    // Local calendar date. toISOString() converts to UTC first, which in UTC+8
-    // hands back yesterday for any time before 08:00.
+    // Local date (toISOString() would shift to UTC).
     const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const getJson = async (params) => {

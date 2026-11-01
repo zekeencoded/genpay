@@ -1,13 +1,5 @@
 <?php
-// ============================================================
-//  parent/api/validate_qr.php
-//  Parent-side twin of student/api/validate_qr.php. Resolves a
-//  scanned QR token or a typed short code into the payment
-//  details the parent must confirm (merchant, item, amount) —
-//  only while the order is still pending and unexpired. The QR
-//  payload itself is never trusted for display; this lookup is
-//  the single source of truth before Pay Now.
-// ============================================================
+// Resolve a QR token or short code to payment details (pending, unexpired orders only).
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';

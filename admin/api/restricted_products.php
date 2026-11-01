@@ -33,9 +33,7 @@ try {
             $stmt->execute([$name, $category, $reason, $matchType, $adminId]);
             $newProductId = (int) $db->lastInsertId();
 
-            // Re-scan existing inventory: disable any already-listed items that
-            // match this new ban under the smart word/fuzzy rules. Closes the
-            // "merchant added it before the ban" loophole.
+            // Disable already-listed items that match the new ban.
             $disabled = 0;
             if (gjc_table_exists($db, 'merchant_inventory')) {
                 $items = $db->query(

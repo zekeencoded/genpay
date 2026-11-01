@@ -5,14 +5,7 @@ require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['merchant']);
 
-/**
- * CRUD "Read": one sale from this merchant's own history, in the shared
- * .uv-* record chrome (assets/css/detail_view.css).
- *
- * The id travels as a signed HMAC token so the URL can't be walked, and the
- * lookup is still scoped to this stall's wallet — staff and owner both read
- * the same stall, which is what gjc_merchant_owner_id() resolves.
- */
+/** View one sale by signed token, scoped to this stall's wallet. */
 $currentUser = gjc_current_user($db);
 $ownerMerchId = gjc_merchant_owner_id($db, (int) $currentUser['id']);
 $wallet = gjc_merchant_wallet($db, $ownerMerchId);
@@ -98,9 +91,7 @@ if (!$record) {
     http_response_code(404);
 }
 
-// The student's maintenance fee on this sale — shown for context only. It is a
-// school charge billed to the student's tuition; the merchant is credited the
-// full sale amount either way.
+// Student's maintenance fee, for context only.
 $maintFee = $record ? gjc_maintenance_fee_for_reference($db, (string) $record['ref']) : null;
 
 $e = gjc_e(...);

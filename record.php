@@ -29,14 +29,9 @@ class Record
             $email = trim((string) ($_POST['email'] ?? '')); // email or student ID
             $password = $_POST['password'] ?? '';
 
-            // Checked for every identifier, real or not, so the lockout reveals nothing
-            // about which accounts exist. Five failures in the last 15 minutes lock it.
-            // Throttled attempts add no rows, so the lock lifts once the oldest of those
-            // failures is 15 minutes old: 15 minutes after the FIRST of the five.
+            // Lock after 5 failures in 15 minutes (checked for every identifier, so nothing leaks).
             $throttleKey = hash('sha256', strtolower($email));
-            // Also counted per network address, so one script cannot try a password on
-            // every account. Set high because a campus can share one address.
-            // REMOTE_ADDR only: X-Forwarded-For is client-controlled (see gjc_audit_ip()).
+            // Also throttle per IP (high limit; campus shares IPs). REMOTE_ADDR only.
             $ipKey = \gjc_throttle_key('ip', (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
             if (\gjc_login_throttled($this->con, $throttleKey)
                 || \gjc_login_throttled($this->con, $ipKey, self::IP_FAILURE_LIMIT)) {
@@ -63,20 +58,13 @@ class Record
                 }
 
                 $storedPassword = (string) ($user['password'] ?? '');
-                // bcrypt only. This used to fall back to hash_equals($storedPassword,
-                // $password) so legacy un-hashed rows could still sign in — verified
-                // 2026-09-06 that all 221 user rows are bcrypt ($2y$), so the fallback
-                // was accepting plaintext for no one. Do not reinstate it: hash any
-                // legacy row in place instead.
+                // bcrypt only; don't reinstate the plaintext fallback.
                 $validPassword = password_verify($password, $storedPassword);
 
                 if ($validPassword) {
                     \gjc_clear_login_failures($this->con, $throttleKey);
                     \gjc_clear_login_failures($this->con, $accountKey);
-                    // The three blocks below turn away an account whose password was
-                    // CORRECT. That is a different event from a bad password, and none
-                    // of them used to leave any trace — probing a deactivated or banned
-                    // account produced an audit trail identical to nobody trying at all.
+                    // Log blocked logins with a correct password.
                     $blockedUserId = (int) ($user['id'] ?? $user['userID'] ?? 0);
 
                     if (!empty($user['status']) && $user['status'] === 'Inactive') {
@@ -179,9 +167,7 @@ class Record
                     $mustChangePassword =
                         !empty($user['force_password_change']);
 
-                    // Remember me: issue a 30-day token when ticked (never for
-                    // accounts still on a forced password change); an unticked
-                    // login discards any token from a previous session.
+                    // Remember me: 30-day token (not during a forced password change).
                     if (!empty($_POST['remember']) && !$mustChangePassword) {
                         \gjc_issue_remember_token($this->con, $userId);
                     } else {
@@ -243,14 +229,7 @@ class Record
                     return "Invalid email/ID or password.";
                 }
             } else {
-                // No matching account. This is the shape a password spray against
-                // made-up addresses takes, and it used to produce no row at all —
-                // the log looked exactly as though nobody had tried.
-                //
-                // There is no user id to attribute it to, so logAudit() files it
-                // against a NULL actor as 'Anonymous'. The attempted identifier is
-                // capped at 100 characters: it is unvalidated request input and
-                // there is no reason to keep more of it than that.
+                // Unknown account: log as Anonymous; identifier capped at 100 chars.
                 \logAudit(
                     $this->con,
                     0,

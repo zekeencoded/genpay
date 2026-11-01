@@ -1,20 +1,4 @@
-/* GenPay — one way for the finance side to talk back to the user.
- *
- * Before this file the admin pages had six different ways to report the same
- * thing: window.alert(), a hand-rolled Bootstrap toast that lived inside
- * stall_applications.php, a server-rendered banner in settings.php, an
- * .alert-danger injected into a modal body, inline rp-modal-alert divs, and —
- * on four money-moving actions — nothing at all. A tester moving between pages
- * had to relearn the interface on each one.
- *
- * Nothing here is new. gpToast is the toast() from stall_applications.php,
- * gpFetchJson is the non-JSON guard from the same file (the only place that
- * handled a PHP fatal gracefully), and gpConfirm generalises the two best
- * confirmations in the app: the fee breakdown in cash_management.php's confirmation dialogs
- * and the type-the-word gate on users.php's ban modal.
- *
- * Depends only on bootstrap.bundle.min.js, which every admin page already
- * loads. No new libraries.
+/* Shared feedback helpers: gpToast, gpConfirm, gpFetchJson, gpMoney. Needs bootstrap.bundle.
  *
  * Usage
  *   gpToast('Top-up approved.');                 // success
@@ -33,10 +17,7 @@
 (function () {
     'use strict';
 
-    /* ── escaping ────────────────────────────────────────────────────────────
-       Defined identically in admin_leases.js, admin_lease_details.js and
-       admin_merchant_details.js, plus an esc() inline in two pages. Those stay
-       for now; new code uses this one. */
+    /* ── escaping ── */
     var ESCAPES = {
         '&': '&amp;',
         '<': '&lt;',
@@ -52,11 +33,7 @@
     }
     window.gpEsc = esc;
 
-    /* ── money ───────────────────────────────────────────────────────────────
-       Mirrors PHP's gjc_money(). The admin side had three conventions, two of
-       them on one page: the Top-ups page showed "P15000.00" in the confirmation you
-       approve money against and "P15,000.00" in the modal a hundred lines
-       below. At a glance those two are easy to confuse. */
+    /* ── money (same format as PHP gjc_money()) ── */
     window.gpMoney = function (pesos) {
         var n = Number(pesos);
         if (!isFinite(n)) { n = 0; }
@@ -66,9 +43,7 @@
         });
     };
 
-    /* ── toast ───────────────────────────────────────────────────────────────
-       The container is created on demand so a page opts in with the script tag
-       alone and there is no markup to forget. */
+    /* ── toast (container created on demand) ── */
     function toastHost() {
         var wrap = document.getElementById('gpToastHost');
         if (!wrap) {
@@ -105,18 +80,9 @@
         return t;
     };
 
-    /* ── confirm ─────────────────────────────────────────────────────────────
-       Returns a Promise<boolean>. Resolves false on cancel, Esc, or backdrop.
-
-       opts:
-         title          required, the question
-         body           optional sentence of context
-         detail         optional [[label, value], ...] — what / how much / to whom
-         note           optional consequence line, shown in a tinted strip
-         confirmLabel   default 'Confirm'
-         cancelLabel    default 'Cancel'
-         danger         true -> red confirm button
-         typeToConfirm  e.g. 'BAN' — the button stays disabled until it matches */
+    /* ── confirm: Promise<boolean>, false on cancel/Esc/backdrop.
+       opts: title, body, detail [[label, value]], note, confirmLabel, cancelLabel,
+       danger (red button), typeToConfirm (e.g. 'BAN'). */
     window.gpConfirm = function (opts) {
         opts = opts || {};
 
@@ -199,20 +165,7 @@
         });
     };
 
-    /* ── inline explainers ───────────────────────────────────────────────────
-       The .gp-howto collapsible ("How rent collection works here") is a good
-       component that existed on exactly one page, with its open/closed state
-       bound by id inside admin_leases.js. This is the same behaviour, bound by
-       attribute so any page can use it:
-
-         <section class="gp-howto is-footnote">
-           <button class="gp-howto-toggle" data-howto="topupVault" aria-expanded="true">…</button>
-           <div class="gp-howto-body">…</div>
-         </section>
-
-       data-howto is the localStorage key. leases.php's toggle deliberately does
-       NOT carry the attribute, so its own handler keeps working and nothing
-       double-binds; it can migrate here later. */
+    /* ── inline explainers: .gp-howto with data-howto="<localStorage key>" on the toggle ── */
     document.addEventListener('DOMContentLoaded', function () {
         Array.prototype.forEach.call(
             document.querySelectorAll('.gp-howto-toggle[data-howto]'),
@@ -241,17 +194,8 @@
         );
     });
 
-    /* ── fetch ───────────────────────────────────────────────────────────────
-       Always resolves to an object with .success and .message, so no caller
-       needs its own try/catch. Two failures were reaching the finance officer
-       raw: a PHP fatal made the endpoint emit HTML and res.json() threw
-       "Unexpected token '<'", and four money actions had no catch at all, so a
-       dropped connection showed nothing whatsoever.
-
-       Bodies: a FormData is sent as-is, a plain object becomes FormData (the
-       house convention for admin/api/*), and {json: {...}} sends a JSON request
-       body — admin/api/mint.php is the one endpoint that reads php://input, so
-       it gets JSON rather than having its contract changed to suit this. */
+    /* ── fetch: always resolves to {success, message}.
+       Body: FormData as-is, plain object -> FormData, {json: {...}} -> JSON. */
     window.gpFetchJson = function (url, body) {
         // Every mutation carries the session CSRF token (set by feedback_assets.php).
         var init = { method: 'POST', headers: { 'X-CSRF-Token': window.GJC_CSRF || '' } };

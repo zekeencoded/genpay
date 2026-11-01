@@ -6,9 +6,7 @@ require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/CirculationEngine.php';
 
-// Printable sales remittance report — a self-declared record that stall staff
-// handed over a counted cash total. Any merchant account on the same stall
-// (owner or staff) can view/reprint it; it is not an admin-approved document.
+// Printable self-declared remittance report (any account on the stall).
 gjc_require_role(['merchant']);
 gjc_ensure_sales_remittances_schema($db);
 
@@ -60,9 +58,7 @@ $rowsStmt = $db->prepare(
 $rowsStmt->execute(array_merge([$remit['merchant_wallet_id']], $earningTypes, [$remit['period_start'], $remit['period_end']]));
 $rows = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Rung up by — a wallet can be shared by several staff logins across a shift,
-// but one remittance bundles all of their pending sales together. Break the
-// total back down per staff so the report shows who actually made each sale.
+// Break the total down per staff member.
 $byStaff = [];
 foreach ($rows as $r) {
     $staffId = (int) $r['initiated_by'];

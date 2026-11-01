@@ -1,13 +1,8 @@
 <?php
 
 // Merchant sales, remittances, compliance documents and display names.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * Resolves a merchant's public display name (stall name, falling back to
- * their account name) from their user id. Shared by the cart snapshot and
- * the Shop Cart order endpoints so every screen shows the same label.
- */
+/** Merchant display name (stall name, else account name). */
 function gjc_merchant_display_name(PDO $db, int $merchantUserId): ?string
 {
     $stmt = $db->prepare(
@@ -26,14 +21,7 @@ function gjc_merchant_display_name(PDO $db, int $merchantUserId): ?string
     return $row['stall_name'] ?: trim($row['first_name'] . ' ' . $row['last_name']);
 }
 
-/**
- * Staff-operated sales a stall hasn't remitted yet, since the wallet's last
- * remittance today, or since midnight if it hasn't remitted at all today.
- * This is what the Remit Sales button submits, and what the merchant
- * dashboard shows as the pending amount waiting to be remitted — see
- * gjc_merchant_remitted_sales_today() for the confirmed "Today's Sales"
- * figure, and gjc_ensure_sales_remittances_schema() for the table.
- */
+/** Staff sales not yet remitted since the last remittance today (or midnight). */
 function gjc_merchant_unremitted_sales(PDO $db, int $walletId): array
 {
     $since = date("Y-m-d 00:00:00");
@@ -73,10 +61,7 @@ function gjc_merchant_unremitted_sales(PDO $db, int $walletId): array
     return ["amount" => (float) $amount, "count" => (int) $count, "since" => $since];
 }
 
-/**
- * Today's completed sales: direct/admin sales count immediately, while
- * staff-operated sales count after remittance. Each ledger row counts once.
- */
+/** Today's completed sales; staff sales count once remitted. */
 function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
 {
     $amount = 0.0;
@@ -104,11 +89,7 @@ function gjc_merchant_remitted_sales_today(PDO $db, int $walletId): array
     ];
 }
 
-/**
- * Counter sales that must be remitted: app pre-orders (CART-) and any sale
- * rung up by a staff account. Pre-orders have no operator on the ledger, so
- * they are always treated as counter sales.
- */
+/** SQL condition for sales that must be remitted (pre-orders and staff sales). */
 function gjc_merchant_staff_sale_sql(PDO $db): string
 {
     $operator = 't.initiated_by';
@@ -171,12 +152,7 @@ function gjc_merchant_owner_id(PDO $db, ?int $userId = null): int
     return $userId;
 }
 
-/**
- * Shared "last checked" timestamp per merchant card on the finance dashboard.
- * The notification badge counts audited merchant management actions newer than
- * this; opening the stall detail view stamps it, clearing the badge for every
- * finance admin (one team, one read state).
- */
+/** Shared "last checked" time per merchant card; clears the badge for all finance admins. */
 function gjc_ensure_merchant_card_views_schema(PDO $db): void
 {
     $db->exec(
@@ -189,13 +165,7 @@ function gjc_ensure_merchant_card_views_schema(PDO $db): void
     );
 }
 
-/**
- * Self-declared sales remittance: merchant staff hand over their counted cash
- * and click Remit Sales, which logs a report of everything since the wallet's
- * last remittance and moves the "since" boundary forward — no admin approval,
- * no wallet balance change (see gjc_merchant_unremitted_sales()). Printable
- * via merchant/remittance_report.php.
- */
+/** Self-declared sales remittances (no approval, no balance change). */
 function gjc_ensure_sales_remittances_schema(PDO $db): void
 {
     static $done = false;
@@ -220,8 +190,7 @@ function gjc_ensure_sales_remittances_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // 3NF: merchant_user_id is implied by merchant_wallet_id and is no longer
-    // written. Until the CLI contract drops it, it must accept NULL.
+    // merchant_user_id is legacy; allow NULL until the contract drops it.
     if (!$db->inTransaction()) {
         $nullable = $db->query("SELECT IS_NULLABLE FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales_remittances'
@@ -232,12 +201,7 @@ function gjc_ensure_sales_remittances_schema(PDO $db): void
     }
 }
 
-// ─── Merchant compliance documents ───────────────────────────────────────────
-// Permits a stall owner uploads from the Business Profile. The awarded stall
-// application may already hold a copy (captured at apply time), but owners
-// onboarded directly have no application row at all, and permits expire and
-// get renewed — so uploads live in their own table, one current file per
-// document, and the newest copy of each document wins.
+// ─── Merchant compliance documents (newest upload per document wins) ───
 
 /** The documents a stall is expected to keep on file: key => [label, hint]. */
 function gjc_merchant_compliance_docs(): array
@@ -266,12 +230,7 @@ function gjc_ensure_merchant_documents_schema(PDO $db): void
     );
 }
 
-/**
- * The current file for each compliance document of one stall owner:
- * key => ['path' => relative path, 'source' => 'upload'|'application',
- *         'uploaded_at' => ?string]. Documents with no file are absent.
- * Pass the awarded application row when the caller already has it.
- */
+/** Current file per compliance document: key => ['path', 'source' => upload|application, 'uploaded_at']. */
 function gjc_merchant_document_files(PDO $db, int $ownerId, ?array $application = null): array
 {
     $files = [];
@@ -293,4 +252,65 @@ function gjc_merchant_document_files(PDO $db, int $ownerId, ?array $application 
     }
 
     return $files;
+}
+
+/** Insert the merchant row for a new merchant user. Returns merchant.id (0 if the table is missing). */
+function gjc_insert_merchant_record(PDO $db, int $userId, string $businessName, string $notes, ?string $stallId = null): int
+{
+    if (!gjc_table_exists($db, 'merchant')) {
+        return 0;
+    }
+
+    $columns = gjc_table_columns($db, 'merchant', true);
+    $payload = [
+        'userID' => $userId,
+        'stall_name' => $businessName,
+        'stall_id' => ($stallId !== null && $stallId !== '') ? $stallId : null,
+        'operational_status' => 'active',
+        'notes' => $notes !== '' ? $notes : null,
+    ];
+
+    $insert = [];
+    $values = [];
+    foreach ($payload as $column => $value) {
+        if (in_array($column, $columns, true)) {
+            $insert[] = $column;
+            $values[] = $value;
+        }
+    }
+
+    if (!$insert) {
+        return 0;
+    }
+
+    $sql = 'INSERT INTO merchant (' . implode(', ', $insert) . ') VALUES (' . implode(', ', array_fill(0, count($insert), '?')) . ')';
+    $stmt = $db->prepare($sql);
+    $stmt->execute($values);
+
+    return (int) $db->lastInsertId();
+}
+
+/** Record an admin-created merchant as an approved stall application. */
+function gjc_insert_awarded_merchant_application(PDO $db, array $data, int $userId, int $adminId): int
+{
+    if (!gjc_table_exists($db, 'stall_applications')) {
+        return 0;
+    }
+
+    $proprietorName = trim(implode(' ', array_filter(
+        [$data['first_name'], $data['middle_name'], $data['last_name'], $data['suffix']],
+        fn($part) => $part !== ''
+    )));
+    $stallId = $data['stall_id'] !== '' ? $data['stall_id'] : null;
+
+    // Address + document columns are left to their '' defaults (not collected here).
+    return gjc_stall_application_create($db,[
+        'business_name'=>$data['business_name'],'first_name'=>$data['first_name'],
+        'middle_name'=>$data['middle_name']!==''?$data['middle_name']:null,'last_name'=>$data['last_name'],
+        'suffix'=>$data['suffix']!==''?$data['suffix']:null,'sex'=>$data['sex'],
+        'contact_number'=>$data['phone'],'email'=>$data['email'],'preferred_stall_id'=>$stallId,'stall_id'=>$stallId,
+        'profile_picture'=>'','business_permit'=>'','sanitary_permit'=>'','gjc_requirements'=>'','clearance'=>'',
+        'terms_accepted'=>1,'status'=>'awarded','current_step'=>5,'reviewed_by'=>$adminId,
+        'reviewed_at'=>GJC_APPLICATION_DB_NOW,'merchant_user_id'=>$userId,
+    ]);
 }

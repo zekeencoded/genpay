@@ -56,7 +56,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
@@ -180,9 +180,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                                 <td><?php echo gjc_e(date('M d, Y h:i A', strtotime($t['created_at']))); ?></td>
                                 <td class="text-end txn-action-cell">
                                     <div class="merchant-row-actions">
-                                        <!-- Read view: the row is identified by a signed HMAC token,
-                                             and view_transaction.php re-checks it against this stall's
-                                             wallet before rendering. -->
+                                        <!-- Signed token; view_transaction.php re-checks ownership. -->
                                         <a class="merchant-row-btn merchant-row-btn--view"
                                             href="<?= MERCHANT_URL ?>/view_transaction.php?token=<?= urlencode(gjc_make_view_token((int) $t['id'], 'merchant_txn')) ?>">
                                             <i class="fa-regular fa-eye"></i> View
@@ -215,7 +213,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-3">Reversing transaction <strong id="returnTxnRef">--</strong>. This refunds the student's wallet and debits yours &mdash; the original sale record is kept, only its status changes.</p>
+                    <p class="mb-3">Reversing transaction <strong id="returnTxnRef">--</strong>. This refunds the customer's wallet and debits yours &mdash; the original sale record is kept, only its status changes.</p>
                     <form id="returnForm">
                         <input type="hidden" id="returnTxnId" value="">
                         <div class="mb-3">

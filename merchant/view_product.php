@@ -5,15 +5,7 @@ require_once __DIR__ . '/../connection/app.php';
 
 gjc_require_role(['merchant']);
 
-/**
- * CRUD "Read": one catalog item, in the shared .uv-* record chrome
- * (assets/css/detail_view.css). Staff and owner both read the same stall,
- * which is what gjc_merchant_owner_id() resolves; the write actions stay in
- * merchant/api/inventory.php and are not reachable from here.
- *
- * The id travels as a signed HMAC token so the URL can't be walked, and the
- * lookup is still scoped to merchant_user_id.
- */
+/** View one catalog item by signed token, scoped to this stall. */
 $currentUser = gjc_current_user($db);
 $ownerMerchId = gjc_merchant_owner_id($db, (int) $currentUser['id']);
 $isMerchAdmin = gjc_is_merchant_admin() || (gjc_current_role() === 'merchant' && !gjc_is_merchant_staff());

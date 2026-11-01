@@ -1,9 +1,6 @@
 ﻿<?php
-// ============================================================
-//  admin/doc.php  â€” Secure document proxy for admin viewing
-//  Serves files from /uploads/ only to authenticated admins.
-//  Usage: /admin/doc?f=uploads/stall_applications/1/file.pdf
-// ============================================================
+// Secure document proxy: serves files under uploads/ to authorised users.
+// Usage: /admin/doc?f=uploads/stall_applications/1/file.pdf
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -30,10 +27,7 @@ if (!str_starts_with($relPath, 'uploads/')) {
     exit('Access denied.');
 }
 
-// Finance can view anything under uploads/ (existing behaviour). Student and
-// parent sessions may ONLY reach their own (or their linked student's) signed
-// Fee Waiver Credit — everything else under uploads/ stays 403 for them, since
-// this proxy has no per-file ownership model beyond this one carve-out.
+// Non-finance users may only open their own (or linked student's) signed fee waiver.
 if ($docRole !== 'finance') {
     if (!str_starts_with($relPath, 'uploads/fee_waiver_credits/')) {
         http_response_code(403);
@@ -80,10 +74,7 @@ if (strpos($absPath, $baseUploads . DIRECTORY_SEPARATOR) !== 0) {
     exit('Access denied.');
 }
 
-// Every check has passed and the file exists, so this is a document actually
-// being read. Uploads here are permits, clearances and signed fee-waiver
-// evidence — real people's documents — and nothing recorded who opened them.
-// The reference is logged, never the contents.
+// Log who opened the document (reference only).
 logAudit(
     $db,
     gjc_user_id(),

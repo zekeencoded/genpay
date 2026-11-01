@@ -1,11 +1,6 @@
 <?php
-// Partial: fixed mobile bottom nav for student pages (visible under 768px).
-// Same $currentPage contract as sidebar_student.php; needs
-// assets/css/student_dashboard.css. Place just before </body>.
-// .sd-scan-fab is the raised centre button. It opens the Shop Cart, which is
-// itself a barcode scanner (jsQR) — so the class name and the fa-qrcode glyph
-// agree again. bottom_nav_merchant.php shares the class but points its FAB at
-// the POS with fa-cash-register.
+// Partial: mobile bottom nav for student pages (<768px). Needs $currentPage and student_dashboard.css.
+// Place just before </body>. .sd-scan-fab opens the Shop Cart scanner.
 $currentPage = $currentPage ?? '';
 ?>
 <nav class="sd-bottomnav">

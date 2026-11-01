@@ -2,13 +2,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Local token names kept exactly as-is (nothing that consumes them below
-   needs to change) — only their values now alias the shared gp-* palette,
-   confirmed against actual usage in this file rather than assumed:
-   green-7/green-1/green-0 are used as a soft brand accent (not a status
-   color) despite the "green" name, amber is used only as a warning hint
-   (not a CTA color), and the gray scale is left untouched since it's a
-   true neutral scale with no brand-accent finding against it. */
+/* Local tokens aliased to the gp-* palette. */
 :root {
     --forest:   var(--gp-green-950);
     --green-8:  var(--gp-green-850);

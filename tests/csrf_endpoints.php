@@ -1,7 +1,5 @@
 <?php
-// Static guard: every state-changing endpoint must refuse requests without the
-// session CSRF token. Reads the source, so it runs without a database or session.
-// Run from the CLI: php tests/csrf_endpoints.php
+// Static test: state-changing endpoints require the CSRF token. Run: php tests/csrf_endpoints.php
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 $root = dirname(__DIR__);
@@ -10,7 +8,7 @@ $endpoints = [
     'admin/api/fee_waiver_credits.php', 'admin/api/maintenance_fees.php',
     'admin/api/archived_rejections.php', 'admin/api/restricted_products.php',
     'admin/api/stall_applications.php', 'admin/api/economy.php',
-    'admin/api/get_stall_details.php',
+    'admin/api/get_stall_details.php', 'merchant/api/pos.php',
     'merchant/api/returns.php', 'merchant/api/topup.php', 'merchant/api/inventory.php',
     'merchant/api/profile.php', 'parent/api/controls.php', 'parent/api/link.php',
     'parent/api/cart.php', 'parent/api/alerts.php', 'student/api/cart.php',

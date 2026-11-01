@@ -1,6 +1,4 @@
-/* minmax(0, 1fr), not 1fr: a long unbroken transaction description (nowrap
-   pq-desc) would otherwise blow out this column's min-content size and push
-   the whole layout into horizontal scroll instead of ellipsizing. */
+/* minmax(0, 1fr) so long descriptions ellipsize instead of overflowing. */
 .pos-layout { display:grid; grid-template-columns:minmax(0, 1fr) 400px; gap:20px; padding:0 0 32px; }
 .pos-products-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:12px; }
 .pos-product-card {
@@ -31,8 +29,7 @@
 .cart-total-row { display:flex; justify-content:space-between; align-items:center;
     padding:12px 0 4px; font-weight:800; font-size:18px; border-top:2px solid var(--gp-line); margin-top:8px; }
 
-/* ── Payment QR panel — echoes the student Scan & Pay confirm card:
-   cream panel, gold corner-frame around the code, numbered guide steps. ── */
+/* ── Payment QR panel ── */
 .pos-qr-box {
     display:none; margin-top:14px; padding:16px; border-radius:var(--gp-radius);
     background:var(--gp-cream); border:1px solid var(--gp-gold-line); text-align:center;
@@ -47,8 +44,7 @@
 .pos-qr-status.is-paid { background:var(--gp-success-bg); color:var(--gp-success); }
 .pos-qr-status.is-expired { background:var(--gp-danger-bg); color:var(--gp-danger); }
 
-/* Gold corner-frame around the generated code (student sp-frame's reticle,
-   adapted for a static QR instead of a live camera feed). */
+/* Gold corner frame around the QR. */
 .pos-qr-frame {
     position: relative;
     width: fit-content;
@@ -155,15 +151,7 @@
     .pos-layout { grid-template-columns:1fr; }
     .pos-cart-panel { position:static; max-height:none; }
 
-    /* responsive.css carries a blanket `button, .btn { width:100% }` under
-       768px, meant for form submits. Inside the POS it turns every category
-       chip into its own full-width row — five categories came to 222px of
-       stacked pills — and does the same to the toolbar's Send GenCoin button,
-       which loses its label at this width and became a bare gold bar.
-
-       Opt those out and let the chips scroll sideways instead, which is what a
-       category strip should do on a phone. The negative margin lets the strip
-       bleed to the screen edges so it reads as scrollable. */
+    /* Undo responsive.css's full-width buttons; category chips scroll sideways instead. */
     .cat-filter {
         flex-wrap: nowrap;
         overflow-x: auto;
@@ -213,8 +201,7 @@
 .pq-head { display:flex; justify-content:space-between; margin:6px 0 0; font-size:11px; font-weight:800;
     text-transform:uppercase; letter-spacing:.05em !important; color:var(--gp-muted); }
 .pq-empty { padding:24px 8px; text-align:center; font-size:13px; color:var(--gp-muted); }
-/* pq-row doubles as a <button> (queue) and an <a> (transactions list) —
-   reset the anchor's default underline/link color so both render identically. */
+/* pq-row is both a <button> and an <a>; reset link styles. */
 .pq-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 12px;
     background:#fff; border:1px solid var(--gp-line); border-radius:12px; cursor:pointer; transition:background .15s;
     color:inherit; text-decoration:none; }

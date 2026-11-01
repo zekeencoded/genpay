@@ -7,16 +7,7 @@ gjc_require_role(['finance']);
 gjc_ensure_user_profile_schema($db);
 gjc_ensure_student_entry_year_schema($db);
 
-/**
- * CRUD "Read": view a single user record as the account's real profile. The
- * record is identified by a signed, opaque token in the URL (?token=...).
- * Because the token is an HMAC over the id, editing the URL by hand fails
- * verification and falls through to "not found" — so the token can sit in the
- * URL safely, and the page still can't be walked by incrementing an id.
- *
- * Everything below the user row is read-only: profile data is pulled with plain
- * SELECTs (never the gjc_*_wallet() accessors, which would create wallet rows).
- */
+/** View one user's profile by signed token. Read-only (no wallet rows are created). */
 $userId = gjc_verify_view_token($_GET['token'] ?? null, 'user');
 
 $user = null;
@@ -92,11 +83,7 @@ if ($user) {
         ? date('M d, Y · g:i A', strtotime((string) $user['created_at']))
         : '—';
 
-    // ---- Role-specific profile data (read-only) --------------------------
-    // A wallet balance is shown only to the account's own owner. This page is
-    // finance-only, so the viewer is an admin looking at someone else's record
-    // — in practice the balance stays hidden unless an admin opens their own
-    // account (finance accounts have no wallet, so the box simply won't appear).
+    // ---- Role-specific profile data; balance shown only to the owner ----
     $isOwner = (gjc_user_id() === (int) $userId);
     $walletBalance = null;   // shown in the hero only when $isOwner
     $student = null;
@@ -341,9 +328,7 @@ $field = static function (string $icon, string $label, string $value, bool $mono
         </section>
         <?php endif; ?>
 
-        <!-- Personal details apply to every role, so this card sits outside the
-             per-role blocks above. Read-only here: the account's owner maintains
-             these from their own profile page. -->
+        <!-- Personal details (all roles), read-only. -->
         <section class="gp-card uv-card">
             <div class="gp-card-head">
                 <div><h3>Personal details</h3><p>Demographics on record for this account.</p></div>

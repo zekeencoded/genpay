@@ -1,28 +1,13 @@
 <?php
 /**
- * Partial: the personal-details form fields — sex, date of birth, derived age,
- * and address. Shared by every profile edit form (student, parent) so the
- * fields, their order and their labels stay identical across roles; the columns
- * behind them come from gjc_user_profile_columns() and the values are read back
- * out by gjc_collect_profile_details().
+ * Partial: personal-details fields (sex, DOB, age, address) for profile forms.
  *
  * Requires:
- *   $pdRow   array  the user's `users` row, for the current values
+ *   $pdRow   array  the user's `users` row
  *   $pdField string wrapper class for one field  ('pf-field' | 'pfield')
  *   $pdGrid  string wrapper class for a 2-up row ('pf-form-grid' | 'pgrid')
  *
- * Age is a field here but never an input: it is disabled, carries no `name`, and
- * so is never submitted. It exists to show the user what their birth date works
- * out to. There is no age column — see gjc_age_from_dob().
- *
- * Layout rule: a field is either half-width inside a complete $pdGrid pair, or
- * full-width on its own row. Never a lone half-width field — that leaves a hole
- * in the grid and the column edges stop lining up with the rows above.
- * Paired fields also carry a matching <small> line (blank where there is
- * nothing to say) so both cells in a row end at the same height.
- *
- * The caller supplies its own surrounding card/panel and its own <form>, which
- * is why this file emits fields only.
+ * Age is display-only (disabled, not submitted). Fields are paired or full-width.
  */
 $pdRow   = $pdRow   ?? [];
 $pdField = $pdField ?? 'pf-field';
@@ -30,9 +15,7 @@ $pdGrid  = $pdGrid  ?? 'pf-form-grid';
 
 $pdEsc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 
-// A rejected submit re-renders the form, so prefer what was just typed over
-// what is still in the database — otherwise a validation error silently throws
-// away everything else the user had filled in.
+// Prefer submitted values so a validation error keeps the user's input.
 $pdVal = static fn(string $key): string => $pdEsc($_POST[$key] ?? $pdRow[$key] ?? '');
 
 $pdSex = (string) ($_POST['sex'] ?? $pdRow['sex'] ?? '');
@@ -98,9 +81,7 @@ $pdAge = gjc_age_from_dob($pdDob);
 </div>
 
 <script>
-// Keep the Age box in step with the date picker as it is edited, so the user
-// sees the same number the server will derive once they save. Purely cosmetic:
-// the field is disabled and never submitted, and the server recomputes on read.
+// Update the Age box as the date changes (display only).
 (function () {
     var dob = document.getElementById("pdDob");
     var age = document.getElementById("pdAge");

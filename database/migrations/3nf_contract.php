@@ -1,55 +1,14 @@
 <?php
 
 /**
- * 3NF CONTRACT: drops columns that duplicated other data.
- *
- *   student_info.yr_lvl  year level is per school year (student_enrollments.yr_lvl);
- *                        student_info keeps only entry_yr_lvl.
- *   users.sub_role       derived from users.roleID by gjc_sub_role_for_role_id().
- *   topup_requests.user_id, withdrawal_requests.user_id, encashment_requests.user_id,
- *   sales_remittances.merchant_user_id
- *                        implied by the row's wallet (gjc_wallet_owner_copies());
- *                        the wallet column becomes NOT NULL with a RESTRICT foreign key.
- *   transactions.base_amount/credited_amount, topup_requests fee copies
- *                        always equal the ledger row's amount/fee (gjc_derived_fee_columns()).
- *   fee_revenue_log, parent_topup_requests, school_revenue_ledger
- *                        whole tables dropped: the first duplicates the ledger (the fee
- *                        split now lives on transactions.merchant_fee), the others are
- *                        empty and unused (gjc_obsolete_fee_tables()).
- *   vouchers.use_count/last_used_at, maintenance_fee_collections.entry_count/
- *   total_amount, system_settings.last_cap_increased_by/_at
- *                        stored totals derivable from other rows (gjc_derived_total_columns()).
- *   transaction_items.subtotal
- *                        converted (not dropped) to a STORED generated column.
- *   cart_orders.buyer_role, p2p_transfers ledger copies, merchant_leases.stall_number,
- *   stalls.merchant_id (+ stored 'occupied'; merchant.stall_id becomes UNIQUE)
- *                        quick fixes (gjc_quickfix_contracts()).
- *   maintenance_fees     drops the copies of its ledger row and receipt (student, type,
- *                        amount, school year, time, collected at/by); reference_no becomes
- *                        UNIQUE with RESTRICT foreign keys and a status/collection CHECK.
- *   maintenance_fee_collections.student_user_id
- *                        a receipt's student is the student of its fees.
- *   system_settings.token_rate/service_fee
- *                        stale copies of code constants (GJC_PESOS_PER_GC, CirculationEngine fees).
- *   users.temp_password, stall_applications.temp_password_plain
- *                        plaintext temporary-password columns that only ever held NULL.
- *   merchant_accounts, merchant_applications, merchant_application_product_types,
- *   payment_verifications
- *                        onboarding leftovers (gjc_obsolete_onboarding_tables()): the first
- *                        repeats stall_application_decisions, the others are empty and unused.
+ * 3NF CONTRACT: drops columns and tables that duplicate other data
+ * (see the gjc_*_contract_schema() functions in connection/app/contracts.php).
  *
  *   php database/migrations/3nf_contract.php            apply
  *   php database/migrations/3nf_contract.php --dry-run  verify + show the plan, change nothing
  *
- * CLI only. Run it only after the code that no longer reads or writes these
- * columns is deployed. Each contract re-verifies the data (every entry_yr_lvl
- * equals yr_lvl; every stored sub_role equals the one derived from roleID; every
- * user copy equals its wallet's owner) and
- * refuses if any key, index, trigger, view or routine still names the column.
- *
- * Before dropping anything it writes a private JSON export of the dropped
- * values to backups/ (git-ignored) and the contract checks the export matches.
- * Idempotent: an already-contracted column is skipped.
+ * CLI only; run after the code that stopped using these columns is deployed.
+ * Each step re-verifies the data and writes a JSON export to backups/ first. Idempotent.
  */
 
 if (PHP_SAPI !== 'cli') {

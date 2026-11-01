@@ -263,8 +263,7 @@
 /* .rp-table styling now comes from the canonical table system in theme.css. */
 .rp-table tbody tr { transition: background .12s; }
 
-/* Fixed-width columns: content (e.g. a long student name) must never resize
-   a column — every row, on every sort/page, uses the exact same layout. */
+/* Fixed layout so content never resizes columns. */
 #fwc-datatable { table-layout: fixed; width: 100%; }
 #fwc-datatable th:nth-child(1), #fwc-datatable td:nth-child(1) { width: 24%; }
 #fwc-datatable th:nth-child(2), #fwc-datatable td:nth-child(2) { width: 18%; }
@@ -275,9 +274,7 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Same footprint as .rp-remove-btn, but a neutral hover — for secondary
-   icon actions (e.g. downloading a form) that aren't destructive and
-   shouldn't turn red like Cancel/Remove do. */
+/* Neutral icon button (non-destructive). */
 .rp-icon-btn {
     width: 28px; height: 28px; border: none; border-radius: 8px;
     background: var(--gjc-soft-2); color: var(--gp-muted); cursor: pointer; font-size: 12px;
@@ -287,10 +284,7 @@
 }
 .rp-icon-btn:hover { background: #e2e8f0; color: var(--gjc-slate); }
 
-/* Fixed header clone: shown/positioned by JS once the real thead has
-   scrolled above the viewport, so it stays glued to the screen instead of
-   scrolling away with the table (a plain position:fixed thead can't line up
-   with the table's columns on its own, hence the JS-measured clone). */
+/* JS-positioned fixed header clone. */
 .rp-fixed-header-bar {
     position: fixed; top: 0; z-index: 1050; display: none;
     background: #fff; border-bottom: 2px solid var(--gjc-soft-2);
@@ -320,8 +314,7 @@
 }
 .rp-remove-btn:hover { background: var(--gp-danger-bg); color: var(--gp-red); }
 
-/* ── Fee Waiver Credit action buttons: short label + icon, so the Actions
-   column reads clearly without the old long labels crowding it ── */
+/* ── Fee Waiver Credit action buttons ── */
 .fwc-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fwc-action-btn {
     display: inline-flex; align-items: center; gap: 5px;

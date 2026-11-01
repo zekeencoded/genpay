@@ -1,19 +1,6 @@
 <?php
-// ============================================================
-//  admin/api/school_years.php
-//  School Year Cycles & Enrollment Lifecycle — per-year enrollment records,
-//  registrar roster upload + diff review, admin-driven year rollover, and
-//  student account locking.
-//
-//  Enrollment is explicit: a student is enrolled for a year because a roster
-//  row (or an admin) says so, never because they merely haven't graduated.
-//  student_enrollments is written ONLY through gjc_set_enrollment_status().
-//
-//  No money ever moves here: rollover never calls CirculationEngine, never
-//  writes to `transactions`, and never touches student_wallets.balance.
-//  student_wallets.is_frozen is the only wallet column this file can change.
-//  school_year_balances is the sole record of a year-end carry-over.
-// ============================================================
+// School years: enrollment roster upload, rollover and student locking.
+// No money moves here; only student_wallets.is_frozen can change.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -101,17 +88,7 @@ function sy_require_inactive_year(PDO $db, int $schoolYearId): array
     return $year;
 }
 
-/**
- * Parses a registrar roster CSV. Columns are matched case-insensitively by
- * header name and may appear in any order; unrecognised columns are ignored so
- * a straight export from the enrollment system doesn't have to be trimmed down
- * first. Same fgetcsv/BOM handling as admin/maintenance.php's student import.
- *
- *   student_id_number  required — the school-issued ID, matched against
- *                      student_info.studentID. Never matched by name.
- *   yr_lvl             optional
- *   status             optional, defaults to 'enrolled'
- */
+/** Parse a roster CSV by header name. Columns: student_id_number (required), yr_lvl, status. */
 function sy_parse_roster_csv(string $path): array
 {
     $handle = fopen($path, 'r');
@@ -194,9 +171,7 @@ function sy_parse_roster_csv(string $path): array
     return ['rows' => $rows, 'rejected' => $rejected];
 }
 
-/** Compare the uploaded statuses with existing students for the activation preview.
- * Missing students and roster students with a non-enrolled status are frozen.
- */
+/** Activation preview: students to freeze (missing or not enrolled). */
 function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
 {
     $activeYearId = gjc_active_school_year_id($db);
@@ -267,11 +242,7 @@ function sy_roster_diff(PDO $db, int $newYearId, ?string $batchId = null): array
     ];
 }
 
-/**
- * Name / studentID / year level / balance for a set of student user ids.
- * $rosterYrLvl overrides the stored year level for roster rows, so the new
- * year's level shows rather than last year's.
- */
+/** Name, studentID, year level and balance for these students. */
 function sy_student_rows(PDO $db, array $userIds, array $rosterYrLvl = []): array
 {
     if (!$userIds) {
@@ -371,7 +342,7 @@ try {
                 gjc_audit_rollback($db, $e->getMessage());
                 throw $e;
             }
-            sy_json(['success' => true, 'message' => 'Student status updated. Balance preserved; withdrawals through Finance remain available.']);
+            sy_json(['success' => true, 'message' => 'Student status updated. Balance preserved in the wallet.']);
         }
 
         // ── Read-only: diff bucket counts for the rollover confirm dialog ──
@@ -393,8 +364,7 @@ try {
 
             $diff = sy_roster_diff($db, $newYearId);
 
-            // The number that decides whether this rollover is safe to run: how
-            // many wallets are about to be frozen with money still in them.
+            // Wallets that will be frozen with money still in them.
             $frozenWithBalance = 0;
             $frozenBalanceTotal = 0.0;
             foreach (sy_student_rows($db, $diff['frozen_ids']) as $row) {
@@ -456,10 +426,7 @@ try {
             sy_json(['success' => true, 'message' => "School year {$name} created.", 'school_year_id' => $newId]);
         }
 
-        // ── Registrar roster CSV -> staging, matched by studentID only ──
-        // Staging is per-year, not per-batch: a fresh upload replaces whatever
-        // was staged for that year, so rollover can never promote a stale batch
-        // alongside the one the admin actually reviewed.
+        // ── Roster CSV -> staging (a new upload replaces that year's staging) ──
         case 'upload_roster': {
             $newYearId = (int) ($_POST['school_year_id'] ?? 0);
             $year = sy_require_inactive_year($db, $newYearId);
@@ -572,11 +539,8 @@ try {
             ]);
         }
 
-        // ── The rollover: claim old off, claim new on, promote the roster,
-        //    snapshot balances, never touch a single peso ─────────────────
-        // old_school_year_id may be 0/absent — that's the bootstrap case (no
-        // school year has ever been active yet), which just activates the new
-        // year and opens balances with nothing to archive out of.
+        // ── Rollover: switch active year, promote roster, snapshot balances ──
+        // old_school_year_id 0 = first-ever activation.
         case 'rollover': {
             $oldYearId = (int) ($_POST['old_school_year_id'] ?? 0);
             $newYearId = (int) ($_POST['new_school_year_id'] ?? 0);
@@ -588,9 +552,7 @@ try {
                 sy_json(['success' => false, 'message' => 'The new school year must be different from the current one.']);
             }
 
-            // Rolling over with nothing staged would leave every student without
-            // an enrollment row for the new year — the whole student body frozen
-            // in one click. Refuse before anything else happens.
+            // Refuse with an empty roster (it would freeze every student).
             $stagedStmt = $db->prepare("SELECT COUNT(*) FROM enrollment_roster_staging WHERE school_year_id = ? AND match_status = 'matched'");
             $stagedStmt->execute([$newYearId]);
             $stagedTotal = (int) $stagedStmt->fetchColumn();
@@ -621,16 +583,14 @@ try {
                 }
 
                 if ($oldYearId > 0) {
-                    // Atomic test-and-set: only proceeds if the year the admin saw
-                    // when the confirm dialog loaded is still the active one.
+                    // Test-and-set: the year must still be the active one.
                     $offStmt = $db->prepare("UPDATE school_years SET is_active = 0 WHERE is_active = 1 AND id = ?");
                     $offStmt->execute([$oldYearId]);
                     if ($offStmt->rowCount() === 0) {
                         throw new RuntimeException('The current school year has changed since you loaded this page. Reload and try again.');
                     }
                 } else {
-                    // Bootstrap: there must genuinely be no active year right now,
-                    // or we'd silently leave two years marked active at once.
+                    // No other active year may exist.
                     $stillNone = (int) $db->query("SELECT COUNT(*) FROM school_years WHERE is_active = 1")->fetchColumn();
                     if ($stillNone > 0) {
                         throw new RuntimeException('A school year is already active. Reload and try again.');
@@ -643,10 +603,7 @@ try {
                     throw new RuntimeException('Could not activate the new school year — it may already be active.');
                 }
 
-                // Archive every student wallet's ending balance into the closing
-                // year (skipped entirely on bootstrap — there's no old year to
-                // close out). ON DUPLICATE KEY UPDATE so a student who joined
-                // mid-year (no starting_balance row yet) still gets archived.
+                // Archive ending balances into the closing year.
                 $archivedCount = 0;
                 if ($oldYearId > 0) {
                     $archiveStmt = $db->prepare(
@@ -662,17 +619,12 @@ try {
                     $archivedCount = $archiveStmt->rowCount();
                 }
 
-                // Promote the staged roster into real enrollment rows. Unmatched
-                // student numbers are left behind on purpose — there is no account
-                // to enrol. Audit is suppressed per row; one ROSTER_APPLIED entry
-                // below records the batch instead of thousands of identical ones.
+                // Promote the roster; one ROSTER_APPLIED audit entry for the batch.
                 $promotedCount = gjc_apply_school_year_roster($db, $newYearId, $adminId);
 
                 $db->prepare("DELETE FROM enrollment_roster_staging WHERE school_year_id = ?")->execute([$newYearId]);
 
-                // Open the new year from current balances — driven by who is
-                // actually enrolled, not by "everyone who hasn't graduated".
-                // INSERT IGNORE so a retried rollover can't duplicate.
+                // Open the new year for enrolled students. INSERT IGNORE for retries.
                 $openStmt = $db->prepare(
                     "INSERT IGNORE INTO school_year_balances (student_user_id, school_year_id, starting_balance)
                      SELECT sw.user_id, ?, sw.balance

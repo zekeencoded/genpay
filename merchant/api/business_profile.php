@@ -1,12 +1,7 @@
 <?php
-// ============================================================
-//  merchant/api/business_profile.php
-//  The stall owner's own fixes from the Business Profile page
-//  (merchant/settings.php), for things that used to be read-only:
-//    action=upload_document  doc_key + file   → a compliance document
-//    action=update_contact   mobile + address → the owner's contact details
-//  Display name and logo stay in merchant/api/profile.php.
-// ============================================================
+// Business Profile owner actions:
+//   upload_document  doc_key + file   → a compliance document
+//   update_contact   mobile + address → the owner's contact details
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -78,9 +73,7 @@ try {
             $prevStmt->execute([$userId, $key]);
             $previous = (string) ($prevStmt->fetchColumn() ?: '');
 
-            // The record is keyed by an id that already exists (the owner), so
-            // the file goes straight into its folder. A timestamped name means a
-            // replacement never overwrites the file the old row still points at.
+            // Timestamped name so a replacement never overwrites the old file.
             $dir = 'uploads/merchant_documents/' . $userId;
             if (!is_dir(BASE_PATH . '/' . $dir) && !mkdir(BASE_PATH . '/' . $dir, 0755, true)) {
                 throw new RuntimeException('Could not prepare the upload folder.');

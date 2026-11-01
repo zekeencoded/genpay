@@ -1,15 +1,5 @@
-/* ============================================================
-   GenPay shared theme — the Scan & Pay design language.
-   Extracted from student_dashboard.css / student_scan.css so every
-   role shell (student, admin, …) derives its visuals from ONE file.
-
-   Usage:
-     1. Tokens: reference var(--gp-*) from any role stylesheet.
-     2. Components: use the gp-* classes directly in markup.
-     3. Bootstrap bridge: add class "gp-theme" to <body> to opt a
-        page's Bootstrap controls (inputs, modals, tables) into the
-        theme. Pages without it are untouched.
-   ============================================================ */
+/* ═══ GenPay shared theme. Use var(--gp-*) tokens and gp-* classes;
+   add body.gp-theme to opt Bootstrap controls into the theme. ═══ */
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&display=swap");
 
 :root {
@@ -35,39 +25,12 @@
 
   /* ---- Text */
   --gp-ink: #14251b;
-  /* Secondary text. Darkened 2026-09-05 from #6b7a70: that value cleared 4.5:1
-     on white (4.52) but not on --gp-cream (4.05), and --gp-cream is the page
-     background every role shell paints, so most muted text in the app was
-     sitting below the threshold. #637168 keeps the ramp's channel shape
-     (g = r+14, b = r+5) and clears 4.5:1 on all three light surfaces —
-     white 5.13, cream 4.60, --gjc-soft-2 4.85. */
+  /* Secondary text; clears 4.5:1 on white, cream and soft-2. */
   --gp-muted: #637168;
-  /* Lightest neutral: NON-READING marks only — inline "·" separators, inactive
-     dots, dashed guides, disabled chrome. It was introduced as a tertiary TEXT
-     tone, but no value light enough to read as "one step below --gp-muted" can
-     also clear 4.5:1, so as of 2026-09-05 the reading cases (empty states, the
-     11px price sub, icon-button glyphs) were moved to --gp-muted and this token
-     was darkened #98a79d -> #7c8f82 to clear 3:1 on every light surface
-     (white 3.44, --gp-cream 3.08, --gjc-soft-2 3.25; it was 2.52 / 2.25 / 2.38),
-     the threshold for non-text marks. Text goes to --gp-muted. It still closes the
-     hole in the neutral ramp — the steps ran 12.9 / 30.7 / 49.8 L* and then jumped 42
-     points to --gp-line at 91.9, so there was no tone between "secondary
-     text" and "border". Seventeen sites had been reaching for Tailwind greys
-     (Tailwind gray-400 and slate-400) to fill it, which is why cool blue-greys
-     kept appearing next to the warm green-greys of this palette.
-
-     The value is derived, not picked: it lands mid-gap between --gp-muted and
-     --gp-line, and the channel shape (g = r+18, b = r+6) tracks --gp-muted's —
-     this is the colour --gp-muted becomes when you lighten it, so it sits on
-     the ramp as a sibling rather than an import. */
+  /* Non-text marks only (separators, dots, guides, disabled). Clears 3:1. Use --gp-muted for text. */
   --gp-subtle: #7c8f82;
 
-  /* ---- Status tints (badge bg + text pairs)
-     Badges are 11px, the smallest reading size in the app, so each text tone
-     is held to 4.5:1 against ITS OWN tint, not just against white. Three of
-     the four missed that on 2026-09-05 (success 4.30, warning 4.48, info 4.38)
-     and were darkened by a hair — the shift is invisible side by side, the
-     compliance is not. Danger already cleared it at 5.37 and is unchanged. */
+  /* ---- Status tints: each text colour clears 4.5:1 on its own tint. */
   --gp-success: #147b3a;    /* on -bg 4.58 · on white 5.35 */
   --gp-success-bg: #dcf3e4;
   --gp-warning: #b25209;    /* on -bg 4.57 · on white 5.12 */
@@ -77,62 +40,34 @@
   --gp-info: #1f5fea;       /* on -bg 4.58 · on white 5.41 */
   --gp-info-bg: #e3edfd;
 
-  /* ---- Semantic accents (amount colours, alerts)
-     Both are set as `color` on real figures, so both are held to 4.5:1 on
-     white AND on --gp-cream. #16a34a managed only 3.30 on white — the worst
-     text contrast in the palette, and it was carrying money-in amounts. */
+  /* ---- Semantic accents: 4.5:1 on white and cream. */
   --gp-green: #117f3a;      /* positive / money-in · white 5.10 · cream 4.57 */
   --gp-red: #d62323;        /* negative / destructive · white 5.09 · cream 4.56 */
 
-  /* ---- Shape & type
-     Containers and labels square off; inline tags sit tighter still.
-     Buttons keep --gp-radius-pill, so shape alone still says "pressable".
-     Circles (border-radius: 50%) are deliberately left round system-wide. */
+  /* ---- Shape & type: square containers, pill buttons, round circles. */
   --gp-radius: 4px;
   --gp-radius-tag: 2px;
   --gp-radius-pill: 999px;
   --gp-mono: "IBM Plex Mono", Consolas, monospace;
 
-  /* ---- Composite surfaces & shadows
-     The --gp-grad-* names are kept (about ten files reference them), but the
-     values are now flat fields: no ramps, no radial glows, and no gold
-     keyline either — a dark field is identity enough. The hero shadow is a
-     hairline so panels sit on the page rather than floating over it. */
+  /* ---- Surfaces & shadows: --gp-grad-* names kept, values are now flat. */
   --gp-grad-hero: var(--gp-green-950);
   --gp-grad-shell: var(--gp-green-950);
   --gp-grad-forest-btn: var(--gp-green-700);
-  /* Retired: the gold keyline that used to sit on top of every hero card.
-     Kept as a definition only so any stray var(--gp-keyline) still resolves. */
+  /* Retired gold keyline; kept so old references resolve. */
   --gp-keyline: 1px solid var(--gp-line);
   --gp-shadow-card: 0 1px 2px rgba(16, 32, 24, 0.04);
 
-  /* ---- Elevation
-     Three steps and one focus ring — every value below already existed in
-     the codebase; these are the ones promoted to canonical. Retired in their
-     favour: 0 15px 50px rgba(0,0,0,.4), 0 18px 34px rgba(14,99,50,.24) and
-     four other one-off modal shadows. --gp-shadow-hero is kept as an alias
-     because ~10 files reference it by name. */
+  /* ---- Elevation: three steps (--gp-shadow-hero kept as an alias). */
   --gp-shadow-raised: 0 1px 3px rgba(13, 36, 24, 0.14);
   --gp-shadow-hero: var(--gp-shadow-raised);
   --gp-shadow-overlay: 0 10px 22px rgba(13, 36, 24, 0.18);
 
-  /* The one focus treatment, for every interactive element. Uses
-     --gp-gold-line (45% alpha) rather than --gp-gold-soft (14%): a 14% tint
-     cannot reach 3:1 against white and is not a usable focus indicator. */
-  /* Focus is one gesture app-wide. It used to be a gold glow, which read as
-     decoration rather than state; these two are the only knobs. */
+  /* Focus ring, used app-wide. */
   --gp-focus-ring: 0 0 0 3px rgba(20, 37, 27, 0.16);
   --gp-focus-border: var(--gp-ink);
 
-  /* ---- Space — 4pt scale
-     One scale for every margin, padding and gap. 8pt was rejected: this is a
-     data-dense wallet UI, and on 8pt the gap between a label and its input
-     collapses into the gap between two table rows.
-
-     --gp-space-nudge is the single documented exception. It has exactly one
-     job: the optical lift on a subtitle sitting under a heading
-     (margin: 2px 0 0). That is typographic correction, not layout rhythm —
-     naming it is what stops 2px reopening as a general half-step. */
+  /* ---- Space: 4pt scale. --gp-space-nudge (2px) is only for subtitle lift. */
   --gp-space-nudge: 2px;
   --gp-space-1: 4px;
   --gp-space-2: 8px;
@@ -145,12 +80,7 @@
   --gp-space-9: 48px;
   --gp-space-10: 64px;
 
-  /* ---- Type ramp
-     Dense at the bottom on purpose: 76% of this app's type sits between 11px
-     and 14px (table cells, labels, captions, meta), so those four steps are
-     1px apart and each carries a distinct job. Above 14px the ramp opens up.
-     There are no half-pixel sizes — if a size is not listed here, it is not
-     a size. */
+  /* ---- Type ramp: no sizes outside this list. */
   --gp-text-2xs: 11px;   /* uppercase micro-labels, table headers, badges */
   --gp-text-xs: 12px;    /* captions, helper text, timestamps, meta */
   --gp-text-sm: 13px;    /* dense UI: table cells, nav items, form labels */
@@ -170,23 +100,13 @@
   --gp-leading-normal: 1.5;   /* body paragraphs */
   --gp-leading-relaxed: 1.65; /* long-form: apply.php, index.php */
 
-  /* ---- Font weight — not tokenised on purpose, but the valid set is fixed.
-     Plus Jakarta Sans and Manrope ship 400 500 600 700 800 and nothing else.
-     A weight outside that set silently snaps to a neighbour, so 850 and 800
-     render identically while reading as a deliberate distinction in source.
-     Only ever write 400, 500, 600, 700 or 800. */
+  /* ---- Font weights: only 400, 500, 600, 700, 800 exist. */
 
-  /* ---- Motion
-     Name the properties you are animating. Never `transition: all` — it
-     animates layout properties you did not intend and costs a frame. */
+  /* ---- Motion: name the properties; never `transition: all`. */
   --gp-transition: 150ms ease;
   --gp-transition-slow: 250ms ease; /* width/margin: sidebar collapse only */
 
-  /* ---- Layering
-     Aligned to Bootstrap 5 so the two systems stop colliding. Bootstrap owns
-     1000 dropdown · 1045 offcanvas · 1050 backdrop · 1055 modal ·
-     1070/1080 popover/tooltip · 1090 toast. App chrome stays below all of it;
-     only the two values that must match Bootstrap reach into its range. */
+  /* ---- Layering: below Bootstrap's 1000+ range except where it must match. */
   --gp-z-raised: 1;
   --gp-z-sticky: 20;
   --gp-z-sidebar: 40;
@@ -199,15 +119,10 @@
   --gp-container-form: 720px;   /* long forms: apply.php */
   --gp-container-detail: 960px; /* detail views */
 
-  /* ---- Breakpoints, for reference — CSS cannot use custom properties in a
-     media query, so these are a convention, not a token:
-       576px phone · 768px tablet / nav switch · 992px sidebar · 1200px wide
-     Those four are the whole set. Do not add a fifth. */
+  /* ---- Breakpoints (convention): 576 phone · 768 tablet · 992 sidebar · 1200 wide. */
 }
 
-/* ============================================================
-   CARDS
-   ============================================================ */
+/* ═══ CARDS ═══ */
 
 /* Plain white content card */
 .gp-card {
@@ -240,9 +155,7 @@
   color: var(--gp-muted);
 }
 
-/* Flat dark hero. It used to carry a gold keyline across the top as "the
-   system signature"; that read as decoration, not information, and was
-   removed. The dark field on a light page is what makes a hero a hero. */
+/* Flat dark hero. */
 .gp-hero {
   position: relative;
   overflow: hidden;
@@ -330,9 +243,7 @@
 .gp-stat-icon.is-info    { background: var(--gp-info-bg);    color: var(--gp-info); }
 .gp-stat-icon.is-gold    { background: var(--gp-gold-soft);  color: var(--gp-gold); }
 
-/* ============================================================
-   BUTTONS — pill-shaped, from the Scan & Pay confirm dialogs
-   ============================================================ */
+/* ═══ BUTTONS (pill-shaped) ═══ */
 
 .gp-btn {
   display: inline-flex;
@@ -396,9 +307,7 @@
 
 .gp-btn--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
-/* ============================================================
-   BADGES / PILLS
-   ============================================================ */
+/* ═══ BADGES / PILLS ═══ */
 
 .gp-badge {
   display: inline-block;
@@ -430,9 +339,7 @@
   white-space: nowrap;
 }
 
-/* ============================================================
-   EMPTY STATE
-   ============================================================ */
+/* ═══ EMPTY STATE ═══ */
 
 .gp-empty {
   text-align: center;
@@ -448,19 +355,7 @@
   color: #b9c9be;
 }
 
-/* ============================================================
-   FEEDBACK — toast + confirm dialog (pairs with assets/js/gp_feedback.js)
-
-   The admin side had six ways to report the same thing, including
-   window.alert(). This is the one way. Bootstrap supplies the Toast and
-   Modal behaviour (already vendored); everything visual here is the
-   existing palette — no new colour is introduced.
-
-   The toast deliberately does NOT use Bootstrap's .text-bg-success /
-   .text-bg-danger utilities, which the one pre-existing toast
-   (admin/stall_applications.php) did: those paint Bootstrap's own
-   #198754 / #dc3545, two colours this palette never uses.
-   ============================================================ */
+/* ═══ FEEDBACK — toast + confirm dialog (assets/js/gp_feedback.js) ═══ */
 
 .gp-toast-host {
   position: fixed;
@@ -498,8 +393,7 @@
 .gp-toast--err { border-left-color: var(--gp-danger); }
 .gp-toast--err .toast-body i { color: var(--gp-danger); }
 
-/* Confirm dialog. Every money action states what, how much, to whom, and
-   whether it can be undone — the .gp-confirm-detail rows carry that. */
+/* Confirm dialog; .gp-confirm-detail rows show what, how much, to whom. */
 .gp-confirm-dialog { max-width: 440px; }
 
 .gp-confirm-title {
@@ -568,19 +462,8 @@
 
 .gp-confirm-typelabel strong { color: var(--gp-danger); }
 
-/* ============================================================
-   TABLES — one canonical design, all roles (minimal hairline).
-   Covers: opt-in .gp-table, every Bootstrap .table under the
-   role shells (body.gp-theme = admin/merchant/parent,
-   body.sd-body = student), and the parent ledger's .txn-table.
-   The per-page table skins (users/topups/transactions/encash/
-   audit/rp/sa + the gjc-clear green-header block) were
-   retired in favor of this system — don't reintroduce them.
-   Cell-level accents (.amount-text, .txn-amount, audit row
-   tints, table-danger rows) still apply: cells inherit their
-   text color from the table, and td backgrounds are left to
-   Bootstrap's variant vars.
-   ============================================================ */
+/* ═══ TABLES — one design for all roles (.gp-table, .table under body.gp-theme / body.sd-body, .txn-table).
+   Don't reintroduce per-page table skins. ═══ */
 
 .gp-table,
 .txn-table,
@@ -659,8 +542,7 @@ body.gp-theme .table-bordered tbody td {
   border: 1px solid var(--gp-line-soft);
 }
 
-/* DataTables chrome (search / length / info / pagination) — shared so every
-   role's listing controls match; was duplicated in admin.css + merchant.css. */
+/* DataTables controls, shared by all roles. */
 .dataTables_wrapper .dataTables_filter input,
 .dataTables_wrapper .dataTables_length select {
   border: 1px solid var(--gp-line);
@@ -739,13 +621,26 @@ body.gp-theme .table-bordered tbody td {
   box-shadow: none;
 }
 
+/* Phones: long page lists wrap instead of overflowing the card.
+   Selector matches DataTables' own (dataTables.bootstrap5.css) to win the cascade. */
+@media (max-width: 575.98px) {
+  div.dataTables_wrapper div.dataTables_paginate ul.pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .dataTables_wrapper .pagination .page-link {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+}
+
 .gp-mono {
   font-family: var(--gp-mono);
 }
 
-/* ============================================================
-   BOOTSTRAP BRIDGE — only under body.gp-theme
-   ============================================================ */
+/* ═══ BOOTSTRAP BRIDGE — only under body.gp-theme ═══ */
 
 body.gp-theme {
   background: var(--gp-cream);
@@ -792,9 +687,7 @@ body.gp-theme .btn-success:hover {
   background: var(--gp-green-900);
 }
 
-/* Reference numbers (rent receipts, encashment refs) are rendered in <code> so
-   they are monospaced and easy to read back — but Bootstrap paints <code> pink,
-   which reads as an error next to money. Keep the mono, drop the alarm. */
+/* Monospace reference numbers without Bootstrap's pink. */
 body.gp-theme code {
   color: var(--gp-ink);
   font-family: var(--gp-mono);
@@ -817,13 +710,7 @@ body.gp-theme .btn-secondary:hover {
   color: var(--gp-ink);
 }
 
-/* The two status-coloured outline buttons. Without these they fall through to
-   Bootstrap's own red/green and square corners, sitting beside pill-shaped
-   .btn-outline-secondary neighbours — and any sheet that flattens .btn-sm (as
-   admin.css does) strips their border too, leaving bare coloured text where a
-   button should be. Three places had already patched this one at a time
-   (lease_details' void button, merchant/history's Issue Return, the stall
-   inventory toggle); one rule here retires the first of those. */
+/* Status-coloured outline buttons as pills with borders. */
 body.gp-theme .btn-outline-danger,
 body.gp-theme .btn-outline-success {
   background: #fff;
@@ -854,10 +741,7 @@ body.gp-theme .btn-outline-success:hover:not(:disabled) {
 body.gp-theme .btn-outline-danger:disabled,
 body.gp-theme .btn-outline-success:disabled { opacity: 0.5; }
 
-/* Tertiary "Clear" / "Show fewer" actions in filter bars. Bootstrap paints
-   .btn-link link-blue, the one stock colour this palette never uses.
-   Matched on .btn.btn-link so parent_dashboard.css keeps its bare .btn-link,
-   which is a green pill CTA and not a text link at all. */
+/* Link buttons in filter bars use the palette, not Bootstrap blue. */
 body.gp-theme .btn.btn-link {
   color: var(--gp-green-700);
   font-weight: 700;
@@ -883,15 +767,7 @@ body.gp-theme .badge.bg-primary,
 body.gp-theme .badge.bg-info      { background: var(--gp-info-bg)    !important; color: var(--gp-info)    !important; }
 body.gp-theme .badge.bg-secondary { background: var(--gp-line-soft)              !important; color: var(--gp-muted)           !important; }
 
-/* ============================================================
-   MOTION — global reduced-motion guard
-
-   Replaces four narrowly-scoped copies of this rule that each covered
-   one component (admin.css .ce-*, gjc-clear.css .mini-metric-card and
-   .logout-modal, detail_view.css .uv-*). Nothing in the app declares a
-   transition or animation with !important outside a reduced-motion
-   block, so this wins everywhere without needing a scoped twin.
-   ============================================================ */
+/* ═══ MOTION — global reduced-motion guard ═══ */
 
 @media (prefers-reduced-motion: reduce) {
   *,

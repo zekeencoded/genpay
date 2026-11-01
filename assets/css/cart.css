@@ -1,6 +1,4 @@
-/* Shop Cart page (student/cart.php) — cart-specific pieces on top of the
-   sd-* shell (student_dashboard.css) and shared sp-* scanner styles
-   (student_scan.css). Uses the --sd-* forest/gold tokens. */
+/* Shop Cart page (student/cart.php), on top of the sd-* shell and sp-* scanner styles. */
 
 .cart-line-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .cart-line {
@@ -46,8 +44,7 @@
 /* Full-width action buttons in the cart panel */
 .cart-panel-btn { width: 100%; display: block; text-align: center; }
 
-/* ── Mobile full-screen scanner (body.sp-page): the cart becomes a slide-up
-     bottom sheet over the camera, opened by the floating View Cart pill. ── */
+/* ── Mobile scanner: the cart is a slide-up sheet over the camera ── */
 .sp-sheet-close {
     display: none;
     width: 34px; height: 34px; flex-shrink: 0;

@@ -1,13 +1,5 @@
-/* ============================================================
-   profile_hub.css — the shared profile layout (2026-09-25).
-   Used by student/profile.php, merchant/profile.php (staff) and
-   merchant/settings.php (owner's Business Profile), so all three read as
-   one system: a dark identity hero with its key figures inside, a
-   completeness nudge, then a two-column body that stacks on phones.
-   Layout-agnostic (works inside .sd-content and .merchant-main); colours
-   come from the --gp-* tokens in theme.css. No gold lines anywhere —
-   gold is only ever a fill or text here.
-   ============================================================ */
+/* ═══ Shared profile layout (student, merchant staff, Business Profile).
+   Uses --gp-* tokens; gold only as fill or text. ═══ */
 
 .ph {
     display: flex;
@@ -209,9 +201,7 @@
 .ph-pill-dark::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* ── ID card hero (student, parent and merchant profile.php) */
-/* Two halves: the student's GenPay card drawn as a real card (identity),
-   and the key figures on plain white beside it. The card is the only
-   green on the hero, so it reads as an object rather than a banner. */
+/* Two halves: the GenPay card and the key figures. */
 .ph-id {
     background: var(--gp-card);
     border: 1px solid var(--gp-line);
@@ -223,9 +213,7 @@
     gap: 24px 36px;
 }
 
-/* The card. ID-1 proportions; the lighter disc is a GenCoin rising behind
-   it. No overflow:hidden, so a long name grows the card instead of being
-   clipped. */
+/* ID-1 card proportions; grows with long names. */
 .ph-id-card {
     flex: 1 1 320px;
     max-width: 380px;
@@ -562,8 +550,7 @@ button.ph-pill { cursor: pointer; }
     font-weight: 700;
     color: var(--gp-ink);
 }
-/* The sentence keeps a readable width; when the chips do not fit beside it
-   they drop to their own line instead of squeezing it. */
+/* Chips wrap to their own line when they don't fit. */
 .ph-nudge > .ph-grow { flex: 1 1 280px; }
 .ph-nudge .ph-t { white-space: normal; }
 .ph-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 auto; }
@@ -587,9 +574,7 @@ button.ph-pill { cursor: pointer; }
 .ph-chip > i { color: var(--gp-green-700); font-size: 11px; }
 
 /* ── Section tabs (student and parent profile.php) ─────────── */
-/* Bootstrap's tab plugin drives these; it toggles .active. The baseline is
-   an inset shadow, not a border, so the 2px marker sits on it without a
-   negative margin (which would give the scrolling row a vertical scrollbar). */
+/* Bootstrap tabs; baseline is an inset shadow. */
 .ph-tabs {
     display: flex;
     gap: 4px;
@@ -678,8 +663,7 @@ button.ph-pill { cursor: pointer; }
 .ph-faq > p { margin: 0; padding: 0 20px 16px; font-size: 13px; line-height: 1.6; color: var(--gjc-slate); }
 
 /* ── Focus ─────────────────────────────────────────────────── */
-/* The house focus style (dark neutral), set explicitly so no browser's
-   default ring colour — gold in some — ever shows up as a highlight line. */
+/* House focus style. */
 .ph a:focus-visible,
 .ph button:focus-visible,
 .ph label:focus-visible,
@@ -696,8 +680,7 @@ button.ph-pill { cursor: pointer; }
 .ph-hero label:focus-visible { outline-color: #fff; }
 
 /* ── Breakpoints ───────────────────────────────────────────── */
-/* Four figures (the Business Profile) only fit in one row on a wide screen;
-   below that they go 2 × 2 so a large balance never gets cut off. */
+/* Four figures go 2 × 2 below wide screens. */
 @media (max-width: 1279.98px) {
     .ph-stats.is-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ph-stats.is-four .ph-stat + .ph-stat { border-left: 0; }
@@ -746,8 +729,7 @@ button.ph-pill { cursor: pointer; }
         right: 0;
         bottom: 0;
         max-width: none;
-        /* Undo .modal-dialog-centered / -scrollable sizing, which would
-           otherwise float the sheet mid-screen. */
+        /* Undo modal centring so the sheet sits at the bottom. */
         height: auto;
         min-height: 0;
         max-height: 85vh;

@@ -1,8 +1,5 @@
 <?php
-// CLI regression: wrong passwords typed by email and by student ID count toward the
-// same account, so an account gets five tries in total, not five per identifier.
-// Calls the real sign-in method against temporary users, student_info and
-// login_attempts tables, inside a transaction whose audit entries are discarded.
+// CLI test: email and student ID logins share one 5-try limit.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../record.php';
 

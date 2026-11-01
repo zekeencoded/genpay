@@ -34,6 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 
 if ($action === 'mark_read') {
     $db->prepare("UPDATE parent_alerts SET is_read = 1 WHERE parent_id = ?")->execute([$parentId]);
+    // Keep the topbar bell in step with the dashboard's Low Balance Alerts card.
+    if (gjc_table_exists($db, 'notifications')) {
+        $db->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND type = 'low_balance' AND is_read = 0")->execute([$parentUserId]);
+    }
     echo json_encode(['success' => true]);
     exit;
 }

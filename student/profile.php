@@ -156,7 +156,7 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
     <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=6">
 </head>
@@ -271,8 +271,10 @@ $currentPage = 'profile';
                 <!-- One section at a time instead of one long scroll. A pending
                      guardian request opens first: it is waiting on the student. -->
                 <?php
-                $phTab = $linkRequests ? 'guardian' : 'details';
                 $phTabs = ['details' => 'Details', 'guardian' => 'Guardian', 'status' => 'Status', 'settings' => 'Settings'];
+                // ?tab= comes from notification links (e.g. fee waiver -> status).
+                $phTabParam = is_string($_GET['tab'] ?? null) ? $_GET['tab'] : '';
+                $phTab = isset($phTabs[$phTabParam]) ? $phTabParam : ($linkRequests ? 'guardian' : 'details');
                 ?>
                 <div class="ph-tabs" role="tablist" aria-label="Profile sections">
                     <?php foreach ($phTabs as $key => $label): ?>

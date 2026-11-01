@@ -15,14 +15,8 @@ class CirculationEngine
     const TXN_ALLOWANCE = "allowance";
     const TXN_FEE_WAIVER_CLAIM = "fee_waiver_claim";
 
-    // ── Service fees ──────────────────────────────────────────────────────
-    // Fees are ADDED ON TOP of the requested amount, never deducted from it.
-    // The amount passed to the fee-charging methods is the amount the RECIPIENT
-    // RECEIVES; the payer hands over that base plus both fees.
-    //
-    //   base ₱1,000  →  finance fee ₱10 (1%) + merchant fee ₱20 (2%)
-    //                →  recipient is credited ₱1,000
-    //                →  payer is charged     ₱1,030
+    // ── Service fees ──
+    // Fees are added on top: the recipient gets the base, the payer pays base + both fees.
     const FEE_SYSTEM_RATE = 0.01; // 1 % → school revenue, settles into the vault
     const FEE_MERCHANT_RATE = 0.02; // 2 % → merchant wallet (merchant route only)
 
@@ -31,10 +25,7 @@ class CirculationEngine
         $this->db = $pdo;
     }
 
-    /**
-     * Claims only an unfrozen student-wallet flag for the account-lockout caller.
-     * Uses the caller's PDO/transaction; changes no balance or ledger.
-     */
+    /** Freeze an unfrozen student wallet for a lockout. Uses the caller's transaction. */
     public function freezeStudentWalletForLockout(int $userId): bool
     {
         $stmt = $this->db->prepare("UPDATE student_wallets SET is_frozen = 1 WHERE user_id = ? AND is_frozen = 0");
@@ -48,20 +39,13 @@ class CirculationEngine
         $this->db->prepare("UPDATE student_wallets SET is_frozen = 0 WHERE user_id = ?")->execute([$userId]);
     }
 
-    /**
-     * "1%" / "2%" straight off the rate constant. Every user-facing fee label
-     * goes through this so a label can never drift from the maths again — the
-     * old hardcoded "2%"/"1%" strings were both wrong by a factor of ten.
-     */
+    /** Rate as a label, e.g. "1%". */
     public static function ratePct(float $rate): string
     {
         return rtrim(rtrim(number_format($rate * 100, 2, ".", ""), "0"), ".") . "%";
     }
 
-    /**
-     * Fee breakdown for a base amount. `total` is what the payer hands over.
-     * Single source of truth for the arithmetic in all four fee-charging paths.
-     */
+    /** Fee breakdown for a base amount; `total` is what the payer pays. */
     public static function feeBreakdown(float $baseAmount, bool $withMerchantFee): array
     {
         $systemFee = round($baseAmount * self::FEE_SYSTEM_RATE, 2);
@@ -78,15 +62,7 @@ class CirculationEngine
         ];
     }
 
-    /**
-     * Top-up with tiered service fee.
-     *
-     * source = 'finance'  → 2 % system fee, 0 % merchant fee
-     * source = 'merchant' → 2 % system fee, 1 % merchant fee (credited to merchant wallet)
-     *
-     * Circulation stays balanced: vault drains by (credited + merchantFee);
-     * systemFee remains in vault as accumulated revenue.
-     */
+    /** Top-up: system fee always, merchant fee on the merchant route. */
     public function cashInWithFee(
         int $studentWalletId,
         float $cashAmount,
@@ -103,15 +79,13 @@ class CirculationEngine
             );
         }
 
-        // Fees ride on top: $cashAmount is what the student receives, and the
-        // cashier collects $totalCollected from them.
+        // $cashAmount is what the student receives.
         $fees = self::feeBreakdown($cashAmount, $source === "merchant");
         $systemFee = $fees["system_fee"];
         $merchantFee = $fees["merchant_fee"];
         $credited = $fees["base"];
         $totalCollected = $fees["total"];
-        // Vault pays out: student credit + merchant cut. The system fee is cash
-        // the school keeps — no points move for it.
+        // Vault pays credit + merchant cut; the system fee stays as revenue.
         $vaultDrain = round($credited + $merchantFee, 2);
 
         $this->db->beginTransaction();
@@ -146,7 +120,7 @@ class CirculationEngine
                 )
                 ->execute([$credited, $studentWalletId]);
 
-            // 3. Credit merchant wallet (1 % cut on merchant route)
+            // 3. Credit merchant wallet (merchant route only)
             if ($merchantFee > 0 && $merchantWalletId > 0) {
                 $this->db
                     ->prepare(
@@ -202,12 +176,7 @@ class CirculationEngine
         }
     }
 
-    /**
-     * Parent-wallet top-up with the same tiered service fee as cashInWithFee().
-     * Reuses TXN_CASH_IN (not a new enum value) — ownership is disambiguated
-     * by parent_wallet_id being set instead of student_wallet_id on the row,
-     * same convention as the existing merchant-fee attribution.
-     */
+    /** Parent-wallet top-up; uses TXN_CASH_IN with parent_wallet_id set. */
     public function cashInParent(
         int $parentWalletId,
         float $cashAmount,
@@ -317,9 +286,7 @@ class CirculationEngine
         }
     }
 
-    /**
-     * Pay one server-recorded POS QR bill atomically. Client amounts are never used.
-     */
+    /** Pay a server-recorded POS QR bill. Client amounts are never used. */
     public function payPosQr(string $payerRole, int $payerUserId, string $token): array
     {
         if (!in_array($payerRole, ['student', 'parent'], true) || $payerUserId <= 0
@@ -365,17 +332,13 @@ class CirculationEngine
             }
             if ($payerRole === 'student') {
                 if (gjc_student_wallet_state($this->db, $payerUserId) !== 'active') {
-                    throw new RuntimeException('Your wallet is frozen by your enrollment status. You can still withdraw your balance at the Finance office.');
+                    throw new RuntimeException('Your wallet is frozen by your enrollment status. Your balance is kept safe; if you have graduated, you can still send it to another student.');
                 }
                 if ((int) $payer['is_frozen'] === 1) {
                     throw new RuntimeException('Your wallet is frozen by a parent or guardian.');
                 }
                 if ((float) $payer['daily_spend_limit'] > 0) {
-                    $spent = $this->db->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions
-                        WHERE student_wallet_id = ? AND transaction_type = 'payment'
-                          AND status = 'completed' AND DATE(created_at) = CURDATE()");
-                    $spent->execute([(int) $payer['id']]);
-                    if ((float) $spent->fetchColumn() + $amount > (float) $payer['daily_spend_limit']) {
+                    if (gjc_student_spent_today($this->db, (int) $payer['id']) + $amount > (float) $payer['daily_spend_limit']) {
                         throw new RuntimeException('Your daily spending limit would be exceeded.');
                     }
                 }
@@ -451,13 +414,7 @@ class CirculationEngine
         }
     }
 
-    /**
-     * Merchant sends GenCoins from their own wallet to a student.
-     *
-     * Fees ride on top: $cashAmount is what the STUDENT RECEIVES in full. The
-     * merchant is debited that base plus both fees, then credited their own cut
-     * back, so their net cost is base + systemFee.
-     */
+    /** Merchant sends GenCoin to a student; student gets the base, merchant pays base + fees and gets its cut back. */
     public function merchantSendToStudent(
         int $merchantWalletId,
         int $studentWalletId,
@@ -484,8 +441,7 @@ class CirculationEngine
             $mStmt->execute([$merchantWalletId]);
             $mRow = $mStmt->fetch();
 
-            // Gross, not net: the debit below lands before the cut is returned,
-            // so the wallet must cover the full amount at that moment.
+            // Wallet must cover the gross debit before the cut is returned.
             if (!$mRow || (float) $mRow["balance"] < $totalDebit) {
                 throw new \RuntimeException(
                     sprintf(
@@ -675,14 +631,7 @@ class CirculationEngine
         }
     }
 
-    /**
-     * One-time parent → student transfer. Internal move, cap unchanged, no
-     * fee (fees were already taken at cash-in). A single transactions row
-     * carries both parent_wallet_id and student_wallet_id, so it's visible
-     * in both the parent's sent-history and the student's own ledger — see
-     * the plan's note on why p2p_transfer's single-sender-row shape isn't
-     * repeated here.
-     */
+    /** Parent → student transfer. No fee; one row carries both wallet ids. */
     public function allowanceTransfer(
         int $parentWalletId,
         int $studentWalletId,
@@ -842,9 +791,7 @@ class CirculationEngine
             $oldCap = $settings["total_circulation_cap"];
             $newCap = $oldCap + $increaseBy;
 
-            // Who/when of the last mint is the newest super-admin row in
-            // cap_increase_log; the system_settings copy is only written until
-            // the 3NF contract drops it.
+            // Last mint comes from cap_increase_log; settings copy is legacy.
             $legacyLastCap = in_array("last_cap_increased_by", gjc_table_columns($this->db, "system_settings"), true);
             $this->db
                 ->prepare(
@@ -884,9 +831,6 @@ class CirculationEngine
                 $settings["cashier_vault_points"],
                 $vaultAfter,
                 notes: "Cap raised from Php {$oldCap} to Php {$newCap}. Reason: {$reason}",
-                // increaseCirculationCap() refuses to run without a
-                // justification; until now that justification only reached
-                // transactions.notes and never the audit trail.
                 audit: [
                     "reason" => $reason,
                     "old" => [
@@ -918,18 +862,8 @@ class CirculationEngine
     }
 
     /**
-     * Mints a Fee Waiver Credit straight into a student's wallet: raises
-     * total_circulation_cap and credits student_wallets directly, vault
-     * untouched — money that was never sitting in the vault in the first
-     * place (the school forgave/credited it outside GenPay). Same shape as
-     * increaseCirculationCap(), except the new coins land in one student's
-     * wallet instead of the vault.
-     *
-     * Caller (gjc_claim_fee_waiver_credit()) is responsible for the
-     * claim-before-mint race guard on fee_waiver_credits.status and for
-     * widening the transactions.transaction_type / cap_increase_log.source
-     * enums before this runs — both are DDL and must happen before any
-     * beginTransaction().
+     * Mint a Fee Waiver Credit into a student's wallet (raises the cap, vault untouched).
+     * Caller handles the claim guard and any DDL before the transaction.
      */
     public function feeWaiverClaim(int $studentWalletId, float $amount, int $initiatedBy, int $creditId): array
     {
@@ -1010,8 +944,6 @@ class CirculationEngine
 
     public function getCirculationSnapshot(): array
     {
-        // Circulation health is computed in PHP (buildCirculationSnapshot),
-        // so the app has no dependency on any database view.
         return $this->buildCirculationSnapshot();
     }
 
@@ -1103,14 +1035,10 @@ class CirculationEngine
         string $topUpSource = null,
         float $feeAmount = null,
         int $parentWalletId = null,
-        // Audit-only extras. Nothing here touches the ledger or the money maths:
-        //   reason  the operator's justification, for actions that demand one
-        //   old     the before-state to record as old_value
-        //   new     extra fields to merge into new_value
+        // Audit-only extras: reason, old (before-state), new (extra fields).
         array $audit = [],
         ?int &$transactionId = null,
-        // The merchant's cut of feeAmount (0 on the finance route). The school
-        // fee is feeAmount - merchantFee; nothing else stores the split.
+        // Merchant's share of feeAmount (0 on the finance route).
         ?float $merchantFee = null,
     ): string {
         $total = (float) $this->db
@@ -1123,11 +1051,7 @@ class CirculationEngine
             )
             ->fetchColumn();
 
-        $ref =
-            "TXN-" .
-            strtoupper(date("Ymd")) .
-            "-" .
-            str_pad((string) random_int(1, 99999), 5, "0", STR_PAD_LEFT);
+        $ref = gjc_reference("TXN");
 
         $this->db
             ->prepare(
@@ -1152,8 +1076,7 @@ class CirculationEngine
                 $parentWalletId,
             ]);
 
-        // Later queries (including audit role lookup) can reset PDO's insert ID.
-        // Return the ledger ID separately from the public payment reference.
+        // Save now; later queries can reset lastInsertId().
         $transactionId = (int) $this->db->lastInsertId();
 
         // Persist fee fields if the migration has already added the columns
@@ -1179,8 +1102,6 @@ class CirculationEngine
             }
         }
 
-        // old_value used to be null on every money movement, which left the
-        // entry with no before-state to compare against.
         $auditOld = $audit["old"] ?? [
             "cashier_vault_points" => $vaultBefore,
         ];

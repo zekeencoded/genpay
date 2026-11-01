@@ -1,7 +1,6 @@
 <?php
 
 // 3NF contract migrations: checks and DROP plans for legacy columns and tables.
-// Loaded by connection/app.php; defines functions and constants only.
 
 
 
@@ -11,11 +10,7 @@
 
 
 
-/**
- * Refuses a column CONTRACT while any key, index, trigger, view, routine,
- * event, generated column, CHECK constraint or expression index still names
- * $table.$column. Shared by the 3NF contracts below.
- */
+/** Refuse to drop $table.$column while anything still references it. */
 function gjc_assert_column_droppable(PDO $db, string $table, string $column, bool $checkKeys = true): void
 {
     if ($checkKeys) {
@@ -69,11 +64,8 @@ function gjc_assert_column_unreferenced(PDO $db, string $column): void
 }
 
 /**
- * 3NF CONTRACT for year level: drops student_info.yr_lvl once every row's
- * entry_yr_lvl carries the same value, and makes entry_yr_lvl NOT NULL.
- * CLI only, outside any transaction. Without $apply it only returns the plan.
- * $apply requires $archivePath: a JSON export (written by
- * database/migrations/3nf_contract.php) that must match the current rows.
+ * Drop student_info.yr_lvl once entry_yr_lvl matches. CLI only, no transaction.
+ * Without $apply returns the plan; $apply needs a matching $archivePath export.
  */
 function gjc_ensure_student_entry_year_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
 {
@@ -109,11 +101,7 @@ function gjc_ensure_student_entry_year_contract_schema(PDO $db, bool $apply = fa
     return $plan;
 }
 
-/**
- * 3NF CONTRACT for roles: drops users.sub_role once every stored value equals
- * what gjc_sub_role_for_role_id() derives from roleID. Same CLI/archive rules
- * as gjc_ensure_student_entry_year_contract_schema().
- */
+/** Drop users.sub_role once it matches roleID. Same rules as above. */
 function gjc_ensure_role_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
@@ -141,10 +129,7 @@ function gjc_ensure_role_contract_schema(PDO $db, bool $apply = false, ?string $
     return $plan;
 }
 
-/**
- * 3NF step 3: request/remittance tables whose user column is implied by the
- * wallet they point at. table => [user copy column, wallet column, wallet table].
- */
+/** Tables whose user column is implied by the wallet: table => [user col, wallet col, wallet table]. */
 function gjc_wallet_owner_copies(): array
 {
     return [
@@ -153,15 +138,7 @@ function gjc_wallet_owner_copies(): array
     ];
 }
 
-/**
- * 3NF CONTRACT for one gjc_wallet_owner_copies() table. Refuses unless every
- * row has a wallet that exists and the copy is either NULL (written after the
- * code stopped writing it) or the same user as the wallet owner. Then
- * drops the copy's foreign keys and indexes, makes the wallet column NOT NULL
- * (each row keeps exactly one owner), guarantees a RESTRICT foreign key on the
- * wallet column, and drops the copy. CLI only, outside any transaction;
- * without $apply it only returns the plan; $apply needs a matching export.
- */
+/** Drop a redundant wallet-owner column after checking it matches. Same CLI/plan/archive rules. */
 function gjc_ensure_wallet_owner_contract_schema(PDO $db, string $table, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
@@ -264,10 +241,7 @@ function gjc_ensure_wallet_owner_contract_schema(PDO $db, string $table, bool $a
     return $steps;
 }
 
-/**
- * 3NF step 4: columns whose every value is derivable from another row/column.
- * table => [columns, SQL counting rows where a present value disagrees with its source].
- */
+/** Derivable fee columns: table => [columns, SQL counting disagreeing rows]. */
 function gjc_derived_fee_columns(): array
 {
     return [
@@ -281,10 +255,7 @@ function gjc_derived_fee_columns(): array
     ];
 }
 
-/**
- * 3NF step 5: stored totals derivable from other rows. Same shape as
- * gjc_derived_fee_columns(): table => [columns, SQL counting disagreeing rows].
- */
+/** Derivable stored totals; same shape as gjc_derived_fee_columns(). */
 function gjc_derived_total_columns(): array
 {
     return [
@@ -297,8 +268,7 @@ function gjc_derived_total_columns(): array
                  OR (c.total_amount IS NOT NULL
                      AND c.total_amount <> (SELECT COALESCE(SUM(f.fee_amount), 0) FROM maintenance_fees f WHERE f.collection_id = c.id))",
         ],
-        // The newest super-admin mint in cap_increase_log (source NULL / super_admin_mint).
-        // The stored time came from a separate NOW(), so allow a few seconds.
+                // Allow a few seconds; the stored time came from a separate NOW().
         'system_settings' => [
             ['last_cap_increased_by', 'last_cap_increased_at'],
             "SELECT COUNT(*) FROM system_settings s
@@ -318,11 +288,7 @@ function gjc_derived_columns(): array
     return gjc_derived_fee_columns() + gjc_derived_total_columns();
 }
 
-/**
- * 3NF CONTRACT: transaction_items.subtotal becomes a STORED generated column,
- * ROUND(quantity * unit_price, 2), so MySQL computes it and it cannot drift.
- * Readers are unchanged; gjc_store_transaction_items() stops supplying it.
- */
+/** Make transaction_items.subtotal a STORED generated column. */
 function gjc_ensure_transaction_items_subtotal_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
@@ -405,15 +371,10 @@ function gjc_ensure_derived_columns_contract_schema(PDO $db, string $table, bool
     return $plan;
 }
 
-/**
- * 3NF step 4: whole tables that hold nothing the rest of the schema lacks.
- * table => SQL counting rows that would lose information if the table went.
- */
+/** Obsolete tables: table => SQL counting rows that would lose information. */
 function gjc_obsolete_fee_tables(): array
 {
     return [
-        // Every column is the ledger row's (source, amount + fee, both fees,
-        // merchant wallet, initiator, time); the split now lives on transactions.
         'fee_revenue_log' => "SELECT COUNT(*) FROM fee_revenue_log f
             LEFT JOIN transactions t ON t.reference_no = f.transaction_ref
             WHERE t.id IS NULL
@@ -425,9 +386,7 @@ function gjc_obsolete_fee_tables(): array
                OR NOT (f.merchant_wallet_id <=> t.merchant_wallet_id)
                OR f.processed_by <> t.initiated_by
                OR f.created_at <> t.created_at",
-        // Nothing writes top-up requests any more (top-ups post straight to the ledger).
-        // A row may go only if it was approved and its transaction says the same thing;
-        // a pending or rejected request holds facts found nowhere else and blocks the drop.
+                // Only approved requests matching their transaction can go.
         'topup_requests' => "SELECT COUNT(*) FROM topup_requests r
             LEFT JOIN transactions t ON t.reference_no = r.reference_no
             WHERE t.id IS NULL OR r.status <> 'approved'
@@ -444,12 +403,7 @@ function gjc_obsolete_fee_tables(): array
     ];
 }
 
-/**
- * Onboarding leftovers. merchant_accounts repeats stall_application_decisions
- * (who the awarded application's merchant is, who awarded it, when); the others
- * belong to a pipeline no feature uses and are only dropped while empty.
- * Children are listed before the tables they reference.
- */
+/** Unused onboarding tables. Children listed before parents. */
 function gjc_obsolete_onboarding_tables(): array
 {
     return [
@@ -489,8 +443,7 @@ function gjc_ensure_obsolete_fee_table_contract_schema(PDO $db, string $table, b
     if ($losing !== 0) {
         throw new RuntimeException("{$losing} {$table} row(s) hold data found nowhere else.");
     }
-    // A foreign key from another table blocks the drop, unless that table is
-    // itself obsolete (it is listed, and therefore dropped, first).
+        // Inbound FKs block the drop unless that table is also obsolete.
     $inbound = $db->prepare("SELECT DISTINCT TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE
         WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND TABLE_NAME <> ?");
     $inbound->execute([$table, $table]);
@@ -525,11 +478,7 @@ function gjc_table_export(PDO $db, string $table): array
     ];
 }
 
-/**
- * Foreign keys and single-column indexes on $table.$column, so a contract can
- * drop them with the column. Refuses composite/primary indexes and inbound FKs.
- * Returns [fkNames, indexNames].
- */
+/** FKs and single-column indexes on a column. Returns [fkNames, indexNames]. */
 function gjc_column_own_keys(PDO $db, string $table, string $column): array
 {
     $fk = $db->prepare("SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
@@ -555,10 +504,7 @@ function gjc_column_own_keys(PDO $db, string $table, string $column): array
     return [$fk->fetchAll(PDO::FETCH_COLUMN), $indexes];
 }
 
-/**
- * 3NF quick fixes. key => [table, columns, SQL counting rows that disagree with
- * the data the column duplicates]. Applied by gjc_ensure_quickfix_contract_schema().
- */
+/** Quick-fix contracts: key => [table, columns, SQL counting disagreeing rows]. */
 function gjc_quickfix_contracts(): array
 {
     return [
@@ -574,8 +520,7 @@ function gjc_quickfix_contracts(): array
                LEFT JOIN transactions t ON t.reference_no = p.reference_no
               WHERE t.id IS NULL OR p.amount <> t.amount OR p.status <> t.status
                  OR NOT (p.from_wallet_id <=> t.student_wallet_id) OR p.created_at <> t.created_at"],
-        // B. A lease's stall is stall_id (FK -> stalls); leases without one are
-        //    matched to the registry by stall_number before it is dropped.
+                // Leases without stall_id are matched by stall_number first.
         'merchant_leases:stall_number' => ['merchant_leases', ['stall_number'],
             "SELECT COUNT(*) FROM merchant_leases l
               WHERE (l.stall_id IS NOT NULL AND l.stall_number <> l.stall_id)
@@ -612,14 +557,12 @@ function gjc_quickfix_contracts(): array
                 AND (f.status <> 'claimed' OR t.id IS NULL
                   OR (f.claimed_by_user_id IS NOT NULL AND f.claimed_by_user_id <> t.initiated_by)
                   OR (f.claimed_at IS NOT NULL AND ABS(TIMESTAMPDIFF(SECOND, f.claimed_at, t.created_at)) > 5))"],
-        // Plaintext temporary passwords are emailed (or shown once), never stored;
-        // these columns only ever held NULL.
+                // Temp passwords are never stored; these columns only held NULL.
         'users:temp_password' => ['users', ['temp_password'],
             "SELECT COUNT(*) FROM users WHERE temp_password IS NOT NULL"],
         'stall_applications:temp_password_plain' => ['stall_applications', ['temp_password_plain'],
             "SELECT COUNT(*) FROM stall_applications WHERE temp_password_plain IS NOT NULL"],
-        // Stale copies of values that live in code: the GenCoin rate is GJC_PESOS_PER_GC
-        // and top-up fees are CirculationEngine::FEE_*_RATE. Nothing reads either column.
+                // Values now live in code; nothing reads these columns.
         'system_settings:token_rate,service_fee' => ['system_settings', ['token_rate', 'service_fee'],
             "SELECT COUNT(*) FROM system_settings WHERE token_rate <> ROUND(1 / " . (int) GJC_PESOS_PER_GC . ", 4)"],
         // A receipt covers one student's fees, so its student is theirs (via the ledger).
@@ -728,11 +671,7 @@ function gjc_ensure_quickfix_contract_schema(PDO $db, string $key, bool $apply =
     return $steps;
 }
 
-/**
- * The rows a quick-fix contract exports before it changes a table. Whole rows,
- * except for tables that hold credentials or personal data, where only the key
- * and the dropped columns are exported.
- */
+/** Rows to export before a quick-fix; only keys and dropped columns for sensitive tables. */
 function gjc_quickfix_export(PDO $db, string $table): array
 {
     $key = ['stalls' => 'stall_id', 'users' => 'userID'][$table] ?? 'id';
@@ -755,14 +694,7 @@ function gjc_maintenance_fee_legacy_columns(): array
     return ['student_user_id', 'source_type', 'txn_amount', 'school_year_id', 'created_at', 'collected_at', 'collected_by'];
 }
 
-/**
- * 3NF CONTRACT for maintenance_fees: drop every column that belongs to the
- * fee's ledger row or its receipt, leaving id, reference_no, fee_amount,
- * status, collection_id. reference_no becomes the unique key; the row now
- * depends on its transaction and receipt, so both get RESTRICT foreign keys,
- * and a CHECK keeps status = 'collected' in step with collection_id.
- * Same CLI/plan/archive rules as the other contracts.
- */
+/** Reduce maintenance_fees to its own columns and add FKs and a status CHECK. */
 function gjc_ensure_maintenance_fees_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
@@ -788,8 +720,7 @@ function gjc_ensure_maintenance_fees_contract_schema(PDO $db, bool $apply = fals
     if ($duplicates !== 0) {
         throw new RuntimeException("{$duplicates} transaction reference(s) carry more than one fee row.");
     }
-    // The fee's own created_at came from a separate NOW(), so allow a few seconds;
-    // the ledger row's time is the authoritative one.
+        // Allow a few seconds; the ledger time is authoritative.
     $conflicts = (int) $db->query("SELECT COUNT(*) FROM maintenance_fees f
         LEFT JOIN transactions t ON t.reference_no = f.reference_no
         LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
@@ -874,16 +805,7 @@ function gjc_voucher_transaction_types(): array
     return ['voucher_payment', 'voucher_create', 'voucher_expire'];
 }
 
-/**
- * Finishes removing the visitor-voucher feature from the schema: drops
- * transactions.voucher_id (with its foreign key and index), the vouchers and
- * voucher_payment_log tables, and the three voucher transaction types.
- *
- * Refuses if ANY voucher history exists (a voucher row, a payment-log row, a
- * transaction with a voucher_id or a voucher type): that history would lose
- * its meaning, and the code no longer labels it. CLI only, outside a
- * transaction; without $apply it only returns the plan.
- */
+/** Remove the voucher feature's schema. Refuses if any voucher history exists. */
 function gjc_ensure_voucher_removal_contract_schema(PDO $db, bool $apply = false, ?string $archivePath = null): array
 {
     if (PHP_SAPI !== 'cli' || $db->inTransaction()) {
@@ -970,10 +892,7 @@ function gjc_assert_contract_archive(?string $archivePath, string $column, array
 
 
 
-/**
- * Retain copied wallet-owner IDs until a separately approved CONTRACT.
- * Metadata only: a table's compatibility columns must be all present or all absent.
- */
+/** Whether the table still has legacy wallet-owner columns. */
 function gjc_has_legacy_wallet_user_ids(PDO $db, string $table): bool
 {
     $legacyColumns = [

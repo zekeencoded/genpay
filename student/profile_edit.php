@@ -25,9 +25,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         // BIGINT, exactly as on the merchant Edit Profile.
         $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? ''));
 
-        // Sex / birth date / address / emergency contact, validated once in
-        // app.php so this page and the parent portal can't disagree on what a
-        // valid birth date is.
+        // Shared validation with the parent portal.
         $details = gjc_collect_profile_details($_POST, $columns);
 
         if ($firstName === '' || $lastName === '') {
@@ -112,7 +110,7 @@ $csrfToken = gjc_csrf_token();
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=14">
 </head>
 

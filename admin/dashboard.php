@@ -29,11 +29,7 @@ $moneyFlow = $dashboard["money_flow"];
 // can open a stall's own page (admin/merchant_details.php).
 $tenantCards = (new MerchantTenantDirectory($db))->directoryCards();
 
-// Notification badge per tenant card: audited MANAGEMENT actions by the
-// merchant (owner or their staff) — products, staff, profile, banned-item
-// attempts — newer than the shared last-viewed stamp. Routine sales are
-// deliberately excluded so the count stays meaningful. Opening a card's
-// detail view stamps merchant_card_views and zeroes the badge for everyone.
+// Per-card badge: merchant management actions since the shared last-viewed time (sales excluded).
 $tenantNotifCounts = [];
 if (!empty($tenantCards)) {
     gjc_ensure_merchant_card_views_schema($db);
@@ -116,10 +112,7 @@ $currentPage = "dashboard";
                 </div>
 
                 <?php
-                // Each tile links to the exact queue, not just the page, so one
-                // click lands on the rows to clear. A tile at zero stays visible
-                // and greys out: a queue that vanishes when empty teaches the
-                // user it might be hiding work somewhere.
+                // Each tile links to its queue; empty queues stay visible, greyed out.
                 $attention = [
                     [
                         'label' => 'Encashments to release',

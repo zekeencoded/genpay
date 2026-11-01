@@ -116,11 +116,9 @@ try {
             exit;
         }
 
+        // Graduated/transferred-out students may still send their balance out
+        // (the school's cash-out process); the recipient check above blocks sending to another frozen wallet.
         $walletState = gjc_student_wallet_state($db, $currentUserId);
-        if ($walletState === 'frozen_exit') {
-            echo json_encode(['success' => false, 'message' => 'Account locked: this account has graduated or transferred out.']);
-            exit;
-        }
         if ($walletState === 'frozen_unenrolled') {
             echo json_encode(['success' => false, 'message' => 'You are not enrolled for the current school year. Your balance is safe and stays in your wallet — contact the registrar to be re-enrolled.']);
             exit;
@@ -161,13 +159,7 @@ try {
                 throw new \RuntimeException('Your wallet is frozen by a parent or guardian.');
             }
             if ($wc && (float) $wc['daily_spend_limit'] > 0) {
-                $spentStmt = $db->prepare(
-                    "SELECT COALESCE(SUM(amount),0) FROM transactions
-                      WHERE student_wallet_id = ? AND transaction_type = 'p2p_transfer'
-                        AND DATE(created_at) = CURDATE() AND status = 'completed'"
-                );
-                $spentStmt->execute([$senderWallet['id']]);
-                $todaySpent = (float) $spentStmt->fetchColumn();
+                $todaySpent = gjc_student_spent_today($db, (int) $senderWallet['id']);
                 if ($todaySpent + $amount > (float) $wc['daily_spend_limit']) {
                     throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
                 }
@@ -197,7 +189,8 @@ try {
             $totalCirc = (float) $db->query(
                 "SELECT (cashier_vault_points
                         + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                        + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
+                        + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
+                        + (SELECT COALESCE(SUM(balance),0) FROM parent_wallets))
                    FROM system_settings WHERE id = 1"
             )->fetchColumn();
 
@@ -214,9 +207,7 @@ try {
                 gjc_active_school_year_id($db),
             ]);
 
-            // 5. Log p2p_transfers record; retain copied IDs until CONTRACT.
-            //    Sender, amount, status and time are the ledger row's; they are
-            //    only copied here until the 3NF contract drops them.
+            // 5. Log p2p_transfers; legacy copies until the 3NF contract.
             $legacyUserIds = gjc_p2p_has_legacy_user_ids($db);
             $legacyCopies = gjc_p2p_has_legacy_ledger_copies($db);
             $db->prepare(
@@ -270,7 +261,8 @@ try {
                 'GenCoin Sent',
                 sprintf('You sent %s to %s.', gjc_money_plain($amount), $recipientName),
                 'paper-plane',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $refNo
             );
             gjc_notify(
                 $db,
@@ -279,7 +271,8 @@ try {
                 'GenCoin Received',
                 sprintf('%s sent you %s (%s GC).', $senderName, gjc_money_plain($amount), number_format($amount / 10, 1)),
                 'arrow-down',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $refNo
             );
 
             echo json_encode([

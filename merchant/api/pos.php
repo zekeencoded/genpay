@@ -159,9 +159,7 @@ try {
             $_SESSION['pos_qr_requests'] = array_slice($requests, -100, null, true);
         }
 
-        // Token-only payload: the student side resolves merchant/item/amount
-        // server-side (student/api/validate_qr.php), so the QR itself leaks
-        // nothing and amounts can never be tampered with client-side.
+        // Token only; the student side resolves the details server-side.
         $qrPayload = [
             'type' => 'payment',
             'token' => $token,
@@ -251,10 +249,7 @@ try {
             ];
         }, $posStmt->fetchAll(PDO::FETCH_ASSOC));
 
-        // Orders the student already submitted from the Shop Cart but hasn't
-        // paid for yet — visible the moment they tap "Submit Order", before
-        // any money moves. Excludes 'paid' rows since those are represented
-        // below by their resulting transactions row instead (avoids duplicates).
+        // Submitted but unpaid cart orders (paid ones appear as transactions).
         $pendingCartStmt = $db->prepare(
             "SELECT id, description, amount, status, created_at
                FROM cart_orders
@@ -636,6 +631,10 @@ try {
 
     // ── VOID / CANCEL A PENDING ORDER ───────────────────────────────────────────
     if ($action === 'void_order') {
+        if (!gjc_csrf_verify()) {
+            echo json_encode(['success' => false, 'message' => 'Security check failed. Refresh the page and try again.']);
+            exit;
+        }
         $orderId = (int) ($_POST['order_id'] ?? 0);
         $source = trim((string) ($_POST['source'] ?? 'pos'));
         if (!$orderId) {
@@ -645,11 +644,7 @@ try {
 
         $table = $source === 'cart_pending' ? 'cart_orders' : 'merchant_qr_orders';
 
-        // Named columns, not SELECT *. merchant_qr_orders.token is a live payment
-        // authorisation, and the whole row used to be handed to logAudit() — which
-        // wrote the token into the audit log in cleartext for any finance account
-        // to read. Both tables carry these seven; only the human-facing reference
-        // differs between them.
+        // Named columns so the live QR token never reaches the audit log.
         $auditColumns = $table === 'cart_orders'
             ? 'id, reference_no AS reference, (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = cart_orders.merchant_wallet_id) AS merchant_user_id, merchant_wallet_id, amount, status, description, created_at'
             : 'id, short_code AS reference, (SELECT mw.user_id FROM merchant_wallets mw WHERE mw.id = merchant_qr_orders.merchant_wallet_id) AS merchant_user_id, merchant_wallet_id, amount, status, description, created_at';
@@ -680,244 +675,6 @@ try {
         );
 
         echo json_encode(['success' => true, 'message' => 'Order voided.']);
-        exit;
-    }
-
-    // ── LOOKUP STUDENT ──────────────────────────────────────────────────────────
-    if ($action === 'lookup_student') {
-        $studentIdInput = trim((string) ($_POST['student_id'] ?? ''));
-        if (!$studentIdInput) {
-            echo json_encode(['success' => false, 'message' => 'Student ID is required.']);
-            exit;
-        }
-
-        // Support both student_info.studentID and users.userID search
-        $stmt = $db->prepare(
-            "SELECT u.userID, u.first_name, u.last_name, sw.id AS wallet_id, sw.balance
-               FROM users u
-               JOIN student_info si ON si.userID = u.userID
-               JOIN student_wallets sw ON sw.user_id = u.userID
-              WHERE si.studentID = ? AND u.roleID = 1
-              LIMIT 1"
-        );
-        $stmt->execute([$studentIdInput]);
-        $found = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$found) {
-            echo json_encode(['success' => false, 'message' => 'Student not found. Check the Student ID.']);
-            exit;
-        }
-
-        echo json_encode([
-            'success'   => true,
-            'name'      => trim($found['first_name'] . ' ' . $found['last_name']),
-            'user_id'   => (int) $found['userID'],
-            'wallet_id' => (int) $found['wallet_id'],
-            'balance'   => (float) $found['balance'],
-        ]);
-        exit;
-    }
-
-    // ── PROCESS POS TRANSACTION ─────────────────────────────────────────────────
-    if ($action === 'process_pos') {
-        $walletId  = (int)   ($_POST['wallet_id'] ?? 0);
-        $totalAmt  = round((float) ($_POST['total'] ?? 0), 2);
-        $itemsJson = (string) ($_POST['items'] ?? '[]');
-        $items     = json_decode($itemsJson, true);
-
-        if (!$walletId || $totalAmt <= 0 || empty($items)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid transaction data.']);
-            exit;
-        }
-
-        // Validate each item belongs to this merchant's inventory
-        foreach ($items as &$item) {
-            $item['id']  = (int)   ($item['id']  ?? 0);
-            $item['qty'] = (int)   ($item['qty'] ?? 0);
-            $item['price'] = (float) ($item['price'] ?? 0);
-
-            if (!$item['id'] || $item['qty'] <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Invalid item in order.']);
-                exit;
-            }
-
-            // Verify item is still available and has enough stock
-            $invCheck = $db->prepare(
-                "SELECT id, product_name, stock_qty, price FROM merchant_inventory
-                  WHERE id = ? AND merchant_user_id = ? AND is_available = 1 AND is_restricted = 0"
-            );
-            $invCheck->execute([$item['id'], $ownerMerchId]);
-            $invItem = $invCheck->fetch(PDO::FETCH_ASSOC);
-
-            if (!$invItem) {
-                echo json_encode(['success' => false, 'message' => "Item #{$item['id']} is unavailable or not in your inventory."]);
-                exit;
-            }
-            if ($invItem['stock_qty'] < $item['qty']) {
-                echo json_encode(['success' => false, 'message' => "Insufficient stock for '{$invItem['product_name']}'. Available: {$invItem['stock_qty']}."]);
-                exit;
-            }
-            $item['name'] = $invItem['product_name'];
-        }
-        unset($item);
-
-        // Get merchant wallet
-        $merchantWallet = gjc_merchant_wallet($db, $ownerMerchId);
-        if ($merchantWallet['id'] === 0) {
-            echo json_encode(['success' => false, 'message' => 'Merchant wallet not found.']);
-            exit;
-        }
-
-        $refNo = gjc_reference('POS');
-
-        // DDL must run before the transaction opens (it would implicitly commit it).
-        gjc_ensure_maintenance_fees_schema($db);
-
-        // ── BEGIN TRANSACTION ───────────────────────────────────────────────────
-        $db->beginTransaction();
-        try {
-            // Parent controls are checked under the wallet lock, so two payments
-            // at the same moment cannot both pass the daily limit.
-            gjc_lock_student_wallet($db, $walletId);
-
-            // ── Parent wallet controls ──────────────────────────────────────────
-            $wcStmt = $db->prepare("SELECT is_frozen, daily_spend_limit FROM student_wallets WHERE id = ?");
-            $wcStmt->execute([$walletId]);
-            $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
-            if ($wc && (int) $wc['is_frozen'] === 1) {
-                throw new \RuntimeException('This wallet is frozen by a parent or guardian.');
-            }
-            if ($wc && (float) $wc['daily_spend_limit'] > 0) {
-                $spentStmt = $db->prepare(
-                    "SELECT COALESCE(SUM(amount),0) FROM transactions
-                      WHERE student_wallet_id = ? AND transaction_type = 'payment'
-                        AND DATE(created_at) = CURDATE() AND status = 'completed'"
-                );
-                $spentStmt->execute([$walletId]);
-                $todaySpent = (float) $spentStmt->fetchColumn();
-                if ($todaySpent + $totalAmt > (float) $wc['daily_spend_limit']) {
-                    throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
-                }
-            }
-
-            // 1. Debit student wallet
-            $debitStmt = $db->prepare(
-                "UPDATE student_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?"
-            );
-            $debitStmt->execute([$totalAmt, $walletId, $totalAmt]);
-            if ($debitStmt->rowCount() === 0) {
-                throw new \RuntimeException('Insufficient balance or concurrent modification.');
-            }
-
-            // 2. Credit merchant wallet
-            $db->prepare(
-                "UPDATE merchant_wallets SET balance = balance + ? WHERE id = ?"
-            )->execute([$totalAmt, $merchantWallet['id']]);
-
-            // 3. Deduct stock for each item
-            foreach ($items as $item) {
-                $db->prepare(
-                    "UPDATE merchant_inventory SET stock_qty = stock_qty - ?
-                      WHERE id = ? AND merchant_user_id = ? AND stock_qty >= ?"
-                )->execute([$item['qty'], $item['id'], $ownerMerchId, $item['qty']]);
-            }
-
-            // 4. Snapshot vault
-            $vaultBefore = (float) $db->query(
-                "SELECT cashier_vault_points FROM system_settings WHERE id = 1"
-            )->fetchColumn();
-
-            $totalCirc = (float) $db->query(
-                "SELECT (cashier_vault_points
-                        + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                        + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
-                   FROM system_settings WHERE id = 1"
-            )->fetchColumn();
-
-            // 5. Log to transactions ledger
-            $itemsSummary = implode(', ', array_map(function ($i) {
-                return "{$i['qty']}x {$i['name']}";
-            }, $items));
-            $db->prepare(
-                "INSERT INTO transactions
-                    (reference_no, transaction_type, initiated_by, student_wallet_id, merchant_wallet_id,
-                     amount, vault_before, vault_after, total_in_circulation, status, notes, school_year_id)
-                 VALUES (?, 'payment', ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)"
-            )->execute([
-                $refNo,
-                $merchantUserId,
-                $walletId,
-                $merchantWallet['id'],
-                $totalAmt,
-                $vaultBefore,
-                $vaultBefore, // vault unchanged in a payment
-                $totalCirc,
-                'POS Sale: ' . $itemsSummary,
-                gjc_active_school_year_id($db),
-            ]);
-
-            gjc_store_transaction_items($db, (int) $db->lastInsertId(), $items);
-
-            // 6. Maintenance fee — billed to tuition, never taken from the wallet.
-            $feePayerStmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ?");
-            $feePayerStmt->execute([$walletId]);
-            gjc_record_maintenance_fee($db, (int) $feePayerStmt->fetchColumn(), $refNo, 'payment', $totalAmt);
-
-            $db->commit();
-            gjc_check_parent_balance_alert($db, $walletId);
-            logAudit(
-                $db,
-                $merchantUserId,
-                gjc_current_role(),
-                'TRANSACTION',
-                'transactions',
-                null,
-                [
-                    'reference_no' => $refNo,
-                    'transaction_type' => 'payment',
-                    'amount' => $totalAmt,
-                    'student_wallet_id' => $walletId,
-                    'merchant_wallet_id' => $merchantWallet['id'],
-                    'items' => $items,
-                    'status' => 'completed',
-                ],
-                null,
-                ['target_id' => $refNo]
-            );
-
-            gjc_notify_wallet(
-                $db,
-                $walletId,
-                'payment',
-                'Payment Successful',
-                sprintf('You paid %s at %s.', gjc_money_plain($totalAmt), gjc_user_label($db, $ownerMerchId)),
-                'cart-shopping',
-                STUDENT_URL . '/history.php'
-            );
-
-            $payerUserIdStmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ?");
-            $payerUserIdStmt->execute([$walletId]);
-            $payerUserId = (int) $payerUserIdStmt->fetchColumn();
-            gjc_notify(
-                $db,
-                $ownerMerchId,
-                'sale',
-                'Payment Received',
-                sprintf('%s paid %s at your stall.', $payerUserId ? gjc_user_label($db, $payerUserId) : 'A student', gjc_money_plain($totalAmt)),
-                'cart-shopping',
-                MERCHANT_URL . '/history.php'
-            );
-
-            echo json_encode([
-                'success'   => true,
-                'reference' => $refNo,
-                'message'   => 'Payment processed successfully.',
-                'total'     => $totalAmt,
-            ]);
-        } catch (\Throwable $e) {
-            $db->rollBack();
-            echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'merchant/api/pos', 'Transaction failed. Please try again.')]);
-        }
         exit;
     }
 

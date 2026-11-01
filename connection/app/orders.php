@@ -1,7 +1,6 @@
 <?php
 
 // QR/cart orders, cart snapshots and order/transaction line items.
-// Loaded by connection/app.php; defines functions and constants only.
 
 function gjc_ensure_merchant_qr_orders_schema(PDO $db): void
 {
@@ -55,13 +54,7 @@ function gjc_ensure_merchant_qr_orders_schema(PDO $db): void
     }
 }
 
-/**
- * Cryptographically random short code for manual (typed) payment entry.
- * 8 chars from an unambiguous alphabet (no 0/O, 1/I/L), unique across
- * merchant_qr_orders. The 32-hex QR token is unrealistic to type, so the
- * POS shows this code beside the QR as the camera-less fallback; both
- * resolve to the same single-use order row.
- */
+/** Random 8-char typed payment code (no ambiguous characters), unique per order. */
 function gjc_generate_order_short_code(PDO $db): string
 {
     $alphabet = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -83,14 +76,7 @@ function gjc_generate_order_short_code(PDO $db): string
     throw new RuntimeException('Could not allocate a unique payment code. Please try again.');
 }
 
-/**
- * Re-reads every line of the student's session cart against
- * merchant_inventory right now, drops any item that became
- * unavailable/restricted/out-of-stock since it was scanned (reporting why),
- * and returns a ready-to-render/ready-to-charge snapshot. Shared by the
- * cart UI (student/api/cart.php) and checkout (student/api/checkout.php) so
- * both always agree on what the cart actually contains.
- */
+/** Re-check the session cart against inventory, drop unavailable items, and return a snapshot. */
 function gjc_cart_snapshot(PDO $db): array
 {
     $cart = $_SESSION['cart'] ?? ['merchant_user_id' => null, 'items' => []];
@@ -125,10 +111,7 @@ function gjc_cart_snapshot(PDO $db): array
     $total = 0.0;
     $merchantUserId = $cart['merchant_user_id'] ?? null;
 
-    // A suspended stall can't sell at all — whether the suspension came from
-    // restricted-product strikes or from finance suspending the owner's
-    // account. Empty the cart with the reason so the student isn't left
-    // holding an order they can never check out.
+    // Suspended stall: empty the cart with the reason.
     if ($merchantUserId && gjc_merchant_sales_blocked($db, (int) $merchantUserId)) {
         $stallLabel = gjc_merchant_display_name($db, (int) $merchantUserId) ?: 'This stall';
         foreach ($cart['items'] as $itemId => $qty) {
@@ -202,11 +185,7 @@ function gjc_cart_snapshot(PDO $db): array
     ];
 }
 
-/**
- * Pending Shop Cart orders — a student submits a cart (no money moves yet),
- * the merchant sees it immediately in the Live Order Queue, and the student
- * later pays by scanning the merchant's static Wallet QR at the counter.
- */
+/** Pending Shop Cart orders (paid later at the counter). */
 function gjc_ensure_cart_orders_schema(PDO $db): void
 {
     $db->exec(
@@ -227,16 +206,14 @@ function gjc_ensure_cart_orders_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // Parent shop-cart (2026-08-27). Additive only. The buyer is a parent exactly
-    // when parent_wallet_id is set (3NF: no stored buyer_role).
+    // Parent orders: buyer is a parent when parent_wallet_id is set.
     $cols = gjc_table_columns($db, 'cart_orders', true);
 
     if (!in_array('parent_wallet_id', $cols, true)) {
         $db->exec("ALTER TABLE cart_orders ADD COLUMN parent_wallet_id INT UNSIGNED NULL");
     }
 
-    // A parent order has no student wallet, so that column must accept NULL.
-    // Copied user IDs are retained only in pre-CONTRACT schemas.
+    // Parent orders have no student wallet.
     foreach (['student_wallet_id'] as $col) {
         try {
             $def = $db->query("SHOW COLUMNS FROM cart_orders LIKE " . $db->quote($col))->fetch(PDO::FETCH_ASSOC);
@@ -472,8 +449,7 @@ function gjc_store_transaction_items(PDO $db, int $transactionId, array $lines):
         }
         return;
     }
-    // subtotal is derived (quantity x unit_price). Once it is a generated column
-    // MySQL computes it; until then it is still written here.
+    // Write subtotal until it becomes a generated column.
     $writeSubtotal = !gjc_transaction_items_subtotal_is_generated($db);
     $insert = $db->prepare($writeSubtotal
         ? 'INSERT INTO transaction_items (transaction_id, line_no, item_name, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)'
@@ -486,10 +462,7 @@ function gjc_store_transaction_items(PDO $db, int $transactionId, array $lines):
     }
 }
 
-/**
- * True once transaction_items.subtotal is a generated column (3NF contract).
- * SHOW COLUMNS, not information_schema, so a TEMPORARY test table is honoured.
- */
+/** True once transaction_items.subtotal is generated. Uses SHOW COLUMNS so temp tables work. */
 function gjc_transaction_items_subtotal_is_generated(PDO $db): bool
 {
     $col = $db->query("SHOW COLUMNS FROM transaction_items LIKE 'subtotal'")->fetch(PDO::FETCH_ASSOC);

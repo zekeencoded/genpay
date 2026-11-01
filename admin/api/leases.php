@@ -227,9 +227,7 @@ try {
                 gjc_lease_json_fail('Lease end date must be after lease start date.');
             }
 
-            // Named columns rather than SELECT *: this row goes into the audit
-            // log as old_value, and a whole-row dump quietly logs whatever gets
-            // added to the table later.
+            // Named columns: this row goes into the audit log.
             $chk = $db->prepare(
                 "SELECT id, stall_id" . (gjc_lease_has_stall_number($db) ? ", stall_number" : "") . ", stall_name, monthly_rent, deposit_amount,
                         lease_start, lease_end, status, contract_notes
@@ -253,9 +251,7 @@ try {
                 $stallName = $old['stall_name'];
             }
 
-            // next_due_date is not an input any more — it is recomputed from the
-            // rent schedule below, so it can never drift out of step with the
-            // payments that have actually been recorded.
+            // next_due_date is recomputed from the rent schedule below.
             $stmt = $db->prepare(
                 "UPDATE merchant_leases
                     SET stall_id         = ?," . ($legacyStallNumber ? "
@@ -363,9 +359,7 @@ try {
                 }
             }
 
-            // The tenant handed over cash and walked away with nothing; this is
-            // their receipt. Best-effort — gjc_notify_rent_payment() swallows its
-            // own failures so a notification problem cannot undo a collection.
+            // Tenant's receipt notification (best-effort).
             gjc_notify_rent_payment(
                 $db,
                 (int) $lease['merchant_user_id'],

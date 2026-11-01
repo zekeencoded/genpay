@@ -28,17 +28,12 @@ $myWallet   = gjc_parent_wallet($db, $parentId);
 $myBalance  = (float) $myWallet['balance'];
 $myWalletId = (int) ($myWallet['id'] ?? 0);
 
-// The parent's own Shop Cart purchases. Parents spend from their own wallet
-// now, so those rows get their own panel here instead of only ever appearing
-// mixed into the students' rows on activity.php — the same split the wallet
-// filter over there draws.
-//
-// The student_wallet_id guard is what separates the two: a parent purchase
-// (parent/api/checkout.php) sets parent_wallet_id alone, while an allowance
-// (CirculationEngine::allowanceTransfer) sets BOTH wallet ids on one row.
-// Without it an allowance the parent SENT would be listed here as a purchase
-// — and as a green "+" at that, since gjc_student_txn_meta() counts the
-// allowance type as incoming, which it is for the child, not the sender.
+$hour = (int) date('H');
+$greeting = $hour < 12 ? 'Good Morning' : ($hour <= 18 ? 'Good Afternoon' : 'Good Evening');
+$parentFirstName = trim((string) ($currentUser['raw']['first_name'] ?? '')) ?: (preg_split('/\s+/', trim((string) $currentUser['name']))[0] ?? '');
+$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+// Parent's own purchases. student_wallet_id IS NULL excludes allowances (which set both wallets).
 $myTxns = [];
 if ($myWalletId > 0 && gjc_table_exists($db, 'transactions')) {
     $myTxnStmt = $db->prepare(
@@ -96,9 +91,10 @@ $currentPage = 'dashboard';
     <title>Parent Dashboard | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_dashboard.css?v=12">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/wallet_widgets.css?v=1">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_dashboard.css?v=22">
 </head>
 <body class="gp-theme">
 <div class="parent-layout">
@@ -108,8 +104,10 @@ $currentPage = 'dashboard';
     <main class="parent-main">
 
         <?php
-        $topbarTitle = 'Parent Dashboard';
-        $topbarSubtitle = "Monitor your child's GenPay wallet and set spending controls.";
+        $topbarTitle = $e($greeting) . ', ' . $e($parentFirstName);
+        $topbarSubtitle = "Here's what's happening with your family's wallets today.";
+        // Keep the greeting on phones, same as the student dashboard.
+        $topbarSubtitleMobile = true;
         require __DIR__ . '/../includes/partials/topbar_parent.php';
         ?>
 
@@ -124,56 +122,82 @@ $currentPage = 'dashboard';
             <div class="parent-grid">
 
                 <div class="parent-grid-col">
-                    <!-- My Wallet -->
-                    <div class="parent-card pd-wallet-card">
-                        <div class="parent-card-head">
-                            <h5><i class="fa-solid fa-wallet me-2" style="color:var(--gp-green-700)"></i>My Wallet</h5>
+                    <!-- Balance card (same markup as student/dashboard.php) -->
+                    <section class="sd-balance">
+                        <div>
+                            <span class="sd-balance-label">Available Balance</span>
+                            <div class="sd-balance-amount">
+                                <span><?= gjc_gc_amount($myBalance) ?></span><span class="sd-unit">GC</span>
+                            </div>
+                            <div class="sd-gc-row">
+                                <span class="sd-gc-badge">&#8776; &#8369;<?= number_format($myBalance, 2) ?></span>
+                                <span class="sd-gc-rate">&#8369;10 = 1 GC</span>
+                            </div>
                         </div>
-                        <div class="pd-wallet-row">
+                        <div class="sd-balance-holder">
+                            <strong><?= $e($currentUser['name']) ?></strong>
+                            <span class="sd-role-badge">PARENT</span>
+                        </div>
+                    </section>
+
+                    <!-- Phone quick-access squares, each opening its own page. -->
+                    <nav class="parent-quick" aria-label="Quick access">
+                        <a href="<?= PARENT_URL ?>/students.php" class="parent-quick-tile">
+                            <span class="parent-quick-icon parent-quick-icon--students"><i class="fa-solid fa-user-graduate"></i></span>
+                            <span class="parent-quick-label">Students</span>
+                        </a>
+                        <a href="<?= PARENT_URL ?>/alerts.php" class="parent-quick-tile">
+                            <span class="parent-quick-icon parent-quick-icon--alerts"><i class="fa-solid fa-bell"></i></span>
+                            <span class="parent-quick-label">Alerts</span>
+                            <span class="parent-quick-count" id="alertQuickCount" hidden></span>
+                        </a>
+                        <a href="<?= PARENT_URL ?>/link_student.php" class="parent-quick-tile">
+                            <span class="parent-quick-icon parent-quick-icon--link"><i class="fa-solid fa-link"></i></span>
+                            <span class="parent-quick-label">Link student</span>
+                        </a>
+                    </nav>
+
+                    <!-- Parent's own wallet only (same markup as the student's Recent Transactions). -->
+                    <section class="sd-panel">
+                        <div class="sd-panel-head">
                             <div>
-                                <div class="pd-wallet-amount"><?= gjc_gc_amount($myBalance) ?><span>GC</span></div>
-                                <div class="pd-wallet-php">&#8776; &#8369;<?= number_format($myBalance, 2) ?> &middot; &#8369;10 = 1 GC</div>
+                                <h3>Recent Transactions</h3>
+                                <p>Your own wallet activity</p>
                             </div>
-                            <a class="btn-link pd-wallet-cta" href="<?= PARENT_URL ?>/cart.php"><i class="fa-solid fa-cart-shopping me-1"></i>Shop Cart</a>
+                            <a href="<?= PARENT_URL ?>/activity.php?student=me" class="sd-viewall">View all</a>
                         </div>
-                    </div>
-
-                    <!-- My Transactions — the parent's own wallet only. Their
-                         children's spending lives in Linked Students and on
-                         activity.php; the two are deliberately never mixed
-                         in this panel. -->
-                    <div class="parent-card">
-                        <div class="parent-card-head">
-                            <h5><i class="fa-solid fa-basket-shopping me-2" style="color:var(--gp-green-700)"></i>My Transactions</h5>
-                            <a class="pd-viewall" href="<?= PARENT_URL ?>/activity.php?student=me">View all</a>
+                        <ul class="sd-txn-list">
+                            <?php foreach ($myTxns as $t): $m = gjc_student_txn_meta((string) $t['transaction_type']); ?>
+                            <li class="sd-txn sd-txn--<?= $e($m['slug']) ?>">
+                                <div class="sd-txn-icon"><i class="fa-solid <?= $e($m['icon']) ?>"></i></div>
+                                <div class="sd-txn-info">
+                                    <div class="sd-txn-ref"><?= $e($t['reference_no']) ?></div>
+                                    <div class="sd-txn-type"><?= $e($m['label']) ?></div>
+                                </div>
+                                <div class="sd-txn-right">
+                                    <div class="sd-txn-amount<?= $m['incoming'] ? ' is-in' : '' ?>">
+                                        <?= $m['incoming'] ? '+' : '&minus;' ?><?= gjc_gc_amount((float) $t['amount']) ?> GC
+                                    </div>
+                                    <div class="sd-txn-php">&#8776; &#8369;<?= number_format((float) $t['amount'], 2) ?></div>
+                                    <div class="sd-txn-date"><?= $e(date('M j', strtotime((string) $t['created_at']))) ?><span class="sd-txn-year"><?= $e(date(', Y', strtotime((string) $t['created_at']))) ?></span></div>
+                                </div>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <?php if (!$myTxns): ?>
+                        <div class="sd-empty">
+                            <i class="fa-regular fa-folder-open"></i>
+                            No transactions yet. Scan a stall's Wallet QR from your <a href="<?= PARENT_URL ?>/cart.php">Shop Cart</a>.
                         </div>
-                        <?php if (empty($myTxns)): ?>
-                        <div class="empty-state">
-                            <i class="fa-solid fa-basket-shopping"></i>
-                            <p>You haven't bought anything yet.<br>Scan a stall's Wallet QR from your <a href="<?= PARENT_URL ?>/cart.php">Shop Cart</a>.</p>
-                        </div>
-                        <?php else: ?>
-                        <?php foreach ($myTxns as $t): $m = gjc_student_txn_meta((string) $t['transaction_type']); ?>
-                        <div class="pd-txn">
-                            <div class="pd-txn-icon <?= $m['incoming'] ? 'is-in' : '' ?>"><i class="fa-solid <?= htmlspecialchars($m['icon']) ?>"></i></div>
-                            <div class="pd-txn-info">
-                                <strong><?= htmlspecialchars($m['label']) ?></strong>
-                                <small><?= htmlspecialchars($t['reference_no']) ?> &middot; <?= htmlspecialchars(date('M j, Y', strtotime((string) $t['created_at']))) ?></small>
-                            </div>
-                            <div class="pd-txn-amount <?= $m['incoming'] ? 'is-in' : '' ?>">
-                                <?= $m['incoming'] ? '+' : '&minus;' ?>&#8369;<?= number_format((float) $t['amount'], 2) ?>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
                         <?php endif; ?>
-                    </div>
+                    </section>
 
-                    <!-- Linked Students -->
-                    <div class="parent-card">
+                    <!-- Linked Students. Hidden on phones: those live on students.php. -->
+                    <div class="parent-card dash-desk-only">
                         <div class="parent-card-head">
                             <h5><i class="fa-solid fa-user-graduate me-2" style="color:var(--gp-green-700)"></i>Linked Students</h5>
                             <?php if (!empty($linkedStudents)): ?>
-                            <a class="pd-viewall" href="<?= PARENT_URL ?>/activity.php">Their activity</a>
+                            <a class="sd-viewall" href="<?= PARENT_URL ?>/activity.php">Their activity</a>
                             <?php endif; ?>
                         </div>
                         <?php if (empty($linkedStudents)): ?>
@@ -203,28 +227,26 @@ $currentPage = 'dashboard';
                         </div>
                         <?php endforeach; ?>
                         <?php endif; ?>
+
+                        <!-- Link a Student, kept inside the list it adds to -->
+                        <div class="link-student">
+                            <h6><i class="fa-solid fa-link me-2" style="color:var(--gp-green-700)"></i>Link a Student</h6>
+                            <p>Enter your child's school-issued student ID (e.g. <code>GJC2026-0001</code>) to link their wallet to your account.</p>
+                            <form class="link-form" id="linkForm">
+                                <input type="text" id="linkSchoolId" placeholder="Student School ID" maxlength="30" autocomplete="off">
+                                <button type="submit" class="btn-link"><i class="fa-solid fa-link me-1"></i>Link Student</button>
+                            </form>
+                            <div id="linkMsg" style="margin-top:8px;font-size:13px;"></div>
+                            <?php foreach ($pendingLinks as $pl): ?>
+                            <p style="font-size:13px;color:var(--gp-muted);margin:8px 0 0;"><i class="fa-solid fa-hourglass-half me-1"></i>Waiting for <strong><?= htmlspecialchars(trim($pl['first_name'] . ' ' . $pl['last_name'])) ?></strong> to approve</p>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </div>
 
                 <div class="parent-grid-col">
-                    <!-- Link a Student -->
-                    <div class="parent-card">
-                        <div class="parent-card-head">
-                            <h5><i class="fa-solid fa-link me-2" style="color:var(--gp-green-700)"></i>Link a Student</h5>
-                        </div>
-                        <p style="font-size:13px;color:var(--gp-muted);margin-bottom:12px;">Enter your child's school-issued student ID (e.g. <code>GJC2026-0001</code>) to link their wallet to your account.</p>
-                        <form class="link-form" id="linkForm">
-                            <input type="text" id="linkSchoolId" placeholder="Student School ID" maxlength="30" autocomplete="off">
-                            <button type="submit" class="btn-link"><i class="fa-solid fa-link me-1"></i>Link Student</button>
-                        </form>
-                        <div id="linkMsg" style="margin-top:8px;font-size:13px;"></div>
-                        <?php foreach ($pendingLinks as $pl): ?>
-                        <p style="font-size:13px;color:var(--gp-muted);margin:8px 0 0;"><i class="fa-solid fa-hourglass-half me-1"></i>Waiting for <strong><?= htmlspecialchars(trim($pl['first_name'] . ' ' . $pl['last_name'])) ?></strong> to approve</p>
-                        <?php endforeach; ?>
-                    </div>
-
-                    <!-- Low Balance Alerts (AJAX) -->
-                    <div class="parent-card">
+                    <!-- Low Balance Alerts (AJAX). Hidden on phones: those live on alerts.php. -->
+                    <div class="parent-card dash-desk-only">
                         <div class="parent-card-head">
                             <h5>
                                 <i class="fa-solid fa-bell me-2" style="color:var(--gp-warning)"></i>Low Balance Alerts
@@ -271,221 +293,11 @@ $currentPage = 'dashboard';
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . '/../includes/partials/feedback_assets.php'; ?>
 <script>
-const ALERTS_API  = '<?= PARENT_URL ?>/api/alerts.php';
+const ALERTS_API   = '<?= PARENT_URL ?>/api/alerts.php';
 const CONTROLS_API = '<?= PARENT_URL ?>/api/controls.php';
-const LINK_API    = '<?= PARENT_URL ?>/api/link.php';
-
-function toggleParentSidebar() {
-    document.getElementById('parentSidebar').classList.toggle('collapsed');
-}
-
-/* ── Link student ───────────────────────────────────────────── */
-document.getElementById('linkForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const sid = document.getElementById('linkSchoolId').value.trim();
-    const msg = document.getElementById('linkMsg');
-    const btn = this.querySelector('[type="submit"]');
-    if (btn.disabled) return;
-    if (!sid) { msg.innerHTML = '<span style="color:var(--gp-danger)">Please enter a school ID.</span>'; return; }
-    btn.disabled = true;
-    msg.textContent = '';
-    let linked = false;
-    try {
-        gpBusy(btn, 'Checking student...');
-        msg.textContent = 'Checking student...';
-        const lookupRes = await fetch(LINK_API, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action: 'lookup_student', school_id: sid})
-        });
-        const student = await lookupRes.json();
-        if (!student.success) {
-            msg.innerHTML = '<span style="color:var(--gp-danger)">' + gpEsc(student.error || 'Student lookup failed.') + '</span>';
-            return;
-        }
-        msg.textContent = '';
-        const confirmed = await gpConfirm({
-            title: 'Link this student?',
-            body: 'Please check the name and school ID before linking this student to your account.',
-            detail: [['Student Name', student.student_name], ['Student School ID', student.school_id]],
-            note: 'The student will be notified and must approve the link from their GenPay profile. Once approved you can view their wallet and transactions, send allowances, and manage spending controls.',
-            confirmLabel: 'Send Request'
-        });
-        if (!confirmed) {
-            document.getElementById('linkSchoolId').focus();
-            return;
-        }
-        btn.textContent = 'Sending...';
-        msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Sending request...';
-        const res = await fetch(LINK_API, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action: 'link_student', school_id: student.school_id})
-        });
-        const data = await res.json();
-        if (data.success) {
-            linked = true;
-            msg.innerHTML = '<span style="color:var(--gp-success)"><i class="fa-solid fa-check me-1"></i>' + gpEsc(data.message) + '</span>';
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            msg.innerHTML = '<span style="color:var(--gp-danger)">' + gpEsc(data.error || 'Failed.') + '</span>';
-        }
-    } catch(err) {
-        msg.innerHTML = '<span style="color:var(--gp-danger)">Request failed.</span>';
-    } finally {
-        if (!linked) {
-            gpBusyDone(btn);
-            btn.disabled = false;
-        }
-    }
-});
-
-/* ── Alert threshold ────────────────────────────────────────── */
-document.getElementById('thresholdForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const val  = parseFloat(document.getElementById('thresholdInput').value) || 0;
-    const msg  = document.getElementById('thresholdMsg');
-    try {
-        const res  = await fetch(CONTROLS_API, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({action: 'set_alert_threshold', amount: val})
-        });
-        const data = await res.json();
-        msg.textContent  = data.success ? 'Saved!' : (data.error || 'Error');
-        msg.style.color  = data.success ? 'var(--gp-success)' : 'var(--gp-danger)';
-        setTimeout(() => { msg.textContent = ''; }, 2500);
-    } catch(err) { msg.textContent = 'Error'; }
-});
-
-/* ── AJAX Alerts ────────────────────────────────────────────── */
-function fmtDate(str) {
-    const d = new Date(str.replace(' ', 'T'));
-    return d.toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'})
-        + ' ' + d.toLocaleTimeString('en-PH', {hour:'numeric', minute:'2-digit'});
-}
-
-let _prevUnread = 0;
-
-function showToast(msg) {
-    let t = document.getElementById('alertToast');
-    if (!t) {
-        t = document.createElement('div');
-        t.id = 'alertToast';
-        t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--gp-green-950);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;max-width:300px;';
-        document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.style.opacity = '1';
-    clearTimeout(t._timer);
-    t._timer = setTimeout(() => { t.style.opacity = '0'; }, 4000);
-}
-
-function renderAlerts(data) {
-    const badge     = document.getElementById('alertBadge');
-    const markBtn   = document.getElementById('markReadBtn');
-    const container = document.getElementById('alertsContainer');
-    const ts        = document.getElementById('alertsTimestamp');
-
-    const count = parseInt(data.unread_count) || 0;
-
-    if (count > 0) {
-        badge.textContent   = count;
-        badge.style.display = 'inline';
-        markBtn.style.display = 'inline';
-        if (count > _prevUnread && _prevUnread !== -1) {
-            const diff = count - _prevUnread;
-            showToast(`${diff} new low-balance alert${diff > 1 ? 's' : ''}`);
-        }
-    } else {
-        badge.style.display   = 'none';
-        markBtn.style.display = 'none';
-    }
-    _prevUnread = count;
-
-    const now = new Date();
-    ts.textContent = 'Updated ' + now.toLocaleTimeString('en-PH', {hour:'numeric', minute:'2-digit', second:'2-digit'});
-
-    if (!data.alerts || data.alerts.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center;padding:24px 16px;color:var(--gp-muted);">
-                <i class="fa-solid fa-bell-slash" style="font-size:28px;margin-bottom:8px;display:block;"></i>
-                <span style="font-size:13px;">No alerts yet. Alerts appear when a linked student's balance drops below your threshold.</span>
-            </div>`;
-        return;
-    }
-
-    container.innerHTML = data.alerts.map(a => {
-        const name   = ((a.first_name || '') + ' ' + (a.last_name || '')).trim();
-        const unread = parseInt(a.is_read) === 0;
-        return `
-        <div class="alert-row" style="${unread ? 'background:var(--gp-warning-bg);border-radius:8px;padding:10px 12px;margin-bottom:4px;' : ''}">
-            <div class="alert-icon${unread ? '' : ' read'}">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <div class="alert-text">
-                <strong>${name}'s balance dropped to &#8369;${parseFloat(a.balance_at_alert).toFixed(2)}</strong>
-                <small>${fmtDate(a.created_at)} &bull; Threshold: &#8369;${parseFloat(a.threshold).toFixed(2)}
-                    ${unread ? '<span style="margin-left:6px;background:var(--gp-warning-bg);color:var(--gp-warning);padding:1px 6px;border-radius:8px;font-size:11px;font-weight:700;">NEW</span>' : ''}
-                </small>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function setRefreshSpinning(on) {
-    const icon = document.getElementById('refreshIcon');
-    if (!icon) return;
-    if (on) icon.classList.add('fa-spin');
-    else    icon.classList.remove('fa-spin');
-}
-
-async function fetchAlerts() {
-    setRefreshSpinning(true);
-    try {
-        const res = await fetch(ALERTS_API, {credentials: 'same-origin'});
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        if (data.success) {
-            renderAlerts(data);
-        } else {
-            document.getElementById('alertsContainer').innerHTML =
-                `<div style="text-align:center;padding:20px;color:var(--gp-danger);font-size:13px;"><i class="fa-solid fa-circle-xmark me-1"></i>${data.error || 'Could not load alerts.'}</div>`;
-        }
-    } catch(err) {
-        const container = document.getElementById('alertsContainer');
-        if (container.querySelector('.fa-spinner')) {
-            container.innerHTML =
-                `<div style="text-align:center;padding:20px;color:var(--gp-muted);font-size:13px;"><i class="fa-solid fa-wifi me-1"></i>Could not reach alerts service. Will retry shortly.</div>`;
-        }
-    } finally {
-        setRefreshSpinning(false);
-    }
-}
-
-async function markAlertsRead() {
-    try {
-        const res = await fetch(ALERTS_API, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'same-origin',
-            body: JSON.stringify({action: 'mark_read'})
-        });
-        const data = await res.json();
-        if (data.success) {
-            _prevUnread = -1;
-            fetchAlerts();
-        }
-    } catch(err) {}
-}
-
-/* Load on page open, then poll every 30 s */
-document.addEventListener('DOMContentLoaded', () => {
-    _prevUnread = -1;
-    fetchAlerts();
-    setInterval(fetchAlerts, 30000);
-});
+const LINK_API     = '<?= PARENT_URL ?>/api/link.php';
 </script>
+<script src="<?= JS_URL ?>/parent_dashboard.js?v=1"></script>
 
 <?php require __DIR__ . '/../includes/partials/bottom_nav_parent.php'; ?>
 </body>

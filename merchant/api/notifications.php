@@ -1,12 +1,5 @@
 <?php
-// ============================================================
-//  merchant/api/notifications.php
-//  Backs the topbar notification bell: list recent notifications (with
-//  unread count) and mark them read. Polled by includes/partials/topbar_merchant.php.
-//  Owner-only by design — see includes/partials/topbar_merchant.php's
-//  $topbarShowBell default (hidden for staff logins). This endpoint itself
-//  just reflects whoever is logged in, same as student/api/notifications.php.
-// ============================================================
+// Topbar notification bell: list and mark read.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';

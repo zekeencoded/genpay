@@ -1,7 +1,4 @@
-/* Public-page chrome shared by index.php and stalls.php: the top bar
-   (includes/partials/public_navbar.php), the hero type and the footer.
-   Colours come from gjc-clear.css (loaded first on both pages); this file
-   only holds layout, so each page's own sheet keeps just its page body. */
+/* Public page chrome (navbar, hero, footer) for index.php and stalls.php; layout only. */
 
 .navbar {
     background-color: rgba(255, 255, 255, 0.95);
@@ -74,9 +71,7 @@
     transition: background-color 0.2s ease;
 }
 
-/* The hero sits on a dark emerald overlay, where the house dark-green
-   button disappears. The one hero CTA per page (Get Started Now / Apply
-   Now) is a solid gold fill instead. !important to outrank gjc-clear.css. */
+/* Hero CTA is solid gold (!important beats gjc-clear.css). */
 .hero .btn-primary-custom {
     background: var(--gp-gold) !important;
     border-color: var(--gp-gold) !important;
@@ -144,4 +139,51 @@ footer {
         text-align: center;
         border-radius: 0 !important; /* gjc-clear.css forces the pill radius with !important */
     }
+}
+
+/* Navbar: text links with a hover tint, plus a solid Login button (!important beats gjc-clear.css pills). */
+.nav-actions .btn-primary-custom {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: var(--gp-radius) !important;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.nav-actions .btn-outline-custom {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: var(--gp-green-700) !important;
+}
+.nav-actions .btn-outline-custom:hover,
+.nav-actions .btn-outline-custom[aria-current="page"] {
+    background: rgba(14, 99, 50, 0.08) !important;
+    border-color: rgba(14, 99, 50, 0.12) !important;
+    color: var(--gjc-green-950) !important;
+}
+.nav-actions .btn-login {
+    margin-left: 6px;
+    box-shadow: 0 4px 12px rgba(14, 99, 50, 0.25) !important;
+}
+.nav-actions .btn-login:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(14, 99, 50, 0.3) !important;
+}
+.nav-actions .btn-login i { transition: transform 0.2s ease; }
+.nav-actions .btn-login:hover i { transform: translateX(3px); }
+.nav-actions .btn-primary-custom:focus-visible {
+    outline: 2px solid var(--gp-green-700);
+    outline-offset: 2px;
+}
+@media (max-width: 768px) {
+    .nav-actions .btn-primary-custom {
+        justify-content: center;
+        border-radius: var(--gp-radius) !important;
+    }
+    .nav-actions .btn-login { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nav-actions .btn-primary-custom,
+    .nav-actions .btn-login i { transition: none; }
+    .nav-actions .btn-login:hover,
+    .nav-actions .btn-login:hover i { transform: none !important; }
 }

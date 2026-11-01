@@ -1,15 +1,8 @@
 <?php
 
 // Student and merchant wallets, wallet user stats, P2P transfers and cap logs.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * The users.userID behind a wallet row — 'student' reads student_wallets.user_id
- * directly, 'parent' hops parent_wallets -> parents.user_id. Credit paths that
- * only ever hold a wallet id use this to name the receiving account for
- * gjc_funds_in_block_reason(). Returns 0 when it can't be resolved, which
- * callers must treat as "don't block" rather than "blocked".
- */
+/** userID that owns a wallet ('student' or 'parent'), or 0 if unknown (treat as don't block). */
 function gjc_wallet_owner_user_id(PDO $db, string $kind, int $walletId): int
 {
     if ($walletId <= 0) {
@@ -45,8 +38,7 @@ function gjc_student_wallet(PDO $db, int $userId): array
         $stmt->execute([$userId]);
         $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$wallet) {
-            // New wallets inherit the configured default spend cap (0 = none).
-            // Parents can still override it per student afterwards.
+            // New wallets get the default spend cap (0 = none).
             $defaultCap = gjc_setting($db, 'wallet_default_spend_cap');
             try {
                 $db->prepare(
@@ -182,19 +174,10 @@ function gjc_parent_wallet_user_stats(PDO $db): array
     ];
 }
 
-/**
- * Lists every wallet user (students + merchants + parents) with name, type, current
- * balance, and last-activity date. Powers the Total Wallet Users drill-in
- * table on the economy page. Mirrors the 30-day "active" rule used by
- * gjc_wallet_user_stats() / gjc_merchant_wallet_user_stats().
- */
+/** All wallet users with type, balance and last activity (economy page). */
 function gjc_wallet_users_list(PDO $db): array
 {
-    // Definitions mirror the economy pool cards: a "student wallet user" is any
-    // student-role user (wallet row optional), a "merchant wallet user" is any
-    // merchant_wallets row, a "parent wallet user" is any parents row (wallet
-    // row optional). This keeps the combined card count == the three pool
-    // cards == this table's row count.
+    // Same definitions as the economy pool cards so counts match.
     $sql = "
         SELECT
             COALESCE(CONCAT(u.first_name, ' ', u.last_name), '(unknown)') AS name,
@@ -249,10 +232,7 @@ function gjc_cap_log_has_legacy_amount_added(PDO $db): bool
 
 
 
-/**
- * Keep P2P compatibility writes until the copied user IDs are contracted.
- * This checks metadata only; it does not change the schema.
- */
+/** Whether p2p_transfers still has legacy user id columns. */
 function gjc_p2p_has_legacy_user_ids(PDO $db): bool
 {
     $columns = gjc_table_columns($db, 'p2p_transfers', true);
@@ -264,10 +244,7 @@ function gjc_p2p_has_legacy_user_ids(PDO $db): bool
     return $hasFrom;
 }
 
-/**
- * True while p2p_transfers still stores the copies of its ledger row
- * (from_wallet_id, amount, status, created_at) that the 3NF contract drops.
- */
+/** Whether p2p_transfers still has legacy ledger copies. */
 function gjc_p2p_has_legacy_ledger_copies(PDO $db): bool
 {
     return in_array('amount', gjc_table_columns($db, 'p2p_transfers'), true);
@@ -289,14 +266,19 @@ function gjc_p2p_daily_sent(PDO $db, int $userId): float
     return (float) $stmt->fetchColumn();
 }
 
-/**
- * Lock one student wallet row until the transaction ends, so two payments or
- * transfers from the same wallet cannot both pass the daily limits.
- *
- * Call it as the FIRST statement after beginTransaction(). Under REPEATABLE READ
- * the first plain SELECT fixes the snapshot; a read before the lock would let the
- * later "spent today" sum miss a payment that committed while we waited.
- */
+/** Today's spend counted against the parent's daily limit: payments + P2P sends. */
+function gjc_student_spent_today(PDO $db, int $walletId): float
+{
+    $stmt = $db->prepare(
+        "SELECT COALESCE(SUM(amount), 0) FROM transactions
+          WHERE student_wallet_id = ? AND transaction_type IN ('payment', 'p2p_transfer')
+            AND DATE(created_at) = CURDATE() AND status = 'completed'",
+    );
+    $stmt->execute([$walletId]);
+    return (float) $stmt->fetchColumn();
+}
+
+/** Lock a student wallet row for the transaction. Call first after beginTransaction(). */
 function gjc_lock_student_wallet(PDO $db, int $walletId): void
 {
     if (!$db->inTransaction()) {

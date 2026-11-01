@@ -1,13 +1,6 @@
 <?php
-// ============================================================
-//  admin/lease_details.php — one lease, in full
-//  The rent roll's "Details" / "Record payment" actions used to
-//  open a modal; this is that ledger as a real page, so it can be
-//  linked, bookmarked, paged and printed. Everything is rendered
-//  server-side from MerchantTenantDirectory (same source the roll
-//  uses); the three write actions still go through
-//  admin/api/leases.php over fetch, then reload the page.
-// ============================================================
+// One lease in full, rendered from MerchantTenantDirectory.
+// Writes go to admin/api/leases.php, then the page reloads.
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -114,10 +107,7 @@ if ($lease) {
         'off_contract' => ['Outside term', 'is-partial'],
     ];
 
-    // ── Which section is on screen ───────────────────────────────────────
-    // Addressed in the URL rather than switched in the browser, so paging the
-    // receipts keeps you on Receipts, and the rent roll can link straight to
-    // the section its button means.
+    // ── Tabs via ?tab= so paging and links keep the section ──
     $tabs = [
         'collect'  => ['Record payment', 'fa-solid fa-hand-holding-dollar'],
         'receipts' => ['Receipts',       'fa-solid fa-receipt'],

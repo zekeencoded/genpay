@@ -1,12 +1,6 @@
 <?php
 
-/**
- * Settings write handler for admin/settings.php.
- *
- * Plain form POST + redirect-with-flash (not fetch/JSON) — a settings page has
- * no partial-update UI to keep in sync, and a redirect makes a double-submit
- * harmless. Two actions: `save_limits` and `set_mint_pin`.
- */
+/** Settings form handler for admin/settings.php (POST + redirect with flash). */
 
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
@@ -73,9 +67,7 @@ try {
             $updates[$key] = $value;
         }
 
-        // Cross-field sanity: a minimum above the daily ceiling would make every
-        // transfer impossible — the two fields are individually valid but the
-        // combination is not.
+        // Minimum can't exceed the daily limit.
         if ($updates['transfer_min_amount'] > $updates['transfer_daily_limit']) {
             settings_redirect(
                 'error',
@@ -113,10 +105,7 @@ try {
             : count($changed) . ' limits updated.', 'limits');
     }
 
-    // ── Panel 3: Merchant restricted-product policy ──────────────────────
-    // ── Panel 4: Fee waiver cap ──────────────────────────────────────────
-    // Both are plain numeric groups, so they share one validator; the two forms
-    // differ only in which keys they submit.
+    // ── Panels 3–4: restricted-product policy, fee waiver cap (shared numeric validator) ──
     if (in_array($action, ['save_merchant_policy', 'save_fee_waiver', 'save_maintenance_fee'], true)) {
         $groups = [
             'save_maintenance_fee' => [

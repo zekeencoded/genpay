@@ -61,7 +61,8 @@ try {
                 'Top-Up Approved',
                 gjc_money_plain($result['credited_amount']) . ' has been credited to your wallet.',
                 'circle-plus',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $result['reference']
             );
             echo json_encode(array_merge(['success' => true], $result));
             break;
@@ -117,9 +118,7 @@ try {
             ]);
             break;
 
-        // Parents have no school ID of their own — resolved through the
-        // linked student's school ID instead, same model as
-        // merchant/api/topup.php's lookup_parent_by_student action.
+        // Parents are found through their linked student's school ID.
         case 'lookup_parent_by_student':
 
             $schoolId = trim($body['school_id'] ?? '');
@@ -174,7 +173,8 @@ try {
                     'Top-Up Approved',
                     gjc_money_plain($result['credited_amount']) . ' has been credited to your wallet.',
                     'circle-plus',
-                    PARENT_URL . '/wallet.php'
+                    PARENT_URL . '/activity.php?student=me',
+                    $result['reference']
                 );
             }
 

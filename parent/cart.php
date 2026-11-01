@@ -1,14 +1,5 @@
 <?php
-// ============================================================
-//  parent/cart.php
-//  Parent shop cart — the parent-side twin of student/cart.php.
-//  Same in-person model: scan each item's barcode at the stall, submit the
-//  order, then pay by scanning that stall's Wallet QR at the counter.
-//  Replaced parent/wallet.php (removed 2026-08-27 along with parent top-up
-//  requests), so the wallet balance hero lives here now.
-//  Content markup and scanner JS are kept identical to the student page on
-//  purpose — only the shell, the wallet lookup and the API URLs differ.
-// ============================================================
+// Parent shop cart page (same markup and scanner as student/cart.php).
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -51,8 +42,8 @@ $csrfToken = gjc_csrf_token();
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=24">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_scan.css?v=12">
     <link rel="stylesheet" href="<?= CSS_URL ?>/cart.css?v=11">
 

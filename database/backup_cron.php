@@ -1,12 +1,11 @@
 <?php
 
-// Nightly automatic backup + pruning (keeps the newest GJC_BACKUP_KEEP_AUTO "auto" backups).
-// The app has no cron; register this with Windows Task Scheduler, after school hours:
+// Nightly backup + pruning (keeps GJC_BACKUP_KEEP_AUTO auto backups). Schedule with Windows Task Scheduler:
 //
 //   schtasks /Create /TN "GenPay nightly backup" /SC DAILY /ST 20:00 /RL HIGHEST
 //     /TR "C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe C:\laragon\www\genpayV3.3\database\backup_cron.php"
 //
-// The php.exe used must have the zip and pdo_mysql extensions enabled.
+// php.exe needs the zip and pdo_mysql extensions.
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);

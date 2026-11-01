@@ -1,14 +1,6 @@
 <?php
-// ============================================================
-//  connection/mail_worker.php
-//  Background sender for the file-spool email queue (CLI only).
-//
-//  Spawned fire-and-forget by gjc_queue_email(); a lock file keeps a single
-//  instance running. Processes storage/mail_spool/mail_*.json over ONE
-//  reused SMTP connection (SMTPKeepAlive), retries transient failures
-//  (3 attempts, 15s apart), and parks permanent failures in
-//  storage/mail_spool/failed/. Activity is appended to mail.log.
-// ============================================================
+// Background sender for the email spool (CLI only, single instance).
+// Retries 3 times, 15s apart; failures go to storage/mail_spool/failed/.
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;
@@ -35,23 +27,20 @@ function mail_worker_log(string $msg): void
     );
 }
 
-// Single instance: a second spawn exits immediately and lets the running
-// worker (which re-globs until the spool is empty) handle the new file.
+// Single instance: the running worker picks up new files.
 $lock = fopen($spool . '/worker.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
-// A crash mid-send leaves a *.json.sending claim behind — return stale ones
-// to the queue so they are retried rather than lost.
+// Requeue stale *.json.sending files from a crash.
 foreach (glob($spool . '/mail_*.json.sending') ?: [] as $stale) {
     if ((int) @filemtime($stale) < time() - 300) {
         @rename($stale, substr($stale, 0, -8));
     }
 }
 
-// One SMTP connection reused for every message in the run: the ~2-5s
-// handshake+login is paid once, not per email.
+// Reuse one SMTP connection for the whole run.
 $mailer = gjc_mailer();
 $mailer->SMTPKeepAlive = true;
 
@@ -59,8 +48,7 @@ $deadline = time() + MAIL_WORKER_TTL;
 while (time() < $deadline) {
     $pending = glob($spool . '/mail_*.json') ?: [];
     if (!$pending) {
-        // Grace pass: catch a file spooled while we were finishing up
-        // (its spawn saw our lock and exited).
+        // Catch files spooled while finishing up.
         sleep(2);
         if (!glob($spool . '/mail_*.json')) {
             break;

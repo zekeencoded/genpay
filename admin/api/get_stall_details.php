@@ -1,14 +1,5 @@
 <?php
-// ============================================================
-//  admin/api/get_stall_details.php
-//  What is left of the old stall-detail modal's backend. The
-//  modal became admin/merchant_details.php, which renders every
-//  panel server-side, so the read actions (details, payments,
-//  inventory, activity) and the lease writes (update_lease,
-//  record_rent_payment — duplicates of admin/api/leases.php) are
-//  gone. Flagging a product is the one thing the page still has
-//  to post, so it is the one action left here.
-// ============================================================
+// Flag/unflag a product for the merchant details page (the only action left).
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -17,9 +8,7 @@ require_once __DIR__ . '/../../connection/MerchantTenantDirectory.php';
 
 header('Content-Type: application/json');
 
-// Finance-wide, matching admin/merchant_details.php and admin/api/leases.php.
-// gjc_require_role() redirects a non-finance session, which an XHR reads as a
-// failed request; the explicit check keeps the JSON contract for that case.
+// Explicit role check so XHR callers get JSON instead of a redirect.
 if (gjc_current_role() !== 'finance') {
     echo json_encode([
         'success' => false,

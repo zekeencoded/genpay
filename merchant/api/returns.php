@@ -1,11 +1,5 @@
 <?php
-// ============================================================
-//  merchant/api/returns.php
-//  Post-payment Return/Exchange pipeline (Rule 5b). Never edits or deletes
-//  the original transaction row — only flips its status to 'reversed' and
-//  records the actual money movement as a brand-new 'refund' ledger entry,
-//  then logs the reason into systemic_audit_trail.
-// ============================================================
+// Return/Exchange: marks the original 'reversed', adds a 'refund' entry, and logs the reason.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -60,7 +54,10 @@ try {
         if ($original['transaction_type'] !== 'payment') {
             throw new RuntimeException('This transaction type cannot be returned.');
         }
-        if (!$original['student_wallet_id']) {
+        // Refund whichever wallet paid: the student's, or a parent's for parent checkouts.
+        $studentWalletId = (int) ($original['student_wallet_id'] ?? 0);
+        $parentWalletId = $studentWalletId > 0 ? 0 : (int) ($original['parent_wallet_id'] ?? 0);
+        if ($studentWalletId <= 0 && $parentWalletId <= 0) {
             throw new RuntimeException('No student wallet is linked to this transaction.');
         }
 
@@ -75,8 +72,10 @@ try {
         }
 
         $db->prepare(
-            "UPDATE student_wallets SET balance = balance + ? WHERE id = ?"
-        )->execute([$amount, (int) $original['student_wallet_id']]);
+            $studentWalletId > 0
+                ? "UPDATE student_wallets SET balance = balance + ? WHERE id = ?"
+                : "UPDATE parent_wallets SET balance = balance + ? WHERE id = ?"
+        )->execute([$amount, $studentWalletId > 0 ? $studentWalletId : $parentWalletId]);
 
         $vaultBefore = (float) $db->query(
             "SELECT cashier_vault_points FROM system_settings WHERE id = 1"
@@ -85,7 +84,8 @@ try {
         $totalCirc = (float) $db->query(
             "SELECT (cashier_vault_points
                     + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
+                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
+                    + (SELECT COALESCE(SUM(balance),0) FROM parent_wallets))
                FROM system_settings WHERE id = 1"
         )->fetchColumn();
 
@@ -95,12 +95,12 @@ try {
         $db->prepare(
             "INSERT INTO transactions
                 (reference_no, transaction_type, initiated_by, student_wallet_id, merchant_wallet_id,
-                 amount, vault_before, vault_after, total_in_circulation, status, notes, school_year_id)
-             VALUES (?, 'refund', ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)"
+                 amount, vault_before, vault_after, total_in_circulation, status, notes, school_year_id, parent_wallet_id)
+             VALUES (?, 'refund', ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)"
         )->execute([
             $refundRefNo,
             $merchantUserId,
-            (int) $original['student_wallet_id'],
+            $studentWalletId > 0 ? $studentWalletId : null,
             $merchantWallet['id'],
             $amount,
             $vaultBefore,
@@ -108,6 +108,7 @@ try {
             $totalCirc,
             $noteLine,
             gjc_active_school_year_id($db),
+            $parentWalletId > 0 ? $parentWalletId : null,
         ]);
 
         // The original sale record is never edited or deleted — only its status changes.

@@ -1,6 +1,4 @@
-/* Shared tu-* money-form pieces (₱ amount input, quick-amount chips, method
-   cards, guide steps, limit callout) for the sd-* shell — used by
-   student/transfer.php (and parent/allowance.php). */
+/* Shared tu-* money-form pieces (student/transfer.php, parent/allowance.php). */
 
 /* ===== FORM + GUIDE GRID ===== */
 .tu-grid {

@@ -1,16 +1,8 @@
 <?php
-// ============================================================
-//  admin/api/fee_waiver_credits.php
-//  JSON API for the Fee Waiver Credit workflow — a school-managed,
-//  non-wallet misc. credit line on a student's tuition assessment.
-//  This never touches CirculationEngine, student_wallets, or
-//  system_settings; it has nothing to do with GenCoin.
-//
-//  Actions (all operate on one student's fee_waiver_credits row):
-//    set_amount     empty   -> pending  (finance enters the amount)
-//    upload_waiver  pending -> posted   (signed parent waiver upload)
-//    cancel         pending -> empty    (full reset)
-// ============================================================
+// Fee Waiver Credit API (non-wallet; no GenCoin):
+//   set_amount     empty   -> pending
+//   upload_waiver  pending -> posted
+//   cancel         pending -> empty
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

@@ -216,7 +216,7 @@ $currentPage = 'school_years';
                     Upload a CSV with <code>student_id_number</code>. Optional columns: <code>yr_lvl</code> and
                     <code>status</code> (defaults to enrolled). Students missing from the roster become Not Enrolled.
                     Enrolled wallets can transact; all other statuses freeze spending, transfers, and cash-in.
-                    Remaining balances can still be withdrawn at the Finance office.
+                    Remaining balances are kept; graduates can send them to another student.
                 </p>
 
                 <?php if (!$inactiveYears): ?>
@@ -244,7 +244,7 @@ $currentPage = 'school_years';
 
             <section class="sy-panel">
                 <h3>Student Status</h3>
-                <p class="sy-sub">Update a student during the active school year. Enrolled allows wallet use; other statuses freeze it. Balances remain available for withdrawal through Finance.</p>
+                <p class="sy-sub">Update a student during the active school year. Enrolled allows wallet use; other statuses freeze it. Balances are kept in the wallet.</p>
                 <?php if (!$activeYear): ?>
                 <p class="sy-sub">Activate a school year first.</p>
                 <?php else: ?>
@@ -430,10 +430,10 @@ $currentPage = 'school_years';
                     (${data.returning_count} returning, ${data.new_count} new).</li>
                 <li><strong>${data.frozen_count}</strong> student wallet(s) will be frozen (${data.not_returning_count} missing from the roster).</li>
                 <li><strong>${data.frozen_with_balance}</strong> of those still hold a balance
-                    (${syPeso(data.frozen_balance_total)} in total), which stays available for withdrawal at Finance.</li>
+                    (${syPeso(data.frozen_balance_total)} in total), which stays safe in their wallets.</li>
                 ${data.unmatched_count ? `<li>${data.unmatched_count} roster row(s) have no GenPay account and are skipped.</li>` : ""}
             </ul>
-            <p style="color:var(--gp-muted);font-size:13px;">Wallet balances are kept. Students absent from the roster become Not Enrolled; withdrawals at the Finance office remain available.</p>
+            <p style="color:var(--gp-muted);font-size:13px;">Wallet balances are kept. Students absent from the roster become Not Enrolled and keep their balance.</p>
         `;
         document.getElementById("syRolloverConfirmBtn").disabled = false;
     }
@@ -497,7 +497,7 @@ $currentPage = 'school_years';
         const status = select.value;
         if (!await gpConfirm({
             title: "Update student status?",
-            body: status === "enrolled" ? "Enrollment allows wallet use, subject to any parent or account restrictions." : "Spending, transfers, and cash-in will stop. The remaining balance can still be withdrawn through Finance.",
+            body: status === "enrolled" ? "Enrollment allows wallet use, subject to any parent or account restrictions." : "Spending, transfers, and cash-in will stop. The remaining balance is kept in the wallet.",
             detail: [["Student", student.name], ["Status", select.options[select.selectedIndex].text]],
             confirmLabel: "Save status",
         })) return;

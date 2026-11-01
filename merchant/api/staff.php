@@ -283,10 +283,7 @@ try {
                 exit;
             }
 
-            // Soft delete (see gjc_ensure_staff_position_schema): Inactive
-            // blocks sign-in and ends any open session on its next request;
-            // the stamp takes the row off the roster. Their past sales keep
-            // pointing at a real user row.
+            // Soft delete: Inactive blocks sign-in; past sales keep their user row.
             $db->prepare(
                 "UPDATE users SET status = 'Inactive', staff_removed_at = NOW()
                   WHERE userID = ? AND merchant_owner_id = ?"

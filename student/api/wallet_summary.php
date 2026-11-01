@@ -1,10 +1,5 @@
 <?php
-// ============================================================
-//  student/api/wallet_summary.php
-//  Everything the student dashboard shows, as one JSON payload:
-//  balance, GenCoin, stats, account status, and the latest five
-//  transactions. Polled by student/dashboard.php.
-// ============================================================
+// Dashboard JSON: balance, stats, status and latest five transactions.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -56,11 +51,7 @@ try {
                 'label' => $meta['label'],
                 'incoming' => $meta['incoming'],
                 'amount' => (float) $row['amount'],
-                // Split so the phone layout can drop the year: on a
-                // "recent activity" list it is noise, and it was the last
-                // 34px standing between "TRANSFER OUT · Aug 25, 2026" and
-                // fitting on one line at 360px. dashboard.php is this
-                // endpoint's only consumer.
+                // Year split out so phones can hide it.
                 'date' => date('M j', strtotime((string) $row['created_at'])),
                 'year' => date(', Y', strtotime((string) $row['created_at'])),
             ];

@@ -13,11 +13,7 @@ if (gjc_sub_role() !== 'super_admin') {
     exit;
 }
 
-/**
- * CRUD "Read": view a single audit-trail entry. Identified by a signed, opaque
- * token in the URL (?token=...) — an HMAC over the log_id, so editing the URL
- * by hand fails verification and falls through to "not found". Read-only.
- */
+/** View one audit entry by signed token. */
 $logId = gjc_verify_view_token($_GET['token'] ?? null, 'audit');
 
 $log = null;
@@ -65,11 +61,7 @@ $auditKv = static function (?string $json) use ($esc): string {
     return '<div class="table-responsive"><table class="table align-middle uv-kv"><tbody>' . $rows . '</tbody></table></div>';
 };
 
-/**
- * Render one side of a before/after pair, marking the keys that differ.
- * Reading two flat tables side by side and spotting the one changed field by
- * eye is exactly the job a diff should be doing.
- */
+/** Render one side of a before/after pair, marking changed keys. */
 $auditDiff = static function (?string $json, ?string $otherJson, string $side) use ($esc): string {
     $raw = trim((string) $json);
     if ($raw === '' || strtolower($raw) === 'null') {
@@ -170,9 +162,7 @@ if ($log) {
     ];
     $icon = $iconMap[$action] ?? 'fa-clipboard-list';
 
-    // The other entries this request wrote. Most requests write exactly one, so
-    // the card only renders when there is something to relate this entry to —
-    // it used to appear on every entry and link to a list holding only itself.
+    // Other entries from the same request (shown only if any).
     $relatedEntries = [];
     if ($correlationId !== '') {
         $relStmt = $db->prepare(

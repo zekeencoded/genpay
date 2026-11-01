@@ -2,9 +2,7 @@
 @import url("theme.css?v=14");
 
 :root {
-  /* Alias layer — pure aliases of the shared gp-* theme
-     (assets/css/theme.css, the Scan & Pay design language).
-     theme.css is the single source of truth for the palette. */
+  /* Aliases of the gp-* palette in theme.css. */
   --emerald-950: var(--gp-green-950);
   --emerald-900: var(--gp-green-900);
   --emerald-800: var(--gp-green-850);
@@ -41,27 +39,12 @@ body {
   min-height: 100vh;
 }
 
-/* responsive.css (linked after this file on every merchant page) sets
-   overflow-x: hidden on BOTH <html> and <body> with no matching overflow-y.
-   Per the CSS overflow spec, that silently forces overflow-y: auto on each
-   of them independently, which also blocks the normal html->body overflow
-   propagation quirk — so instead of one viewport-level scrollbar, <body>
-   becomes its own separate scroll box. .sd-sidebar's position: sticky is
-   sticky *within that box*, and a flex row taller than 100vh inside a
-   scrolling <body> doesn't give sticky anything to stick against, so it
-   just scrolls off with everything else. Neutralizing html's overflow-x
-   here restores single-viewport scrolling (student pages never load
-   responsive.css, so they never hit this). */
+/* Restore single-viewport scrolling (responsive.css's overflow-x breaks the sticky sidebar). */
 html {
   overflow-x: visible !important;
 }
 
-/* Sidebar (sd-sidebar/sd-brand/sd-menu/sd-logout), topbar (sd-topbar) and
-   mobile bottom nav (sd-bottomnav) are shared with the student shell —
-   see includes/partials/sidebar_merchant_admin.php / sidebar_merchant_staff.php
-   / topbar_merchant.php / bottom_nav_merchant.php, all styled entirely by
-   assets/css/student_dashboard.css (every merchant page links it). No
-   merchant-specific shell CSS needed here. */
+/* Shell (sidebar, topbar, bottom nav) is styled by student_dashboard.css. */
 
 .merchant-main {
   --main-pad: 28px;
@@ -70,19 +53,12 @@ html {
   padding: var(--main-pad);
 }
 
-/* Student's .sd-topbar is flush with the viewport edge for free — .sd-main
-   carries no padding of its own, only its inner .sd-content wrapper does.
-   .merchant-main puts page padding directly on itself (no such wrapper),
-   so without this the topbar sits inset like any other child instead of
-   full-bleed. Pull it back out on the three sides that need to touch the
-   edge; --main-pad tracks the padding at each breakpoint below. */
+/* Full-bleed topbar; --main-pad tracks the page padding. */
 .merchant-main .sd-topbar {
   margin: calc(var(--main-pad) * -1) calc(var(--main-pad) * -1) 26px;
 }
 
-/* Send GenCoin action button — lives inside pos.php's product toolbar now
-   (the old header/topbar had its own dedicated slot for it; sd-topbar,
-   shared with student, doesn't). */
+/* Send GenCoin button in pos.php's toolbar. */
 .merchant-loadwallet-btn {
   padding: 9px 18px;
   background: var(--gold);
@@ -104,8 +80,7 @@ html {
   transform: translateY(-1px);
 }
 
-/* The student balance-hero look: forest gradient with gold/green
-   radial glows (--gp-grad-hero), mono numbers. */
+/* Hero look: forest gradient with gold/green glows. */
 .merchant-metric-card {
   min-height: 152px;
   padding: 22px 24px;
@@ -170,12 +145,8 @@ html {
   z-index: 2;
 }
 
-/* Dashboard hero balance + quick actions + stat row reuse student's
-   sd-balance / sd-quick / sd-stats classes directly (see
-   assets/css/student_dashboard.css and merchant/dashboard.php). */
 
-/* Sales Remittance stat card (staff dashboard, replaces Total Earned) — same
-   .sd-stat shell, but a button instead of a number. */
+/* Sales Remittance stat card (a button instead of a number). */
 .sd-stat--remit {
   display: flex;
   flex-direction: column;
@@ -303,8 +274,7 @@ html {
   color: #116232;
 }
 
-/* .merchant-premium-table styling + DataTables chrome now come from the
-   canonical table system in theme.css (one design for all roles). */
+/* Table styles come from theme.css. */
 
 .dataTables_wrapper .pagination .page-link:focus {
   box-shadow: none;
@@ -336,8 +306,7 @@ html {
   color: #2b4a38;
 }
 
-/* Inventory stock-level pill: low = at/below the item's Min Alert,
-   medium = within 3x of it, high = comfortably above. */
+/* Stock pill: low (<= min alert), medium (<= 3x), high. */
 .stock-pill {
   display: inline-flex;
   align-items: center;
@@ -376,13 +345,8 @@ html {
 /* MERCHANT ENCASH PAGE */
 /* ============================= */
 
-/* Hero balance panel (available-to-encash) reuses student's sd-balance /
-   sd-balance-label / sd-balance-amount / sd-gc-rate / sd-gc-badge classes
-   directly (assets/css/student_dashboard.css) instead of a near-duplicate
-   — see merchant/encash.php. */
 
-/* The status badge sits directly in the flex hero rather than in a column,
-   so without this it stretches to the hero's full height. */
+/* Don't stretch to the hero's height. */
 .encash-hero-badge {
   align-self: flex-start;
   white-space: nowrap;
@@ -553,9 +517,7 @@ html {
   gap: 24px;
 }
 
-/* Hero balance panel reuses student's sd-balance classes (see
-   merchant/history.php); only the wallet icon on the right stays
-   merchant-specific since sd-balance's own right side is holder info. */
+/* Merchant-only wallet icon on the history hero. */
 .history-balance-icon {
   position: relative;
   z-index: 2;
@@ -626,10 +588,7 @@ html {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   MERCHANT — ECONOMY STATUS PANEL
-   Matches emerald-900 / gold merchant theme
-═══════════════════════════════════════════════════════════ */
+/* ═══ MERCHANT — ECONOMY STATUS PANEL ═══ */
 
 .me-section {
   display: flex;
@@ -689,8 +648,7 @@ html {
   50%      { opacity:0.4; transform:scale(1.35); }
 }
 
-/* Live Order Queue — brief highlight when new AJAX data lands (the queue lives in
-   pos.css; the keyframes stay here). */
+/* Live Order Queue flash on new data. */
 @keyframes queue-flash-kf {
   0%   { background-color: rgba(240, 165, 0, 0.18); }
   100% { background-color: transparent; }
@@ -699,11 +657,7 @@ html {
 /* ── Hero strip ──────────────────────────────────────────── */
 .me-hero-strip {
   align-items: stretch;
-  /* NOTE: this whole block is superseded by the later top-level
-     .me-hero-strip rule (~line 1253), which makes the strip a transparent
-     5-column grid. Kept flat for correctness, but it does not paint. No
-     keyline here: a border-top before the `border` shorthand below would be
-     wiped by it anyway, and a transparent grid has no hero to key. */
+  /* Superseded by the later .me-hero-strip rule. */
   background: var(--emerald-950);
   overflow-x: auto;
 }
@@ -960,9 +914,7 @@ html {
     touch-action: manipulation;
   }
 
-  /* Below 768px .gjc-cards--on stacks this table into cards, and a card
-     column must not be held open at 680px. Tables the card system skips
-     (JS off, data-cards="false") keep the scroll port. */
+  /* Keep the scroll width only when not stacked as cards. */
   .merchant-premium-table:not(.gjc-cards--on) {
     min-width: 680px;
   }
@@ -1143,14 +1095,7 @@ html {
   align-items: flex-end;
 }
 
-/* ── Table row action group ───────────────────────────────────────────────
-   The View / Issue Return pair in merchant/history.php. theme.css now gives
-   .btn-outline-danger the pill and the palette red, but not this pair's fixed
-   32px line height, and Issue Return still needs to match its neighbour to the
-   pixel. One geometry lives here; colour is the only thing that differs
-   between the two, and the pair sits flush on a single 32px line.
-   Deliberately NOT named .merchant-view-btn — gjc-clear.css force-skins that
-   whole family with !important, which would fight the danger variant. */
+/* ── Row action pair (View / Issue Return), one 32px line ── */
 .merchant-row-actions {
   display: inline-flex;
   align-items: center;
@@ -1205,10 +1150,7 @@ html {
   .merchant-row-actions { flex-wrap: wrap; gap: 6px; }
 }
 
-/* ============================================================
-   Rent & Lease (merchant/rent.php)
-   The tenant's read-only mirror of the finance rent roll.
-   ============================================================ */
+/* ═══ Rent & Lease (merchant/rent.php) ═══ */
 
 .gp-rent-hero {
   display: flex;
@@ -1310,17 +1252,7 @@ html {
   .gp-rent-hero-amount { font-size: 28px; }
 }
 
-/* ── Panel headers on a phone ─────────────────────────────────────────
-   Six merchant pages put action buttons in .merchant-panel-header with
-   Bootstrap's `d-flex justify-content-between` and no wrap. Below ~420px the
-   title and the buttons fight over one row: "+ Add Product" was rendering
-   125px wide and 110px TALL, its label broken across three lines, and "Print
-   Full Menu" was worse at 69px wide.
-
-   Stack them instead. align-self on the children rather than align-items on
-   the parent, because Bootstrap's .align-items-center utility is !important
-   and would otherwise win.
-   ──────────────────────────────────────────────────────────────────── */
+/* ── Panel headers on a phone: stack title and buttons (align-self beats Bootstrap's !important) ── */
 @media (max-width: 767.98px) {
   .merchant-panel-header.d-flex {
     flex-direction: column;
@@ -1346,19 +1278,14 @@ html {
     padding-right: 10px;
   }
 
-  /* A single button in the header spans the width — the standard mobile
-     treatment for a panel's one primary action. */
+  /* A lone header button spans the width. */
   .merchant-panel-header.d-flex > .btn,
   .merchant-panel-header.d-flex > .merchant-view-btn {
     text-align: center;
   }
 }
 
-/* ============================================================
-   Business Profile detail (merchant/settings.php)
-   Read-only reference blocks: the finance office is the source
-   of truth, so every value is displayed, never edited here.
-   ============================================================ */
+/* ═══ Business Profile detail (merchant/settings.php), read-only ═══ */
 
 .gp-bp-list {
   display: grid;

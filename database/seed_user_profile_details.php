@@ -1,31 +1,11 @@
 <?php
 /**
- * Seeds the personal-details columns added by gjc_ensure_user_profile_schema()
- * — sex, date of birth and address — with plausible sample data for a
- * General De Jesus College roster. Addresses are real Nueva Ecija
- * barangays and municipalities, weighted toward San Isidro (where the college
- * is) and its neighbouring towns.
- *
- * This is demo/QA data, not a migration: it exists so the new fields have
- * something to render while the system is being built and shown. It never
- * invents a value where one already exists, so re-running it is safe.
- *
- * Addresses stop at the barangay — "San Fernando Sur, Cabiao, Nueva Ecija".
- * There is no house number or postal code, here or in the schema.
+ * Seed demo sex, date of birth and address data. Deterministic per user id;
+ * only fills blanks unless --force. Linked students share their parent's address.
  *
  *   php database/seed_user_profile_details.php            fill blanks, write
  *   php database/seed_user_profile_details.php --dry-run  show, write nothing
  *   php database/seed_user_profile_details.php --force     overwrite existing
- *
- * Households are the one thing it deliberately gets right rather than
- * randomising: students linked to a parent through parent_student_links share
- * that parent's address, because a family lives in one house.
- *
- * There is no age here — age is computed from date_of_birth on every read
- * (gjc_age_from_dob), so there is no column to seed.
- *
- * Every value is derived from the user's own id, so the same row always seeds to
- * the same data no matter how often this runs or in what order.
  */
 
 require_once __DIR__ . '/../connection/config.php';
@@ -37,15 +17,7 @@ $force  = in_array('--force', $argv, true);
 
 gjc_ensure_user_profile_schema($db);
 
-/* ── Nueva Ecija ───────────────────────────────────────────────────────────
- * [municipality, postal code, weight, [barangays]]. The `weight` repeats an
- * entry in the draw pool, so most of the roster lives near the college instead
- * of being scattered evenly across all 32 towns.
- *
- * The postal code is retained here purely as documentation of which town each
- * barangay list belongs to — addresses are barangay/municipality/province only,
- * so it is never written to the database.
- */
+/* ── Nueva Ecija towns: [municipality, postal code (not stored), weight, [barangays]] ── */
 $TOWNS = [
     // The college's own town and its immediate neighbours.
     ['San Isidro',            '3106', 8, ['Poblacion', 'Malapit', 'Mangga', 'Pulo', 'San Roque', 'Calaba', 'Tabon', 'Alua', 'Sto. Cristo']],
@@ -81,12 +53,7 @@ foreach ($TOWNS as $i => $t) {
     $TOWN_POOL = array_merge($TOWN_POOL, array_fill(0, $t[2], $i));
 }
 
-/* ── Sex, read off the given name ──────────────────────────────────────────
- * Every distinct first name on the roster is listed. A name that does not
- * clearly indicate one — an initials-style login, a service account — is seeded
- * as 'Prefer not to say' rather than guessed at, which is both the honest
- * default and a useful exercise of that enum value.
- */
+/* ── Sex by first name; unclear names get 'Prefer not to say' ── */
 $FEMALE = ['Abigail','Ana','Ana Sofia','Andrea','Andrea Nicole','Angelica Mae','Bea','Bianca','Camille','Carmen','Cecilia','Chienna Mae','Clarisse','Colleen','Corazon','Cristina','Diana','Dolores','Elena','Emily','Erica','Evangeline','Frances','Grace','Hazel','Imelda','Isabella','Jane','Jasmin','Jasmine','Josefina','Katrina','Kristine Joy','Lorraine','Lourdes','Maria','Maria Angelica','Marilou','Michelle','Miku','Monica','Nicole','Patricia Anne','Pauline','Priscilla','Regine','Rosario','Samantha','Sofia Isabel','Teresa','Trisha','Veronica'];
 $MALE   = ['Aaron','Adrian','Alvin','Antonio','Arturo','Benedict','Carlos','Christian','Danilo','David','Dennis','Eduardo','Elijah','Emmanuel','Ernesto','Ezekiel Clarence','Fernando','Francis','Gabriel','Greg Bautista','Ivan','Jerome','John','John Paul','Joshua','Juan Carlos','Juan Miguel','Justin','Lorenzo','Marco','Mark Anthony','Michael','Michael Keith','Miguel','Nathaniel','Nestor','Paolo','Rafael','Ramon','Ricardo','Roberto','Rodolfo','Rogelio','Ronald','Ryan','Vincent','Zeke'];
 
@@ -100,12 +67,7 @@ $sexOf = static function (string $firstName) use ($FEMALE, $MALE): string {
 /** Age bands by role — a student is not the same age as the parent paying for them. */
 $AGE_BANDS = [1 => [16, 22], 7 => [38, 58], 2 => [26, 60], 5 => [26, 60], 6 => [21, 45], 3 => [25, 60], 4 => [25, 60]];
 
-/**
- * A deterministic pseudo-random generator seeded from a single integer. Using
- * this instead of mt_rand() keeps every value reproducible: the same user id
- * always yields the same address, birth date and contact, so re-running the
- * seeder is a no-op rather than a reshuffle.
- */
+/** Deterministic RNG so re-runs give the same data. */
 $rng = static function (int $seed): callable {
     $state = $seed * 2654435761 % 2147483647;
     if ($state <= 0) { $state += 2147483646; }

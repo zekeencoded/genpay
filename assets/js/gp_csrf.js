@@ -1,6 +1,4 @@
-// Adds the session CSRF token (window.GJC_CSRF, set by includes/partials/csrf_bootstrap.php)
-// to every same-origin POST that does not already carry it. Pages keep calling fetch()
-// as before; the server rejects any state-changing request without this header.
+// Add the session CSRF token (window.GJC_CSRF) to every same-origin POST.
 (function () {
     var nativeFetch = window.fetch;
     window.fetch = function (input, init) {
@@ -17,8 +15,7 @@
         return nativeFetch.call(this, input, init);
     };
 
-    // Classic form posts carry the token as a hidden field. Added in the capture
-    // phase so page submit handlers that build FormData from the form include it.
+    // Inject the token into form posts (capture phase, before FormData is built).
     document.addEventListener('submit', function (e) {
         var form = e.target;
         if (!window.GJC_CSRF || (form.method || '').toUpperCase() !== 'POST') return;

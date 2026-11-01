@@ -1,9 +1,5 @@
 <?php
-// ============================================================
-//  student/api/wallet.php
-//  Lightweight wallet stats used to AJAX-refresh the student
-//  Dashboard and History pages without a full page reload.
-// ============================================================
+// Wallet stats for AJAX refresh on Dashboard and History.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';

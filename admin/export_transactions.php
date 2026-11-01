@@ -16,9 +16,7 @@ $filters = [
 // export - a short CSV that looks complete is the worst outcome.
 $transactions = gjc_fetch_admin_transactions($db, $filters, 0, 0);
 
-// Bulk extraction of the whole ledger — every reference, amount, sender and
-// receiver — leaving the system as a file. It was completely unlogged: there
-// was no way to tell afterwards that anyone had taken a copy, or what of.
+// Log the full ledger export.
 logAudit(
     $db,
     gjc_user_id(),

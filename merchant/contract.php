@@ -1,13 +1,6 @@
 <?php
-// ============================================================
-//  merchant/contract.php — Merchant-scoped contract download
-//  Serves the signed lease contract that finance uploaded on
-//  award, but ONLY to the merchant it belongs to. No ?f= path
-//  param: the file is looked up from the owner's awarded
-//  application, so a merchant can never reach another's file.
-//  Usage: /merchant/contract.php            (inline view)
-//         /merchant/contract.php?dl=1       (force download)
-// ============================================================
+// Serves the owner's signed lease contract (looked up from their application, no path param).
+// Usage: /merchant/contract.php (inline) or ?dl=1 (download)
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';

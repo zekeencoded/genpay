@@ -1,8 +1,5 @@
 <?php
-// Shared top bar for the public pages (index.php, stalls.php). Styled by
-// index.css/stalls.css + gjc-clear.css; keep both pages on this partial so
-// the landing chrome can't drift again. Set $publicNavCurrent = 'stalls'
-// before including to mark the current link for screen readers.
+// Shared top bar for index.php and stalls.php. Set $publicNavCurrent = 'stalls' to mark the link.
 $publicNavCurrent = $publicNavCurrent ?? '';
 ?>
 <nav class="navbar">
@@ -14,8 +11,9 @@ $publicNavCurrent = $publicNavCurrent ?? '';
         <span></span><span></span><span></span>
     </button>
     <div class="nav-actions" id="public-nav-menu">
-        <a href="<?= BASE_URL ?>/stalls" class="btn btn-primary-custom btn-outline-custom"<?= $publicNavCurrent === 'stalls' ? ' aria-current="page"' : '' ?>>View Stalls</a>
-        <a href="<?= BASE_URL ?>/login.php" class="btn btn-primary-custom btn-login">Login<span class="d-none d-sm-inline"> to Portal</span></a>
+        <a href="<?= BASE_URL ?>/#faq" class="btn btn-primary-custom btn-outline-custom"><i class="fa-regular fa-circle-question" aria-hidden="true"></i>FAQ</a>
+        <a href="<?= BASE_URL ?>/stalls" class="btn btn-primary-custom btn-outline-custom"<?= $publicNavCurrent === 'stalls' ? ' aria-current="page"' : '' ?>><i class="fa-solid fa-store" aria-hidden="true"></i>View Stalls</a>
+        <a href="<?= BASE_URL ?>/login.php" class="btn btn-primary-custom btn-login">Login<i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i></a>
     </div>
 </nav>
 <script>
@@ -29,6 +27,10 @@ $publicNavCurrent = $publicNavCurrent ?? '';
         }
         toggle.addEventListener('click', function () {
             setOpen(!menu.classList.contains('is-open'));
+        });
+        // Same-page links (FAQ) don't reload, so close the menu ourselves.
+        menu.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') setOpen(false);

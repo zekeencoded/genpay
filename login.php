@@ -36,9 +36,7 @@ if (!$error && ($_GET['reason'] ?? '') === 'suspended') {
         . ' due to repeated attempts to list restricted products.';
 }
 
-// Finance-issued suspension (admin/users.php). The reason text lives on the
-// account and is only shown once the user identifies themselves at login —
-// this banner just says the session ended and when access returns.
+// Suspended mid-session: show when access returns.
 if (!$error && ($_GET['reason'] ?? '') === 'account_suspended') {
     $untilTs = strtotime((string) ($_GET['until'] ?? ''));
     $error = 'Your account has been suspended by the GenPay finance office'
@@ -119,46 +117,9 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
 
             </form>
 
-            <div class="signup-text">
-                Doesn’t have an account yet?<br>
-
-                <a href="#" data-bs-toggle="modal" data-bs-target="#studentModal">
-                    Register as Student
-                </a>
-            </div>
-
         </div>
     </div>
 
-
-    <div class="modal fade" id="studentModal">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content custom-modal">
-                <div class="modal-body text-center">
-
-                    <div class="modal-icon">
-                        <img src="<?= ICONS_URL ?>/signup.png">
-                    </div>
-
-                    <h5 class="modal-title">Student Registration</h5>
-
-                    <p class="modal-desc">
-                        Follow these steps to register your account:
-                    </p>
-
-                    <ul class="modal-steps text-start">
-                        <li>Go to Finance Department</li>
-                        <li>Provide your School ID</li>
-                        <li>Request account creation</li>
-                        <li>Wait for activation</li>
-                    </ul>
-
-                    <button class="btn-close-modal" data-bs-dismiss="modal">Got it</button>
-
-                </div>
-            </div>
-        </div>
-    </div>
 
 
     <div class="modal fade" id="forgotModal">

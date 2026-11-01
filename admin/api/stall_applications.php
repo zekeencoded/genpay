@@ -1,22 +1,6 @@
 <?php
-// ============================================================
-//  admin/api/stall_applications.php
-//  JSON API for the ONE-STOP stall application flow.
-//
-//  Submit -> meeting auto-scheduled at submission (see apply.php) ->
-//  everything (document verification, contract signing, payment) happens at a
-//  single in-person meeting -> Awarded.
-//
-//  Actions (all operate on a 'pending_verification' application):
-//    upload_contract   Save the scanned signed contract (multipart)
-//    record_payment    Record 2mo deposit + 1mo advance, start date, schedule
-//    award             Finalize: assign stall, create merchant, -> 'awarded'
-//                      (requires contract uploaded AND payment recorded)
-//    reject            Documents invalid / no-show -> 'rejected' (reason), notify to re-apply
-//    mark_viewed       Stamp first_viewed_at on first open (clears the "New" badge)
-//    meeting_slots     Slot availability for one date (drives the reschedule picker)
-//    reschedule_meeting  Finance moves the auto-assigned meeting; applicant is emailed
-// ============================================================
+// One-stop stall application API (actions on 'pending_verification' applications):
+// upload_contract, record_payment, award, reject, mark_viewed, meeting_slots, reschedule_meeting.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -41,8 +25,7 @@ const CONTRACT_ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
 $action  = trim((string) ($_POST['action'] ?? ''));
 $adminId = gjc_user_id();
 
-// No-show sweep: any pending_verification application whose meeting time has
-// already passed becomes 'expired' before this request's action runs.
+// Expire no-shows before handling the action.
 gjc_expire_overdue_stall_applications($db, $adminId);
 
 function stall_app_json(array $payload): void
@@ -141,8 +124,6 @@ try {
             $rel = 'uploads/stall_applications/' . $appId . '/' . $fname;
             if(!gjc_stall_application_update($db,$appId,['contract_file'=>$rel,'contract_uploaded_at'=>GJC_APPLICATION_DB_NOW,'contract_uploaded_by'=>$adminId],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
-            // The signed contract is the document the award is justified by.
-            // Uploading (or silently replacing) one was not recorded anywhere.
             logAudit(
                 $db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stall_applications',
                 ['id' => $appId, 'contract_file' => $app['contract_file'] ?: null],
@@ -159,9 +140,7 @@ try {
             stall_app_json(['success' => true, 'message' => 'Signed contract uploaded.', 'contract_file' => $rel]);
         }
 
-        // ── Record payment: 2mo deposit + 1mo advance + schedule ─
-        // Always paid in cash at the meeting — there is no method to choose, so
-        // the column is written as 'cash' and no reference number is stored.
+        // ── Record payment: 2mo deposit + 1mo advance, always cash ──
         case 'record_payment': {
             $appId       = (int) ($_POST['app_id'] ?? 0);
             $deposit     = round((float) ($_POST['deposit_amount'] ?? 0), 2);
@@ -186,8 +165,6 @@ try {
 
             if(!gjc_stall_application_update($db,$appId,['deposit_amount'=>$deposit,'advance_amount'=>$advance,'rental_start_date'=>$startDate,'payment_schedule_day'=>$scheduleDay,'payment_method'=>'cash','payment_ref_no'=>null],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
-            // Money the applicant handed over at the counter. Recording it moved
-            // the application forward and left no audit entry at all.
             logAudit(
                 $db, $adminId, gjc_current_role(), 'TRANSACTION', 'stall_applications',
                 [
@@ -251,10 +228,7 @@ try {
             try {
                 $app=gjc_stall_application_fetch($db,$appId,true);
                 if(!$app||$app['status']!=='pending_verification'||empty($app['contract_file'])||!stall_app_payment_complete($app))throw new RuntimeException('APPLICATION_CHANGED');
-                // Named columns, not SELECT * — this row is written to the audit
-                // log as old_value/new_value, and a whole-row dump silently logs
-                // any column added to `stalls` later.
-                // Occupancy comes from merchant.stall_id (3NF); same keys as before.
+                // Named columns: this row goes into the audit log.
                 $stallStmt = $db->prepare(
                     "SELECT s.stall_id, s.label, " . StallManager::statusSql('s', 'm') . " AS status,
                             m.merchantID AS merchant_id, s.monthly_rate, s.pending_expires_at
@@ -285,11 +259,7 @@ try {
                 )->execute([$newUserId, $app['business_name'], $stallId]);
                 $newMerchantId = (int) $db->lastInsertId();
 
-                // NOTE: the submitted profile picture is a photo of the proprietor (a
-                // verification/KYC document) — NOT the business logo. It is deliberately
-                // not copied into the public logos dir, otherwise the proprietor's face
-                // becomes the storefront logo. New merchants start with no logo
-                // (users.profile_img = '') and set their own from Merchant Settings.
+                // The proprietor photo is a KYC document, not the store logo; don't copy it.
 
                 $db->prepare("INSERT IGNORE INTO merchant_wallets (user_id, balance) VALUES (?, 0.00)")
                    ->execute([$newUserId]);
@@ -335,8 +305,6 @@ try {
                         $adminId,
                     ]);
                     }
-                    // Captured so the MERCHANT_ONBOARDING entry below can name the
-                    // lease this award created, not just the user and merchant.
                     $newLeaseId = (int) $db->lastInsertId();
                 }
 
@@ -360,12 +328,7 @@ try {
                 ['target_id' => $stallId, 'reason' => 'Stall awarded from application #' . $appId . '.']
             );
 
-            // The award also creates a user account, a merchant business row, a
-            // wallet and a lease. That is an account coming into existence, not a
-            // stall changing status, and none of it was logged — MERCHANT_ONBOARDING
-            // existed in the enum for exactly this and had no callers anywhere.
-            // Shares this request's correlation_id with the STALL_UPDATE above, so
-            // the two read back as one action.
+            // Log the new merchant account (shares this request's correlation_id).
             logAudit(
                 $db, $adminId, gjc_current_role(), 'MERCHANT_ONBOARDING', 'users',
                 null,
@@ -438,8 +401,6 @@ try {
 
             if(!gjc_stall_application_update($db,$appId,['status'=>'rejected','rejection_reason'=>$reason,'reviewed_by'=>$adminId,'reviewed_at'=>GJC_APPLICATION_DB_NOW],['status'=>'pending_verification']))throw new RuntimeException('Application is no longer awaiting verification.');
 
-            // The rejection reason was already required, shown to the applicant
-            // and emailed to them — but never written to the audit trail.
             logAudit(
                 $db, $adminId, gjc_current_role(), 'STALL_UPDATE', 'stall_applications',
                 ['id' => $appId, 'status' => 'pending_verification'],
@@ -531,9 +492,7 @@ try {
                 stall_app_json(['success' => false, 'message' => 'The meeting is already scheduled at that time.']);
             }
 
-            // Same advisory lock as the auto-scheduler so a concurrent
-            // submission can never be handed the slot finance is taking.
-            // (stall_app_json exits, which skips finally — respond after release.)
+            // Same lock as the auto-scheduler. stall_app_json exits, so release first.
             $slotTaken = false;
             if((int)$db->query("SELECT GET_LOCK('gjc_stall_scheduler',10)")->fetchColumn()!==1)throw new RuntimeException('Meeting scheduler is busy.');
             try {

@@ -1,12 +1,6 @@
 <?php
-// ============================================================
-//  student/api/checkout.php
-//  Pays the student's pending Shop Cart order (see student/api/cart.php's
-//  submit_order) against the merchant's static Wallet QR (merchant/settings.php).
-//  The QR only identifies the merchant — the order and its locked-in price
-//  always come from the cart_orders row the student already submitted,
-//  never from the client.
-// ============================================================
+// Pay the student's pending cart order against the merchant's Wallet QR.
+// Order and price come from cart_orders, never the client.
 session_start();
 require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
@@ -128,13 +122,7 @@ try {
             throw new \RuntimeException('This wallet is frozen by a parent or guardian.');
         }
         if ($wc && (float) $wc['daily_spend_limit'] > 0) {
-            $spentStmt = $db->prepare(
-                "SELECT COALESCE(SUM(amount),0) FROM transactions
-                  WHERE student_wallet_id = ? AND transaction_type IN ('payment','p2p_transfer')
-                    AND DATE(created_at) = CURDATE() AND status = 'completed'"
-            );
-            $spentStmt->execute([$studentWallet['id']]);
-            $todaySpent = (float) $spentStmt->fetchColumn();
+            $todaySpent = gjc_student_spent_today($db, (int) $studentWallet['id']);
             if ($todaySpent + $total > (float) $wc['daily_spend_limit']) {
                 throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
             }
@@ -176,7 +164,8 @@ try {
         $totalCirc = (float) $db->query(
             "SELECT (cashier_vault_points
                     + (SELECT COALESCE(SUM(balance),0) FROM student_wallets)
-                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets))
+                    + (SELECT COALESCE(SUM(balance),0) FROM merchant_wallets)
+                    + (SELECT COALESCE(SUM(balance),0) FROM parent_wallets))
                FROM system_settings WHERE id = 1"
         )->fetchColumn();
 
@@ -247,7 +236,8 @@ try {
                 'Payment Successful',
                 sprintf('You paid %s at %s.', gjc_money_plain($total), gjc_user_label($db, (int) $order['merchant_user_id'])),
                 'cart-shopping',
-                STUDENT_URL . '/history.php'
+                STUDENT_URL . '/history.php',
+                $refNo
             );
 
             gjc_notify(

@@ -1,11 +1,6 @@
 <?php
-// Partial: fixed mobile bottom nav for merchant pages (visible under 768px).
-// Same $currentPage contract as sidebar_merchant_admin.php /
-// sidebar_merchant_staff.php; needs assets/css/student_dashboard.css for the
-// sd-bottomnav/sd-scan-fab styles (same partial student pages use). Place
-// just before </body>. Curated per role, same idea as bottom_nav_student.php:
-// a short list of the most-used links plus one raised FAB for the primary
-// action, rather than every sidebar link crammed into a scroll strip.
+// Partial: mobile bottom nav for merchant pages (<768px). Needs $currentPage and student_dashboard.css.
+// Place just before </body>.
 $currentPage = $currentPage ?? '';
 $__bnavIsStaff = function_exists('gjc_is_merchant_staff') && gjc_is_merchant_staff();
 ?>

@@ -38,7 +38,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=62">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=2">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -145,9 +145,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                             </td>
                             <td class="text-nowrap">
                                 <div class="d-flex align-items-center gap-1 flex-nowrap">
-                                    <!-- Read view: the row is identified by a signed HMAC token,
-                                         and view_product.php re-checks it against this stall's
-                                         merchant_user_id before rendering. -->
+                                    <!-- Signed token; view_product.php re-checks ownership. -->
                                     <a class="btn btn-sm btn-outline-secondary rounded-0 text-decoration-none"
                                         href="<?= MERCHANT_URL ?>/view_product.php?token=<?= urlencode(gjc_make_view_token((int) $item['id'], 'merchant_product')) ?>">
                                         <i class="fa-regular fa-eye"></i> View
@@ -162,9 +160,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                                         ], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                                         <i class="fa-solid fa-qrcode"></i> QR
                                     </button>
-                                    <!-- Same order for both roles: View · QR · the role's action.
-                                         Staff have no Edit, so the quick Stock modal takes that
-                                         slot; admins update stock via Edit. -->
+                                    <!-- View · QR · Edit (admin) or Stock (staff). -->
                                     <?php if (!$isMerchAdmin): ?>
                                     <button class="btn btn-sm btn-outline-primary rounded-0"
                                         onclick='editStock(<?= (int) $item['id'] ?>, <?= (int) $item['stock_qty'] ?>, <?= htmlspecialchars(json_encode($item['product_name']), ENT_QUOTES) ?>)'>
@@ -495,11 +491,7 @@ document.getElementById('productForm').addEventListener('submit', async function
     }
 });
 
-// ── Restricted-product strike modals ─────────────────────────────────────────
-// Below the risk threshold: warning modal with the strike meter (escalation
-// note from warn_at up). Hitting risk_at: the account-suspended modal — the
-// server has already frozen the stall for suspend_days, so the only exit is
-// Log Out. Thresholds come from the API so policy lives server-side.
+// ── Restricted-product strike modals: warning below risk_at, suspended at risk_at ──
 function showViolationModal(d) {
     const count  = parseInt(d.violation_count) || 0;
     const warnAt = parseInt(d.warn_at) || 3;

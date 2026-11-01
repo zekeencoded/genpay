@@ -1,20 +1,11 @@
 <?php
 
 // School years, enrollment and student wallet lock.
-// Loaded by connection/app.php; defines functions and constants only.
 
-/**
- * School Year Cycles & Balance Lifecycle. school_year_balances is the sole
- * record of a year-end carry-over — rollover() in admin/api/school_years.php
- * never touches CirculationEngine, student_wallets, or system_settings.
- */
+/** School year cycles; school_year_balances records year-end carry-over. */
 function gjc_ensure_school_year_schema(PDO $db): void
 {
-    // CREATE/ALTER TABLE are DDL — MySQL implicitly commits any open
-    // transaction the instant it sees one, before the statement even runs.
-    // This must never execute from inside a CirculationEngine transaction
-    // (or any other beginTransaction()/commit() block). The static cache
-    // below also means it only actually runs once per request either way.
+    // DDL commits open transactions; never call inside one.
     static $ensured = false;
     if ($ensured) {
         return;
@@ -83,16 +74,7 @@ function gjc_validate_school_year_name(string $name): bool
     return ((int) $m[2]) === ((int) $m[1]) + 1;
 }
 
-/**
- * The one active school_years.id, or null if none has been activated yet
- * (or the table doesn't exist yet — this deliberately does NOT call
- * gjc_ensure_school_year_schema(), since this is called from inside
- * CirculationEngine::logTransaction() on every money-moving transaction, and
- * running DDL there would implicitly commit the ambient transaction (see the
- * comment on gjc_ensure_school_year_schema()). Schema creation happens
- * separately, from non-transactional pages (admin/school_years.php,
- * student/history.php, parent/student.php). Cached per request.
- */
+/** Active school year id, or null. Runs no DDL (called inside money transactions). Cached. */
 function gjc_active_school_year_id(PDO $db): ?int
 {
     static $cached = false;
@@ -121,20 +103,7 @@ function gjc_active_school_year_name(PDO $db): ?string
     return $name !== false ? (string) $name : null;
 }
 
-/**
- * Per-year enrollment records. student_enrollments is the authority on who is
- * enrolled in a given school year — the old "not graduated, therefore still
- * enrolled" assumption is gone. It is fed by the registrar's roster CSV today
- * (enrollment_roster_staging, promoted at rollover), and by the school's
- * enrollment system API later, through the same single write path.
- *
- * yr_lvl lives here rather than on student_info because year level is per-year
- * data. student_info only keeps entry_yr_lvl (see gjc_ensure_student_entry_year_schema).
- *
- * Same DDL rules as gjc_ensure_school_year_schema(): CREATE/ALTER implicitly
- * commit, so this must never run from inside an open transaction or any money
- * path. Static-cached, so it only ever runs once per request anyway.
- */
+/** Per-year enrollment records (student_enrollments). DDL: never call inside a transaction. */
 function gjc_ensure_enrollment_schema(PDO $db): void
 {
     static $ensured = false;
@@ -163,8 +132,7 @@ function gjc_ensure_enrollment_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // Staging holds an uploaded roster so the whole diff can be reviewed before
-    // the year is activated. Rollover promotes these rows and clears them.
+    // Uploaded roster awaiting review; promoted at rollover.
     $db->exec(
         "CREATE TABLE IF NOT EXISTS enrollment_roster_staging (
             id                INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -182,9 +150,6 @@ function gjc_ensure_enrollment_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
     );
 
-    // status carries the CSV's optional status column through to the promoted
-    // student_enrollments row. Guarded ADD so a staging table created before
-    // this column existed still picks it up.
     $stagingCols = gjc_table_columns($db, 'enrollment_roster_staging', true);
     if (!in_array('status', $stagingCols, true)) {
         try {
@@ -210,21 +175,8 @@ function gjc_enrollment_sources(): array
 }
 
 /**
- * The one write path for student_enrollments. Nothing else in the codebase may
- * INSERT or UPDATE that table directly — the registrar API, when it lands,
- * becomes a fourth caller of this function with $source = 'api', and every
- * status change keeps landing in the audit trail through here.
- *
- * Graduation is recorded in two places on purpose: student_info.graduated_at
- * stays the authoritative flag the exit lock reads, and the 'graduated' row
- * records which year it happened in. They are always written together, here.
- *
- * $yrLvl is optional — null preserves whatever year level the row already had
- * rather than blanking it. $audit = false is for the bulk roster promotion in
- * rollover, which writes one ROSTER_APPLIED summary instead of one audit row
- * per student.
- *
- * No money moves here. is_frozen is the only wallet column this touches.
+ * The only write path for student_enrollments. Graduation also sets student_info.graduated_at.
+ * $yrLvl null keeps the current level; $audit false skips per-row audit (bulk rollover).
  */
 function gjc_set_enrollment_status(
     PDO $db,
@@ -284,9 +236,7 @@ function gjc_set_enrollment_status(
         $db->prepare("UPDATE student_wallets SET is_frozen = 1 WHERE user_id = ?")
             ->execute([$studentUserId]);
     } elseif ($priorStatus === 'graduated' || $priorGraduatedAt !== null) {
-        // Moving away from graduated reverses both halves. Only reached when the
-        // student really was graduated, so a parent-frozen wallet that never
-        // graduated is never silently unfrozen here.
+        // Un-graduate; only unfreezes if the student was graduated.
         $db->prepare("UPDATE student_info SET graduated_at = NULL WHERE userID = ?")
             ->execute([$studentUserId]);
         $db->prepare("UPDATE student_wallets SET is_frozen = 0 WHERE user_id = ?")
@@ -322,24 +272,8 @@ function gjc_set_enrollment_status(
 }
 
 /**
- * Three-state wallet gate, replacing the old graduated-or-not binary.
- *
- *   frozen_exit        graduated, or transferred out. Terminal.
- *   frozen_unenrolled  no enrollment row for the active school year, or a row
- *                      that is not 'enrolled'. Reversible — the balance is kept
- *                      indefinitely and stays visible to the student.
- *   active             'enrolled' for the active school year.
- *
- * Never runs DDL and never assumes the enrollment tables exist: this is called
- * from inside open transactions (student/api/checkout.php asks mid-transaction),
- * where DDL would implicitly commit. Same constraint as
- * gjc_active_school_year_id() — schema creation happens on the admin pages.
- *
- * Three bootstrap escapes return 'active' rather than locking the whole student
- * body out of a system nobody has configured yet: no enrollment table, no
- * active school year, and an active year with no roster loaded at all. Once a
- * single enrollment row exists for the active year, the absence of a row for
- * one student is a real answer and means unenrolled.
+ * Wallet state: frozen_exit (graduated/transferred), frozen_unenrolled, or active.
+ * No DDL (called inside transactions). Returns 'active' until enrollment is set up.
  */
 function gjc_student_wallet_state(PDO $db, int $studentUserId): string
 {
@@ -393,20 +327,8 @@ function gjc_student_wallet_state(PDO $db, int $studentUserId): string
 }
 
 /**
- * Page-level lockout for student HTML pages. Call this right after
- * gjc_require_role(['student']). Do NOT call it on JSON endpoints
- * (student/api/*.php) — a redirect there would break the fetch() caller; those
- * branch on gjc_student_wallet_state() and return a JSON error instead.
- *
- *   frozen_exit        everything redirects to dashboard.php, which tells the
- *                      student to collect what is left as a cheque from finance
- *                      (handled off-system).
- *   frozen_unenrolled  the money-moving pages redirect to dashboard.php, which
- *                      explains the situation. Everything read-only stays open
- *                      and the balance stays visible — it is still their money.
- *
- * The unenrolled case is an allowlist rather than a blocklist so that a money
- * page added later fails closed instead of silently staying reachable.
+ * Redirect locked students away from money pages. HTML pages only, not JSON endpoints.
+ * Unenrolled uses an allowlist so new money pages fail closed.
  */
 function gjc_enforce_student_lock(PDO $db): void
 {
@@ -422,7 +344,8 @@ function gjc_enforce_student_lock(PDO $db): void
     $script = basename(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''));
 
     if ($state === 'frozen_exit') {
-        if ($script === 'dashboard.php') {
+        // Graduates may still send their remaining balance to another student.
+        if ($script === 'dashboard.php' || $script === 'transfer.php') {
             return;
         }
         header('Location: ' . STUDENT_URL . '/dashboard.php');

@@ -61,8 +61,7 @@ class MerchantTenantDirectory
 
         $rows = $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-        // Same rent-standing verdict the Leases & Rent page shows, so the two
-        // screens never disagree about who is behind.
+        // Same rent verdict as the Leases & Rent page.
         $this->primePaymentCache(array_column($rows, 'lease_id'));
 
         return array_map(function (array $row): array {
@@ -250,23 +249,10 @@ class MerchantTenantDirectory
         ];
     }
 
-    /* -- Rent accounting --------------------------------------------------
-       One lease bills exactly one month of rent per billing period. Period 0
-       opens on lease_start; period k opens k whole months later; each period
-       is labelled with the calendar month it opens in (YYYY-MM) - the very
-       label the admin picks in the payment form's "Period covered" field. So
-       every payment lands on one specific month's charge.
+    /* -- Rent accounting: one month of rent per period from lease_start, labelled YYYY-MM.
+       All figures derive from this schedule; next_due_date is written back for other pages. -- */
 
-       Everything the UI shows - balance, months behind, next due date, the
-       month-by-month table - is derived from that schedule. Nothing reads the
-       stored next_due_date column; syncNextDueDate() writes the derived value
-       back into it so other pages (merchant/dashboard.php) stay in agreement.
-       -------------------------------------------------------------------- */
-
-    /**
-     * One row per billing period, with what was charged, what has been
-     * recorded against it, and whether that period has come due yet.
-     */
+    /** One row per billing period: charged, paid and whether it's due. */
     public function rentSchedule(array $lease, ?string $asOf = null): array
     {
         $rent   = round((float) ($lease['monthly_rent'] ?? 0), 2);
@@ -303,8 +289,7 @@ class MerchantTenantDirectory
             unset($paidByPeriod[$label]);
         }
 
-        // Payments filed against a month outside the contract term still have to
-        // appear somewhere, or the collected total stops adding up on screen.
+        // Show off-contract payments so totals still add up.
         foreach ($paidByPeriod as $label => $paid) {
             $rows[] = [
                 'period'    => (string) $label,
@@ -323,10 +308,7 @@ class MerchantTenantDirectory
         return $rows;
     }
 
-    /**
-     * Roll the schedule up into the handful of figures the screens actually
-     * show, plus a plain-English sentence describing where the lease stands.
-     */
+    /** Summary figures and a status sentence for a lease. */
     public function leaseAccount(array $lease, ?array $schedule = null): array
     {
         $schedule = $schedule ?? $this->rentSchedule($lease);
@@ -356,17 +338,14 @@ class MerchantTenantDirectory
                 if ($row['state'] === 'advance' && $rent > 0 && $row['paid'] + 0.005 >= $rent) {
                     $monthsAhead++;
                 }
-                // The next charge that has not opened yet. Deliberately separate
-                // from next_due_date (the oldest month still owing): a tenant who
-                // is behind must still be reminded about the month coming up.
+                // Next unopened charge (separate from the oldest unpaid month).
                 if ($upcoming === null && $row['state'] !== 'off_contract') {
                     $upcoming = $row;
                 }
             }
         }
 
-        // The earliest month still owing money is what to collect next; if
-        // nothing is owed, it is the first future month not already paid ahead.
+        // Oldest unpaid month, else the first unpaid future month.
         $nextDue = $oldestUnpaid;
         if ($nextDue === null) {
             foreach ($schedule as $row) {
@@ -427,10 +406,7 @@ class MerchantTenantDirectory
         ];
     }
 
-    /**
-     * Recompute next_due_date from the schedule and write it back, so the
-     * compatibility column while present; after CONTRACT this returns the calculated date.
-     */
+    /** Recompute next_due_date and write it back (while the column exists). */
     public function syncNextDueDate(int $leaseId): ?string
     {
         $stmt = $this->db->prepare("SELECT * FROM merchant_leases WHERE id = ? LIMIT 1");
@@ -441,8 +417,7 @@ class MerchantTenantDirectory
         }
 
         $account = $this->leaseAccount($lease);
-        // Nothing left to bill (paid through end of term): park the column on
-        // the lease end date rather than leaving a stale date in the past.
+        // Fully paid: use the lease end date.
         $nextDue = $account['next_due_date'] ?? (string) $lease['lease_end'];
 
         // Compatibility write exists only until the approved CONTRACT removes the column.
@@ -455,19 +430,9 @@ class MerchantTenantDirectory
     }
 
     /**
-     * Send the "rent due soon" heads-up for any lease whose next charge falls
-     * inside the reminder window, at most once per billing period.
+     * Send "rent due soon" reminders, once per period (lazy; no cron).
      *
-     * There is no cron in this app, so this rides the same lazy pattern as the
-     * rest of the time-based behaviour here: it runs when the finance rent roll
-     * is opened, and when a tenant loads their own dashboard. Passing
-     * $merchantUserId scopes it to that one tenant, which is what the merchant
-     * side does — a stall owner logging in to run the POS reminds themselves.
-     *
-     * The rent_reminder_period column holds the last period a tenant was told
-     * about, so refreshing the page ten times sends one notification, not ten.
-     *
-     * @return int how many reminders were actually sent
+     * @return int how many reminders were sent
      */
     public function dispatchRentReminders(?int $merchantUserId = null, int $daysAhead = 7): int
     {
@@ -700,14 +665,7 @@ class MerchantTenantDirectory
         ];
     }
 
-    /**
-     * Paged merchant management activity from the systemic audit trail — the
-     * same action set the dashboard notification badge counts: product/menu
-     * changes, staff and profile changes, and banned-item attempts, by the
-     * stall owner or their staff. Routine sales are excluded on purpose,
-     * matching the stall detail view's revenue-privacy rule. $since limits it
-     * to entries after that timestamp — what the badge was counting.
-     */
+    /** Paged merchant management activity from the audit trail (sales excluded). */
     public function pagedActivity(int $merchantUserId, int $page, int $perPage, ?string $since = null): array
     {
         if (!gjc_table_exists($this->db, 'systemic_audit_trail')) {
@@ -830,10 +788,7 @@ class MerchantTenantDirectory
         return $reference;
     }
 
-    /**
-     * Load the rent payments for a whole page of leases in one query, so
-     * rendering a 20-row rent roll does not fire 20 separate lookups.
-     */
+    /** Load rent payments for many leases in one query. */
     public function primePaymentCache(array $leaseIds): void
     {
         $leaseIds = array_values(array_unique(array_filter(array_map('intval', $leaseIds))));
@@ -917,7 +872,7 @@ class MerchantTenantDirectory
     }
 
     /**
-     * @return array{0:string,1:string,2:string} state key, short badge label, one-sentence summary
+     * @return array{0:string,1:string,2:string} state key, badge label, summary
      */
     private function accountNarrative(
         string $status,
@@ -998,11 +953,7 @@ class MerchantTenantDirectory
         return $dt->format('Y-m-d');
     }
 
-    /**
-     * How many monthly rent charges the contract term contains. lease_end is
-     * the closing boundary, not a billable day: a Jun 20 -> Jun 20 next-year
-     * lease bills 12 months, not 13.
-     */
+    /** Number of monthly charges in the term (lease_end is exclusive). */
     private function termPeriods(string $start, string $end): int
     {
         $startTs = strtotime($start);

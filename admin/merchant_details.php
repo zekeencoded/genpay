@@ -1,16 +1,6 @@
 <?php
-// ============================================================
-//  admin/merchant_details.php — one stall, in full
-//  The dashboard's Merchant/Tenant Directory card used to open a
-//  modal; this is that view as a real page, widened to everything
-//  finance holds on a stall: proprietor profile, the physical
-//  stall record, the application and its documents, staff logins,
-//  rent standing, inventory compliance and management activity.
-//
-//  Revenue privacy still applies — no sales figures, no POS
-//  transaction history, no merchant wallet. Rent is shown
-//  read-only here; collections belong on lease_details.php.
-// ============================================================
+// One stall in full: profile, stall, application, staff, rent, inventory, activity.
+// No sales, POS history or wallet (revenue privacy). Rent is read-only here.
 require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
@@ -53,9 +43,7 @@ $perPage = 10;
 if ($summary) {
     $merchantUserId = (int) $summary['merchant_user_id'];
 
-    // Opening the page marks this stall's activity as checked — shared stamp,
-    // so the dashboard badge clears for every finance admin. This used to live
-    // in the API's `details` action, which the page no longer calls.
+    // Mark activity as checked (clears the dashboard badge for everyone).
     gjc_ensure_merchant_card_views_schema($db);
 
     // Read the old stamp first: whatever landed after it is what the badge was
@@ -86,9 +74,7 @@ if ($summary) {
     $merchantStmt->execute([$merchantId]);
     $merchantRow = $merchantStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    // ── Physical stall ───────────────────────────────────────────────────
-    // merchant.stall_id is the one link between a merchant and its stall (3NF);
-    // the map status is derived from it.
+    // ── Physical stall (via merchant.stall_id) ──
     $stall = null;
     if (gjc_table_exists($db, 'stalls')) {
         $stallStmt = $db->prepare(
@@ -101,10 +87,7 @@ if ($summary) {
         $stall = $stallStmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
-    // ── Application on file ──────────────────────────────────────────────
-    // The awarded application is the one carrying this merchant's user id;
-    // fall back to a match on the stall code for stalls awarded before that
-    // column was backfilled.
+    // ── Application on file (by user id, else by stall code) ──
     $application = null;
     if (gjc_table_exists($db, 'stall_applications')) {
         $appStmt = $db->prepare(
@@ -132,10 +115,7 @@ if ($summary) {
     $lease   = $directory->activeLease($merchantUserId);
     $account = $lease['account'] ?? null;
 
-    // ── Which section is on screen ───────────────────────────────────────
-    // Tabs are addressed in the URL rather than switched in the browser, so a
-    // paged table or a filtered list stays on its own tab across a reload, and
-    // a tab can be linked to directly (the rent roll does exactly that).
+    // ── Tabs via ?tab= so paging and links keep the section ──
     $tabs = [
         'overview'    => ['Overview',     'fa-solid fa-circle-info'],
         'lease'       => ['Lease & rent', 'fa-solid fa-file-signature'],
@@ -641,9 +621,7 @@ if ($summary) {
                 <?php endif; ?>
 
                 <?php
-                // Permits the owner uploaded themselves from their Business
-                // Profile (merchant/api/business_profile.php) — newer than, or
-                // instead of, anything captured with the application above.
+                // Permits the owner uploaded from their Business Profile.
                 $ownerUploads = [];
                 if (!empty($merchantUserId) && gjc_table_exists($db, 'merchant_documents')) {
                     $upStmt = $db->prepare(

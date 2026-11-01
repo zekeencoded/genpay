@@ -17,16 +17,7 @@ class MintingGuard
         $this->engine = new CirculationEngine($db);
     }
 
-    /**
-     * Record one minting attempt, allowed or refused.
-     *
-     * Every refusal in this class used to be a bare exception: a wrong Mint PIN
-     * reached error_log and nothing else, and a non-super-admin hitting the
-     * ceiling left no trace at all. Creating GenCoin is the most sensitive thing
-     * the system can do, so the attempts matter as much as the successes.
-     *
-     * $detail never carries the PIN, or anything derived from it.
-     */
+    /** Log a mint attempt (allowed or refused). Never includes the PIN. */
     private function logMintAttempt(
         int $userId,
         string $outcome,
@@ -95,8 +86,7 @@ class MintingGuard
             ));
         }
 
-        // The PIN gates every mint, not only ones past the soft limit: a stolen
-        // session alone must not be able to create money.
+        // PIN is required for every mint, not just past the soft limit.
         $softLimitExceeded = ($projectedTotal > self::SOFT_LIMIT);
         $this->verifyMintPin($superAdminId, $pin, $mintedSoFar, $amount);
 
@@ -134,10 +124,7 @@ class MintingGuard
         $stmt->execute([$superAdminId]);
         $hash = $stmt->fetchColumn();
 
-                // bcrypt only. The removed `$currentPassword === $hash` comparison meant a
-        // plaintext password row could authorise changing the mint PIN — the control
-        // that gates creating GenCoin. fetchColumn() returns false when the row is
-        // missing, so the hash is type-checked before it reaches password_verify().
+                // bcrypt only; type-check the hash before password_verify().
         $passwordValid = is_string($hash) && $hash !== ''
             && password_verify($currentPassword, $hash);
         if (!$passwordValid) {
@@ -288,9 +275,7 @@ class MintingGuard
         }
 
         if (!password_verify($pin, $hash)) {
-            // Was error_log only, which meant a repeated wrong-PIN attack on the
-            // money supply was invisible to anyone reading the audit trail.
-            // The PIN itself is never recorded — only that one was wrong.
+            // Log wrong PINs to the audit trail (never the PIN itself).
             $this->logMintAttempt($adminId, 'failure',
                 'Incorrect Mint PIN.',
                 [

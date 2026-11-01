@@ -40,12 +40,7 @@ $currentPage = $currentPage ?? '';
     </a>
 </aside>
 <script>
-/* The collapsed rail has to survive navigation: every item in it is a link,
-   so without this the sidebar sprang back open on the next page load. The
-   class is restored inline right after the <aside> (before first paint, so
-   there is no flash of the wide rail and no width transition), and re-saved
-   by watching the element itself — that catches toggleParentSidebar() as well as the
-   pages that flip the class straight from an onclick attribute. */
+/* Persist the collapsed rail across pages (restored before first paint). */
 (function () {
     var el = document.getElementById('parentSidebar');
     if (!el) return;

@@ -1,13 +1,10 @@
 <?php
 
-// Database introspection and the self-healing core schema (ensure_* helpers not owned by one feature).
-// Loaded by connection/app.php; defines functions and constants only.
+// Database introspection and the self-healing core schema.
 
 function gjc_table_exists(PDO $db, string $table): bool
 {
-    // Pages ask this dozens of times per request. Only "exists" is remembered, so a
-    // table created later in the request is still seen; CLI is skipped because the
-    // migration contracts there DROP tables and then re-check.
+    // Cache only "exists"; skip caching on CLI (migrations drop tables).
     static $exists = [];
     if (isset($exists[$table])) {
         return true;
@@ -99,9 +96,7 @@ function gjc_ensure_operational_tables(PDO $db): void
 
 function gjc_ensure_fee_schema(PDO $db): void
 {
-    // Fee columns on transactions. 3NF: this is the only place top-up fees are
-    // stored (base/credited always equalled amount and were dropped; the old
-    // topup_requests copies and fee_revenue_log were dropped too).
+    // Fee columns on transactions (the only place top-up fees are stored).
     foreach ([
         'top_up_source  VARCHAR(20) NULL',
         'fee_amount     DECIMAL(15,2) NULL',
@@ -121,13 +116,7 @@ function gjc_ensure_fee_schema(PDO $db): void
     }
 }
 
-/**
- * Makes merchant_inventory.sku safe to use as a scan key for the student
- * cart: a SKU must be unique within a single merchant's catalog (NULL skus
- * are exempt, so optional SKUs still work). Attempts the index once; if
- * older duplicate data blocks it, the ALTER is skipped silently — app-layer
- * checks in merchant/api/inventory.php still prevent new collisions either way.
- */
+/** Unique (merchant, sku) index; skipped if old duplicates exist. */
 function gjc_ensure_inventory_sku_index(PDO $db): void
 {
     if (!gjc_table_exists($db, "merchant_inventory")) {
@@ -148,20 +137,11 @@ function gjc_ensure_inventory_sku_index(PDO $db): void
             "ALTER TABLE merchant_inventory ADD UNIQUE KEY uq_merchant_sku (merchant_user_id, sku)"
         );
     } catch (\Throwable $e) {
-        // Existing duplicate SKUs from before this rule existed — leave the
-        // index off for now; app-layer validation still blocks new clashes.
+        // Old duplicates block the index; app validation still prevents new ones.
     }
 }
 
-/**
- * Widens transactions.transaction_type to include every label in
- * $requiredTypes, by reading the CURRENT live enum and rebuilding the
- * MODIFY with the union — never a hardcoded replacement list, which would
- * silently drop any label added by a migration this function doesn't know
- * about (that was the bug in the old gjc_ensure_transaction_refund_type()).
- * Call this from a page/dispatcher BEFORE any beginTransaction() — it's DDL,
- * and MySQL implicitly commits an open transaction the instant it sees DDL.
- */
+/** Add labels to transactions.transaction_type, merged with the live enum. DDL: call before beginTransaction(). */
 function gjc_ensure_transaction_types(PDO $db, array $requiredTypes): void
 {
     try {
@@ -199,13 +179,7 @@ function gjc_ensure_transaction_types(PDO $db, array $requiredTypes): void
     }
 }
 
-/**
- * Same safe widen-from-the-live-enum approach as gjc_ensure_transaction_types(),
- * generalized to any ENUM column — used for cap_increase_log.source so new mint
- * sources don't need a bespoke widener each time. Call before beginTransaction();
- * this is DDL and MySQL implicitly commits an open transaction the instant it
- * sees it.
- */
+/** Add values to any ENUM column, merged with the live enum. DDL: call before beginTransaction(). */
 function gjc_ensure_enum_values(PDO $db, string $table, string $column, array $required): void
 {
     try {
@@ -244,11 +218,7 @@ function gjc_ensure_enum_values(PDO $db, string $table, string $column, array $r
     }
 }
 
-/**
- * Widens transactions.transaction_type to include 'refund' (used when a
- * merchant issues a Return). Kept as its own function since
- * merchant/api/returns.php already calls it by this name.
- */
+/** Add the 'refund' transaction type. */
 function gjc_ensure_transaction_refund_type(PDO $db): void
 {
     gjc_ensure_transaction_types($db, ['refund']);

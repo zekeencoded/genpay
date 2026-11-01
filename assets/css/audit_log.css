@@ -9,8 +9,7 @@
 .audit-reset:hover { background:var(--gp-cream); }
 
 .audit-table-wrap { border:1px solid var(--gp-line); border-radius:var(--gjc-radius); overflow:hidden; }
-/* .audit-table styling now comes from the canonical table system in theme.css;
-   only the semantic row tints below are page-specific. */
+/* Table styles come from theme.css; only row tints are page-specific. */
 .audit-row-login { background:var(--gjc-soft-2); }
 .audit-row-password { background:#fff8ec; }
 .audit-row-login-failed { background:#fef2f2; }
@@ -33,8 +32,7 @@
 .audit-pill.PRODUCT_RESTRICTION { background:var(--gp-danger-bg); color:var(--gp-danger); }
 .audit-pill.LOGIN_FAILED { background:var(--gp-danger-bg); color:var(--gp-danger); }
 
-/* Base box-model for .details-btn - this page doesn't load
-   transactions.css, only the colours from gjc-clear.css. */
+/* Base box model for .details-btn (this page doesn't load transactions.css). */
 .details-btn { min-height:34px; padding:0 13px; border-radius:var(--gjc-radius); text-decoration:none; font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 
 .audit-pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:16px; font-size:13px; color:var(--gp-muted); font-weight:600; }

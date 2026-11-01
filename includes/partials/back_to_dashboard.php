@@ -1,12 +1,6 @@
 <?php
-// Partial: force the browser Back button to always return to the dashboard.
-//
-// Included (defensively) from every role chrome partial — sidebars, topbars
-// and bottom navs. The static guard below ensures the <script> is emitted
-// only once per page even when a page renders several chrome partials.
-//
-// Requires: DASHBOARD_URL (connection/config.php). The unified /dashboard.php
-// router resolves to the correct role dashboard, so one URL covers all roles.
+// Partial: make the browser Back button return to the dashboard (emitted once per page).
+// Requires DASHBOARD_URL.
 if (defined('GJC_BACK_GUARD_EMITTED')) {
     return;
 }

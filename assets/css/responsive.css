@@ -1,6 +1,4 @@
-/* =========================================
-   GLOBAL RESPONSIVE FIX (SAFE OVERRIDE)
-========================================= */
+/* ═══ GLOBAL RESPONSIVE FIX ═══ */
 
 * {
   box-sizing: border-box;
@@ -26,18 +24,14 @@ video {
   padding-right: 15px;
 }
 
-/* =========================================
-   CARD FIXES (SAFE)
-========================================= */
+/* ═══ CARD FIXES ═══ */
 
 .card {
   width: 100% !important;
   max-width: 100% !important;
 }
 
-/* =========================================
-   TABLE FIXES
-========================================= */
+/* ═══ TABLE FIXES ═══ */
 
 .table-responsive {
   width: 100%;
@@ -45,9 +39,7 @@ video {
   -webkit-overflow-scrolling: touch;
 }
 
-/* =========================================
-   GRID STACKING FIX
-========================================= */
+/* ═══ GRID STACKING FIX ═══ */
 
 @media (max-width: 992px) {
   .row > [class*="col-"] {
@@ -56,9 +48,7 @@ video {
   }
 }
 
-/* =========================================
-   NAVBAR & SIDEBAR FIX
-========================================= */
+/* ═══ NAVBAR & SIDEBAR FIX ═══ */
 
 @media (max-width: 768px) {
   .sidebar {
@@ -82,9 +72,7 @@ video {
   }
 }
 
-/* =========================================
-   TEXT & SPACING FIX
-========================================= */
+/* ═══ TEXT & SPACING FIX ═══ */
 
 @media (max-width: 768px) {
   h1 {
@@ -106,9 +94,7 @@ video {
   }
 }
 
-/* =========================================
-   BUTTON & INPUT FIX
-========================================= */
+/* ═══ BUTTON & INPUT FIX ═══ */
 
 @media (max-width: 768px) {
   button,
@@ -123,9 +109,7 @@ video {
   }
 }
 
-/* =========================================
-   OVERFLOW FIX
-========================================= */
+/* ═══ OVERFLOW FIX ═══ */
 
 body,
 html {

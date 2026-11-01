@@ -1,13 +1,6 @@
 <?php
-// Partial: fixed mobile bottom nav for parent pages (visible under 768px).
-// Mirrors includes/partials/bottom_nav_student.php exactly — same markup,
-// same classes, same raised centre FAB — so the parent portal reads as the
-// same product as the student one on a phone. Same $currentPage contract as
-// sidebar_parent.php; needs assets/css/parent_shell.css. Place just before
-// </body>.
-//
-// The five slots map 1:1 onto the parent sidebar's five entries, with Shop
-// Cart raised into the FAB the way the student shell raises its own cart.
+// Partial: mobile bottom nav for parent pages (<768px), same as the student one.
+// Needs $currentPage and parent_shell.css. Place just before </body>.
 $currentPage = $currentPage ?? '';
 ?>
 <nav class="parent-bottomnav">
