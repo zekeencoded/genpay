@@ -18,11 +18,32 @@ $merchantName = $currentUser['name'];
 $notice = '';
 $error = '';
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+// Accountancy Office hours: Mon–Fri, 8:00 AM – 5:00 PM (Asia/Manila, set in config.php).
+$officeOpen = (int) date('N') <= 5 && date('H:i') >= '08:00' && date('H:i') < '17:00';
+$officeHoursLabel = 'Monday to Friday, 8:00 AM – 5:00 PM';
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['cancel_reference'])) {
+    if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
+    $stmt = $db->prepare(
+        "UPDATE encashment_requests
+            SET status = 'cancelled'
+          WHERE reference_no = ?
+            AND merchant_wallet_id = ?
+            AND status = 'pending'"
+    );
+    $stmt->execute([(string) $_POST['cancel_reference'], $wallet['id']]);
+    if ($stmt->rowCount() === 1) {
+        $notice = 'Encashment request ' . $_POST['cancel_reference'] . ' was cancelled.';
+    } else {
+        $error = 'This request can no longer be cancelled. It may have already been processed.';
+    }
+} elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
     $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
 
-    if (!$amount || $amount <= 0) {
+    if (!$officeOpen) {
+        $error = "Encashment requests are only accepted during office hours ({$officeHoursLabel}).";
+    } elseif (!$amount || $amount <= 0) {
         $error = 'Enter a valid encashment amount.';
     } elseif ($wallet['id'] <= 0) {
         $error = 'Your merchant wallet is not ready. Contact the finance office.';
@@ -120,8 +141,13 @@ $currentPage = 'encash';
                     <div class="alert alert-danger"><?php echo gjc_e($error); ?></div>
                     <?php endif; ?>
 
+                    <?php if (!$officeOpen): ?>
+                    <div class="alert alert-warning">The Accountancy Office is closed. You can submit requests <?php echo gjc_e($officeHoursLabel); ?>.</div>
+                    <?php endif; ?>
+
                     <form method="POST" class="encash-form" data-busy="Submitting…">
 
+                        <fieldset <?php echo $officeOpen ? '' : 'disabled'; ?>>
                         <div class="encash-field">
                             <label>Encashment Amount (&#8369;)</label>
 
@@ -142,6 +168,7 @@ $currentPage = 'encash';
                         <button type="submit" class="encash-submit-btn">
                             Submit Request
                         </button>
+                        </fieldset>
 
                     </form>
                 </div>
@@ -196,13 +223,14 @@ $currentPage = 'encash';
                                 <th>Status</th>
                                 <th data-card="hide">Processed By</th>
                                 <th>Date</th>
+                                <th data-card="hide"></th>
                             </tr>
                         </thead>
 
                         <tbody>
                             <?php if (empty($encashHistory)): ?>
                             <tr>
-                                <td colspan="4" class="encash-empty-state">
+                                <td colspan="5" class="encash-empty-state">
                                     No encashment history.
                                 </td>
                             </tr>
@@ -211,8 +239,17 @@ $currentPage = 'encash';
                             <tr>
                                 <td><?php echo gjc_money($row["amount"]); ?></td>
                                 <td><span class="merchant-type-pill encash-status <?php echo gjc_e(strtolower($row["status"])); ?>"><?php echo gjc_e(ucfirst($row["status"])); ?></span></td>
-                                <td><?php echo $row["released_by"] ? 'Finance Office' : 'Pending'; ?></td>
+                                <td><?php echo $row["released_by"] ? 'Finance Office' : ($row["status"] === 'pending' ? 'Pending' : '—'); ?></td>
                                 <td><?php echo gjc_e(date('M d, Y h:i A', strtotime($row["created_at"]))); ?></td>
+                                <td>
+                                    <?php if ($row["status"] === 'pending' && $row["reference_no"]): ?>
+                                    <form method="POST" onsubmit="return confirm('Cancel this encashment request?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo gjc_e(gjc_csrf_token()); ?>">
+                                        <input type="hidden" name="cancel_reference" value="<?php echo gjc_e($row["reference_no"]); ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                                    </form>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                             <?php endif; ?>

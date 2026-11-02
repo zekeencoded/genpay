@@ -74,7 +74,7 @@ $currentPage = "staff";
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=4">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>

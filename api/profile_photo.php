@@ -27,7 +27,7 @@ if ($action === 'remove') {
     $idCol = gjc_column($db, 'users', ['id', 'userID']);
     if ($idCol) {
         // Delete physical file(s) for this user
-        foreach (glob($photoDir . '/' . $userId . '.*') ?: [] as $old) {
+        foreach (array_merge(glob($photoDir . '/' . $userId . '.*') ?: [], glob($photoDir . '/' . $userId . '_*') ?: []) as $old) {
             @unlink($old);
         }
         $db->prepare("UPDATE users SET profile_img = '' WHERE {$idCol} = ?")->execute([$userId]);
@@ -70,12 +70,13 @@ if (!isset($allowedMimes[$mime])) {
 
 $ext = $allowedMimes[$mime];
 
-// Remove any previous photo for this user regardless of extension
-foreach (glob($photoDir . '/' . $userId . '.*') ?: [] as $old) {
+// Remove any previous photo for this user (old {id}.ext and newer {id}_{time}.ext names)
+foreach (array_merge(glob($photoDir . '/' . $userId . '.*') ?: [], glob($photoDir . '/' . $userId . '_*') ?: []) as $old) {
     @unlink($old);
 }
 
-$relPath  = 'assets/profile_photos/' . $userId . '.' . $ext;
+// A new name per upload, so phones can't keep showing a cached old photo.
+$relPath  = 'assets/profile_photos/' . $userId . '_' . time() . '.' . $ext;
 $fullPath = BASE_PATH . '/' . $relPath;
 
 if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
@@ -90,5 +91,5 @@ if ($idCol) {
 
 echo json_encode([
     'success'   => true,
-    'photo_url' => BASE_URL . '/' . $relPath . '?v=' . time(),
+    'photo_url' => BASE_URL . '/' . $relPath,
 ]);

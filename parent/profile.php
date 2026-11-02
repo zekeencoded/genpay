@@ -139,7 +139,7 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=6">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=7">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=13">
 </head>
 <body class="gp-theme">
@@ -300,7 +300,7 @@ $currentPage = 'profile';
                 </div>
 
                 <div class="tab-pane" id="ph-pane-settings" role="tabpanel" aria-labelledby="ph-tab-settings" tabindex="0">
-                    <!-- Settings: same menu as student/profile.php; on phones this is the only Logout. -->
+                    <!-- Settings: same menu as student/profile.php. -->
                     <section class="ph-card">
                         <div class="ph-card-head">
                             <div><h3>Settings</h3></div>
@@ -338,15 +338,21 @@ $currentPage = 'profile';
                                 </span>
                                 <i class="fa-solid fa-chevron-right ph-chev"></i>
                             </button>
-                            <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
-                                <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
-                                <span class="ph-grow"><span class="ph-t">Log out</span></span>
-                            </button>
                         </nav>
                     </section>
                 </div>
 
             </div>
+
+            <!-- Log out stays visible whichever tab is open (on phones the sidebar is hidden). -->
+            <section class="ph-card">
+                <nav class="ph-menu" aria-label="Log out">
+                    <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
+                        <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                        <span class="ph-grow"><span class="ph-t">Log out</span></span>
+                    </button>
+                </nav>
+            </section>
 
             <div class="ph-foot">GenPay v<?= htmlspecialchars(GJC_APP_VERSION) ?></div>
 
@@ -393,6 +399,7 @@ $currentPage = 'profile';
 </div>
 
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+<script src="<?= JS_URL ?>/gp_photo_crop.js?v=1"></script>
 <script>
 // Settings shortcuts switch to the matching tab instead of duplicating its form.
 document.querySelectorAll('[data-ph-open-tab]').forEach(function (item) {
@@ -422,6 +429,9 @@ const PHOTO_API = '<?= BASE_URL ?>/api/profile_photo.php';
 document.getElementById('photoInput').addEventListener('change', async function() {
     const file = this.files[0];
     if (!file) return;
+    const photo = await gpCropPhoto(file);
+    this.value = ''; // so picking the same file again still fires change
+    if (!photo) return;
 
     const msg = document.getElementById('photoMsg');
     msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
@@ -429,7 +439,7 @@ document.getElementById('photoInput').addEventListener('change', async function(
 
     const fd = new FormData();
     fd.append('action', 'upload');
-    fd.append('photo', file);
+    fd.append('photo', photo, 'photo.jpg');
 
     try {
         const res  = await fetch(PHOTO_API, {method: 'POST', body: fd, credentials: 'same-origin'});
@@ -476,7 +486,6 @@ document.getElementById('photoInput').addEventListener('change', async function(
         msg.innerHTML = 'Network error. Please try again.';
         msg.style.color = 'var(--gp-danger)';
     }
-    this.value = '';
 });
 </script>
 

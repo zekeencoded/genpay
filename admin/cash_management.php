@@ -64,7 +64,7 @@ $currentPage = 'cash';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
     <link rel="stylesheet" href="<?= CSS_URL ?>/topups.css?v=10">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/encashments.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/encashments.css?v=10">
     <link rel="stylesheet" href="<?= CSS_URL ?>/cash_management.css?v=1">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -284,6 +284,8 @@ $currentPage = 'cash';
                                     <div class="encash-actions">
                                         <button type="button" class="release-btn"
                                             onclick="releaseEncashment(this, <?php echo (int) $request['id']; ?>, <?php echo (int) $request['merchant_wallet_id']; ?>, <?php echo (float) $request['amount']; ?>, <?php echo htmlspecialchars(json_encode($merchantName), ENT_QUOTES, 'UTF-8'); ?>)">Release</button>
+                                        <button type="button" class="reject-btn"
+                                            onclick="rejectEncashment(this, <?php echo (int) $request['id']; ?>, <?php echo (float) $request['amount']; ?>, <?php echo htmlspecialchars(json_encode($merchantName), ENT_QUOTES, 'UTF-8'); ?>)">Reject</button>
                                     </div>
                                 </td>
                             </tr>
@@ -605,6 +607,32 @@ $currentPage = 'cash';
             return;
         }
         gpToast(result.message || 'The encashment could not be released.', false);
+        gpBusyDone(btn);
+    }
+
+    async function rejectEncashment(btn, encashmentId, amount, merchantName) {
+        const ok = await gpConfirm({
+            title: 'Reject this encashment?',
+            body: 'No cash is released and the merchant balance stays as it is.',
+            detail: [
+                ['Merchant', merchantName],
+                ['Amount', gpMoney(amount)],
+            ],
+            note: 'The merchant will be notified.',
+            confirmLabel: 'Reject request',
+        });
+        if (!ok) return;
+
+        if (!gpBusy(btn, 'Rejecting…')) return;
+
+        const result = await gpFetchJson('reject_encashment.php', { encashment_id: encashmentId });
+
+        if (result.success) {
+            gpToast(result.message || 'Encashment rejected.');
+            setTimeout(() => window.location.reload(), 900);
+            return;
+        }
+        gpToast(result.message || 'The encashment could not be rejected.', false);
         gpBusyDone(btn);
     }
 

@@ -455,7 +455,8 @@ img {
 
 .transaction-status.rejected,
 .topup-status.rejected,
-.encash-status.rejected {
+.encash-status.rejected,
+.encash-status.cancelled {
   background: var(--gjc-danger-bg) !important;
   color: var(--gjc-danger) !important;
 }

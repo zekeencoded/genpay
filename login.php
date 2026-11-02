@@ -65,7 +65,7 @@ if (!$error && ($_GET['reason'] ?? '') === 'account_banned') {
         rel="stylesheet">
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=33">
 </head>
 
 <body class="landing signin-body">

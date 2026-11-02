@@ -598,7 +598,9 @@ try {
                 "SELECT t.*, u.first_name, u.last_name
                    FROM transactions t
                    LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
-                   LEFT JOIN users u ON u.userID = sw.user_id
+                   LEFT JOIN parent_wallets pw ON pw.id = t.parent_wallet_id
+                   LEFT JOIN parents p ON p.id = pw.parent_id
+                   LEFT JOIN users u ON u.userID = COALESCE(sw.user_id, p.user_id)
                   WHERE t.id = ? AND t.merchant_wallet_id = ?"
             );
             $stmt->execute([$orderId, $merchantWallet['id']]);
@@ -620,7 +622,9 @@ try {
                 'status' => $row['status'],
                 'created_at' => $row['created_at'],
                 'paid_at' => $row['created_at'],
-                'student_name' => $studentName !== '' ? $studentName : 'Student',
+                'student_name' => $studentName !== ''
+                    ? $studentName
+                    : (!empty($row['parent_wallet_id']) ? 'Parent' : 'Student'),
             ]);
             exit;
         }

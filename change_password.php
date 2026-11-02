@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Same layout as the sign-in page, which this screen follows. -->
     <link rel="stylesheet" href="<?= CSS_URL ?>/public_theme.css?v=1">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=32">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/login.css?v=33">
 
 </head>
 

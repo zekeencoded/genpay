@@ -105,7 +105,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=5">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=7">
 </head>
 
 <body class="sd-body">
@@ -398,6 +398,7 @@ $currentPage = 'profile';
     </div>
 
     <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
+    <script src="<?= JS_URL ?>/gp_photo_crop.js?v=1"></script>
 
     <script>
     /* ── Profile photo upload (same endpoint as the student profile) ── */
@@ -406,6 +407,9 @@ $currentPage = 'profile';
     document.getElementById('photoInput').addEventListener('change', async function() {
         const file = this.files[0];
         if (!file) return;
+        const photo = await gpCropPhoto(file);
+        this.value = ''; // so picking the same file again still fires change
+        if (!photo) return;
 
         const msg = document.getElementById('photoMsg');
         msg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
@@ -413,7 +417,7 @@ $currentPage = 'profile';
 
         const fd = new FormData();
         fd.append('action', 'upload');
-        fd.append('photo', file);
+        fd.append('photo', photo, 'photo.jpg');
 
         try {
             const res  = await fetch(PHOTO_API, {method: 'POST', body: fd, credentials: 'same-origin'});
@@ -431,7 +435,6 @@ $currentPage = 'profile';
             msg.textContent = 'Network error. Please try again.';
             msg.style.color = 'var(--gp-danger)';
         }
-        this.value = '';
     });
     </script>
 

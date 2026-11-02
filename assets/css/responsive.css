@@ -173,3 +173,9 @@ html {
   }
 }
 
+
+/* Edge adds its own reveal eye to password fields; pages use their own toggle. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

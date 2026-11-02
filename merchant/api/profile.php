@@ -83,11 +83,12 @@ if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] !== UPLOAD_ERR_N
     if (!is_dir($logoDir)) {
         mkdir($logoDir, 0755, true);
     }
-    // Clear any previous logo for this merchant regardless of its extension.
-    foreach (glob($logoDir . '/' . $merchantId . '.*') ?: [] as $old) {
+    // Clear any previous logo for this merchant (old {id}.ext and newer {id}_{time}.ext names).
+    foreach (array_merge(glob($logoDir . '/' . $merchantId . '.*') ?: [], glob($logoDir . '/' . $merchantId . '_*') ?: []) as $old) {
         @unlink($old);
     }
-    $logoRelPath = 'assets/merchant_logos/' . $merchantId . '.' . $ext;
+    // A new name per upload, so phones can't keep showing a cached old logo.
+    $logoRelPath = 'assets/merchant_logos/' . $merchantId . '_' . time() . '.' . $ext;
     $removeLogo = false; // a new upload wins over a removal in the same save
     if (!move_uploaded_file($file['tmp_name'], BASE_PATH . '/' . $logoRelPath)) {
         echo json_encode(['success' => false, 'message' => 'Failed to save the uploaded logo.']);
@@ -99,7 +100,7 @@ $db->prepare("UPDATE merchant SET stall_name = ? WHERE merchantID = ?")->execute
 if ($logoRelPath !== null) {
     $db->prepare("UPDATE users SET profile_img = ? WHERE userID = ?")->execute([$logoRelPath, $userId]);
 } elseif ($removeLogo) {
-    foreach (glob(BASE_PATH . '/assets/merchant_logos/' . $merchantId . '.*') ?: [] as $old) {
+    foreach (array_merge(glob(BASE_PATH . '/assets/merchant_logos/' . $merchantId . '.*') ?: [], glob(BASE_PATH . '/assets/merchant_logos/' . $merchantId . '_*') ?: []) as $old) {
         @unlink($old);
     }
     $db->prepare("UPDATE users SET profile_img = NULL WHERE userID = ?")->execute([$userId]);

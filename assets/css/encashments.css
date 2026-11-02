@@ -158,19 +158,33 @@
   color: var(--gp-warning);
 }
 
-.encash-status.rejected {
+.encash-status.rejected,
+.encash-status.cancelled {
   background: var(--gp-line-soft);
   color: var(--gjc-slate);
 }
 
 .encash-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
+.reject-btn {
+  background: #fff;
+  color: var(--gjc-danger, #b42318);
+  border: 1px solid currentColor !important;
+  border-radius: 999px !important;
+}
+
+.reject-btn:hover {
+  background: var(--gjc-danger, #b42318);
+  color: #fff;
+}
+
 .details-btn,
-.release-btn {
+.release-btn,
+.reject-btn {
   min-height: 36px;
   padding: 0 13px;
   border-radius: 13px;

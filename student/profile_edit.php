@@ -19,8 +19,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } elseif (!$idColumn) {
         $error = 'Profile cannot be updated because the users table ID column was not found.';
     } else {
-        $firstName = trim((string) ($_POST['first_name'] ?? ''));
-        $lastName = trim((string) ($_POST['last_name'] ?? ''));
         // users has no `phone` column — the number lives in contact_number, a
         // BIGINT, exactly as on the merchant Edit Profile.
         $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? ''));
@@ -28,9 +26,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         // Shared validation with the parent portal.
         $details = gjc_collect_profile_details($_POST, $columns);
 
-        if ($firstName === '' || $lastName === '') {
-            $error = 'First name and last name are required.';
-        } elseif ($phone !== '' && !preg_match('/^0?9\d{9}$/', $phone)) {
+        if ($phone !== '' && !preg_match('/^0?9\d{9}$/', $phone)) {
             $error = 'Enter an 11-digit mobile number, like 09171234567.';
         } elseif ($details['error'] !== null) {
             $error = $details['error'];
@@ -38,10 +34,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $updates = [];
             $values = [];
 
+            // Name is locked for students (Admin changes it), so it isn't saved here.
             foreach ([
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'name' => trim($firstName . ' ' . $lastName),
                 'contact_number' => $phone !== '' ? $phone : '0',
             ] + $details['values'] as $column => $value) {
                 if (in_array($column, $columns, true)) {
@@ -74,6 +68,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $rawUser = $currentUser['raw'] ?? [];
 $firstName = (string) ($rawUser['first_name'] ?? '');
 $lastName = (string) ($rawUser['last_name'] ?? '');
+$middleName = (string) ($rawUser['middle_name'] ?? '');
+$suffix = (string) ($rawUser['suffix'] ?? '');
 
 if ($firstName === '' && $lastName === '') {
     $nameParts = preg_split('/\s+/', trim($currentUser['name']), 2);
@@ -156,14 +152,27 @@ $csrfToken = gjc_csrf_token();
                         <div class="pf-form-grid">
                             <div class="pf-field">
                                 <label>First Name</label>
-                                <input type="text" name="first_name" value="<?= $e($firstName) ?>" required>
+                                <input type="text" value="<?= $e($firstName) ?>" disabled>
                             </div>
 
                             <div class="pf-field">
-                                <label>Last Name</label>
-                                <input type="text" name="last_name" value="<?= $e($lastName) ?>" required>
+                                <label>Middle Name</label>
+                                <input type="text" value="<?= $e($middleName) ?>" placeholder="—" disabled>
                             </div>
                         </div>
+
+                        <div class="pf-form-grid">
+                            <div class="pf-field">
+                                <label>Last Name</label>
+                                <input type="text" value="<?= $e($lastName) ?>" disabled>
+                            </div>
+
+                            <div class="pf-field">
+                                <label>Suffix</label>
+                                <input type="text" value="<?= $e($suffix) ?>" placeholder="—" disabled>
+                            </div>
+                        </div>
+                        <small class="d-block mb-3">Your name can only be changed by the Admin.</small>
 
                         <div class="pf-field">
                             <label>Mobile Number</label>
