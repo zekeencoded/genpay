@@ -83,7 +83,7 @@ $currentPage = 'activity';
                     <select id="paWallet" name="student">
                         <option value="0" <?= $walletFilter === '0' ? 'selected' : '' ?>>All wallets</option>
                         <?php if ($parentWalletId > 0): ?>
-                        <option value="me" <?= $walletFilter === 'me' ? 'selected' : '' ?>>My transactions (parent)</option>
+                        <option value="me" <?= $walletFilter === 'me' ? 'selected' : '' ?>>My transactions (guardian)</option>
                         <?php endif; ?>
                         <?php foreach ($linkedStudents as $s): ?>
                         <?php if ((int) $s['wallet_id'] <= 0) continue; ?>

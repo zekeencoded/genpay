@@ -7,6 +7,7 @@ require_once __DIR__ . '/../connection/config.php';
 require_once __DIR__ . '/../connection/pdo.php';
 require_once __DIR__ . '/../connection/app.php';
 require_once __DIR__ . '/../connection/CirculationEngine.php';
+require_once __DIR__ . '/../connection/audit_logger.php';
 
 gjc_require_role(['merchant']);
 if (gjc_is_merchant_staff()) {
@@ -17,6 +18,37 @@ if (gjc_is_merchant_staff()) {
 gjc_ensure_user_profile_schema($db); // canonical personal-details schema
 $currentUser = gjc_current_user($db);
 $userId = (int) $currentUser['id'];
+
+// Password & Security tab — same rules as parent/profile.php.
+$notice = '';
+$error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['profile_action'] ?? '') === 'password') {
+    $current = (string) ($_POST['current_password'] ?? '');
+    $new     = (string) ($_POST['new_password'] ?? '');
+    $confirm = (string) ($_POST['confirm_password'] ?? '');
+    $stored  = (string) ($currentUser['raw']['password'] ?? '');
+
+    if (!gjc_csrf_verify()) {
+        $error = 'Security check failed. Please reload the page and try again.';
+    } elseif ($stored === '' || !password_verify($current, $stored)) {
+        $error = 'Current password is incorrect.';
+    } elseif (strlen($new) < 8) {
+        $error = 'New password must be at least 8 characters.';
+    } elseif ($new !== $confirm) {
+        $error = 'New passwords do not match.';
+    } else {
+        $db->prepare('UPDATE users SET password = ? WHERE userID = ?')
+           ->execute([password_hash($new, PASSWORD_DEFAULT), $userId]);
+        // No before-state: see the note in student/security.php.
+        logAudit($db, $userId, gjc_current_role(),
+            'PASSWORD_CHANGE', 'users',
+            null,
+            ['password_changed' => true, 'changed_via' => 'merchant_business_profile'],
+            null,
+            ['target_id' => $userId]);
+        $notice = 'Password updated successfully!';
+    }
+}
 
 $wallet = gjc_merchant_wallet($db, $userId);
 
@@ -175,11 +207,17 @@ $checksTotal = count($profileChecks);
 $checksPct = $checksTotal ? (int) round($checksDone / $checksTotal * 100) : 0;
 
 $opStatus = (string) ($merchant['operational_status'] ?? 'active');
-$heroMeta = array_filter([
-    $merchant && $merchant['row_label'] ? 'Row ' . $merchant['row_label'] . ', unit ' . (int) $merchant['col_number'] : '',
-    $merchant && $merchant['area_sqm'] !== null ? rtrim(rtrim(number_format((float) $merchant['area_sqm'], 2), '0'), '.') . ' sqm' : '',
-    $fullName !== '' ? 'Run by ' . $fullName : '',
-]);
+$memberSince = !empty($merchant['account_created']) ? date('F Y', strtotime($merchant['account_created'])) : 'N/A';
+
+// Open the tab whose form was just submitted, so its result is in view.
+$phTab  = ($_POST['profile_action'] ?? '') === 'password' ? 'password' : 'listing';
+$phTabs = [
+    'listing'   => 'Directory Listing',
+    'documents' => 'Documents',
+    'details'   => 'Stall &amp; Contact',
+    'password'  => 'Password &amp; Security',
+    'settings'  => 'Settings',
+];
 $paymentDay = (int) ($application['payment_schedule_day'] ?? 0);
 $ordinal = static function (int $n): string {
     $suffix = ($n % 100 >= 11 && $n % 100 <= 13) ? 'th' : (['th', 'st', 'nd', 'rd'][$n % 10] ?? 'th');
@@ -197,12 +235,13 @@ $ordinal = static function (int $n): string {
     <title>Business Profile | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=12">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=2">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant_settings.css?v=13">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=8">
 </head>
 <body class="gp-theme">
 <div class="merchant-layout">
@@ -211,7 +250,7 @@ $ordinal = static function (int $n): string {
     <main class="merchant-main">
         <?php
         $topbarTitle = 'Business Profile';
-        $topbarSubtitle = 'Your public listing, and the details the finance office holds for your stall.';
+        $topbarSubtitle = 'Your stall listing, account details and security.';
         require __DIR__ . '/../includes/partials/topbar_merchant.php';
         ?>
 
@@ -222,64 +261,69 @@ $ordinal = static function (int $n): string {
         <?php else: ?>
         <div class="ph">
 
-        <!-- ── Hero: the stall first, its owner second ─────────────────── -->
-        <section class="ph-hero" aria-label="Stall summary">
-            <div class="ph-hero-top">
-                <div class="ph-avatar is-logo" id="heroLogo"
-                     <?= $logoUrl ? 'style="background-image:url(&quot;' . htmlspecialchars($logoUrl, ENT_QUOTES) . '&quot;)"' : '' ?>>
-                    <span <?= $logoUrl ? 'hidden' : '' ?>><?= htmlspecialchars(mb_strtoupper(mb_substr($merchant['stall_name'], 0, 1))) ?></span>
-                    <label for="logoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change logo" aria-label="Change logo">
-                        <i class="fa-solid fa-camera"></i>
-                    </label>
-                </div>
+        <?php if ($notice): ?>
+        <div class="pf-alert"><i class="fa-solid fa-circle-check"></i><?= htmlspecialchars($notice) ?></div>
+        <?php elseif ($error): ?>
+        <div class="pf-alert is-error"><i class="fa-solid fa-circle-xmark"></i><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
 
-                <div class="ph-identity">
-                    <div class="ph-eyebrow-row">
-                        <span class="ph-eyebrow"><?= htmlspecialchars($stallTitle) ?></span>
-                        <span class="ph-pill-dark <?= $opStatus === 'active' ? '' : 'is-off' ?>">
-                            <?= $opStatus === 'active' ? 'Open for business' : htmlspecialchars(ucwords(str_replace('_', ' ', $opStatus))) ?>
-                        </span>
+        <!-- Hero: the stall's GenPay card, with the wallet beside it.
+             Same design as student/profile.php and parent/profile.php. -->
+        <section class="ph-id" aria-label="Stall summary">
+            <div class="ph-id-card">
+                <div class="ph-id-brand">
+                    <img src="<?= ICONS_URL ?>/gp_logo.png" alt="">
+                    GenPay
+                </div>
+                <div class="ph-id-holder">
+                    <div class="ph-id-photo is-logo" id="heroLogo"
+                         <?= $logoUrl ? 'style="background-image:url(&quot;' . htmlspecialchars($logoUrl, ENT_QUOTES) . '&quot;)"' : '' ?>>
+                        <span <?= $logoUrl ? 'hidden' : '' ?>><?= htmlspecialchars(mb_strtoupper(mb_substr($merchant['stall_name'], 0, 1))) ?></span>
+                        <label for="logoInput" role="button" tabindex="0" class="ph-avatar-edit" title="Change logo" aria-label="Change logo">
+                            <i class="fa-solid fa-camera"></i>
+                        </label>
                     </div>
-                    <h2 class="ph-name" id="heroName"><?= htmlspecialchars($merchant['stall_name']) ?></h2>
-                    <?php if ($heroMeta): ?>
-                        <p class="ph-meta"><?= htmlspecialchars(implode(' · ', $heroMeta)) ?></p>
-                    <?php endif; ?>
+                    <div class="ph-id-who">
+                        <h2 class="ph-id-name" id="heroName"><?= htmlspecialchars($merchant['stall_name']) ?></h2>
+                        <p class="ph-id-no<?= empty($merchant['stall_id']) ? ' is-text' : '' ?>"><?= htmlspecialchars($stallTitle) ?></p>
+                        <p class="ph-id-since">Member since <?= htmlspecialchars($memberSince) ?></p>
+                    </div>
                 </div>
+            </div>
 
-                <div class="ph-hero-actions">
+            <div class="ph-id-wallet">
+                <div class="ph-id-top">
+                    <div>
+                        <span class="ph-id-k">Wallet balance</span>
+                        <span class="ph-id-amount"><?= gjc_gc_amount($wallet['balance']) ?> <small>GC</small></span>
+                        <span class="ph-id-k">&#8776; <?= gjc_money($wallet['balance']) ?> &middot; <a href="<?= MERCHANT_URL ?>/encash.php">Encash</a></span>
+                    </div>
                     <?php if (!empty($merchant['stall_id'])): ?>
-                        <a class="ph-btn-ghost" target="_blank" rel="noopener"
+                        <a class="ph-id-edit" target="_blank" rel="noopener"
                            href="<?= BASE_URL ?>/stalls.php#stall-<?= rawurlencode((string) $merchant['stall_id']) ?>">
                             <i class="fa-solid fa-arrow-up-right-from-square"></i> View in directory
                         </a>
                     <?php endif; ?>
-                    <a class="ph-btn-gold" href="#listing"><i class="fa-solid fa-pen"></i> Edit listing</a>
                 </div>
-            </div>
 
-            <div class="ph-stats is-four" style="--ph-stat-cols: 4">
-                <div class="ph-stat">
-                    <span class="ph-stat-k">Today's sales</span>
-                    <span class="ph-stat-v"><?= gjc_gc_amount($salesToday['amount']) ?> <small>GC</small></span>
-                    <span class="ph-stat-n">&#8776; <?= gjc_money($salesToday['amount']) ?> &middot; <?= $salesToday['orders'] ?> order<?= $salesToday['orders'] === 1 ? '' : 's' ?> so far</span>
-                </div>
-                <div class="ph-stat">
-                    <span class="ph-stat-k">Wallet balance</span>
-                    <span class="ph-stat-v"><?= gjc_gc_amount($wallet['balance']) ?> <small>GC</small></span>
-                    <span class="ph-stat-n">&#8776; <?= gjc_money($wallet['balance']) ?> &middot; <a href="<?= MERCHANT_URL ?>/encash.php">Encash</a></span>
-                </div>
-                <div class="ph-stat">
-                    <span class="ph-stat-k">Products</span>
-                    <span class="ph-stat-v"><?= (int) $glance['products'] ?></span>
-                    <span class="ph-stat-n"><?= $glance['restricted'] > 0
-                        ? (int) $glance['restricted'] . ' restricted by the school'
-                        : 'None restricted' ?></span>
-                </div>
-                <div class="ph-stat">
-                    <span class="ph-stat-k">Monthly rent</span>
-                    <span class="ph-stat-v"><?= $merchant['monthly_rate'] !== null ? gjc_gc_amount($merchant['monthly_rate']) . ' <small>GC</small>' : '&mdash;' ?></span>
-                    <span class="ph-stat-n"><?= $merchant['monthly_rate'] !== null ? '&#8776; ' . gjc_money($merchant['monthly_rate']) . ' &middot; ' : '' ?><?= $paymentDay > 0 ? 'Due every ' . $ordinal($paymentDay) . ' &middot; ' : '' ?><a href="<?= MERCHANT_URL ?>/rent.php">Schedule</a></span>
-                </div>
+                <dl class="ph-id-facts">
+                    <div>
+                        <dt>Status</dt>
+                        <dd class="<?= $opStatus === 'active' ? '' : 'is-paused' ?>"><?= $opStatus === 'active' ? 'Open for business' : htmlspecialchars(ucwords(str_replace('_', ' ', $opStatus))) ?></dd>
+                    </div>
+                    <div>
+                        <dt>Today's sales</dt>
+                        <dd><?= gjc_gc_amount($salesToday['amount']) ?> GC <span>&middot; <?= $salesToday['orders'] ?> order<?= $salesToday['orders'] === 1 ? '' : 's' ?></span></dd>
+                    </div>
+                    <div>
+                        <dt>Products</dt>
+                        <dd><?= (int) $glance['products'] ?> <span><?= $glance['restricted'] > 0 ? '&middot; ' . (int) $glance['restricted'] . ' restricted' : '' ?></span></dd>
+                    </div>
+                    <div>
+                        <dt>Monthly rent</dt>
+                        <dd><?= $merchant['monthly_rate'] !== null ? gjc_gc_amount($merchant['monthly_rate']) . ' GC' : '&mdash;' ?> <span><?= $paymentDay > 0 ? '&middot; due every ' . $ordinal($paymentDay) : '' ?></span></dd>
+                    </div>
+                </dl>
             </div>
         </section>
 
@@ -309,13 +353,29 @@ $ordinal = static function (int $n): string {
                     <?php elseif ($check['href'] === 'contact'): ?>
                         <button type="button" class="ph-chip border-0" data-bs-toggle="modal" data-bs-target="#contactModal"><i class="fa-solid fa-plus"></i><?= htmlspecialchars($check['label']) ?></button>
                     <?php else: ?>
-                        <a href="<?= $check['href'] ?>" class="ph-chip"><i class="fa-solid fa-plus"></i><?= htmlspecialchars($check['label']) ?></a>
+                        <button type="button" class="ph-chip border-0" data-ph-open-tab="listing"><i class="fa-solid fa-plus"></i><?= htmlspecialchars($check['label']) ?></button>
                     <?php endif; ?>
                 <?php endforeach; ?>
             </div>
         </section>
         <?php endif; ?>
 
+        <!-- One section at a time, like the student and parent profiles. -->
+        <?php // Phones hide the tabs: the Settings menu lists every section, each with a back link. ?>
+        <div class="ph-tabs d-none d-md-flex" role="tablist" aria-label="Profile sections">
+            <?php foreach ($phTabs as $key => $label): ?>
+            <button type="button" class="ph-tab<?= $key === $phTab ? ' active' : '' ?>" id="ph-tab-<?= $key ?>"
+                    data-bs-toggle="tab" data-bs-target="#ph-pane-<?= $key ?>" role="tab"
+                    aria-controls="ph-pane-<?= $key ?>" aria-selected="<?= $key === $phTab ? 'true' : 'false' ?>">
+                <?= $label ?>
+            </button>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="tab-content">
+
+        <div class="tab-pane<?= $phTab === 'listing' ? ' active' : '' ?>" id="ph-pane-listing" role="tabpanel" aria-labelledby="ph-tab-listing" tabindex="0">
+        <button type="button" class="pf-back-link border-0 d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
         <!-- ── The public listing: edit on the left, the real tile on the right ── -->
         <section class="ph-card bp-listing" id="listing">
             <div class="ph-card-head">
@@ -386,10 +446,10 @@ $ordinal = static function (int $n): string {
                 </figure>
             </form>
         </section>
+        </div>
 
-        <div class="ph-grid">
-        <div class="ph-col">
-
+        <div class="tab-pane<?= $phTab === 'documents' ? ' active' : '' ?>" id="ph-pane-documents" role="tabpanel" aria-labelledby="ph-tab-documents" tabindex="0">
+        <button type="button" class="pf-back-link border-0 d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
         <!-- ── Compliance documents ─────────────────────────────────────── -->
         <?php $missingDocs = count(array_diff_key($complianceDocs, $docFiles)); ?>
         <section class="ph-card" id="documents">
@@ -453,45 +513,11 @@ $ordinal = static function (int $n): string {
                 </div>
             <?php endif; ?>
         </section>
+        </div>
 
-        <!-- ── Team ────────────────────────────────────────────────────── -->
-        <section class="ph-card">
-            <div class="ph-card-head">
-                <div>
-                    <h3>Your team</h3>
-                    <p><?= $team
-                        ? count($team) . ' staff account' . (count($team) === 1 ? '' : 's') . ' can sign in to your POS'
-                        : 'Staff you add can sign in to your POS' ?></p>
-                </div>
-                <a class="ph-link" href="<?= MERCHANT_URL ?>/staff.php">Manage <i class="fa-solid fa-chevron-right"></i></a>
-            </div>
-            <?php if ($team): ?>
-                <?php foreach ($team as $member):
-                    $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Staff member'; ?>
-                    <div class="ph-row">
-                        <?php $memberPhoto = trim((string) ($member['profile_img'] ?? '')); ?>
-                        <span class="ph-ini">
-                            <?php if ($memberPhoto !== ''): ?>
-                                <img src="<?= htmlspecialchars(BASE_URL . '/' . ltrim($memberPhoto, '/')) ?>" alt="" loading="lazy">
-                            <?php else: ?>
-                                <?= htmlspecialchars(mb_strtoupper(mb_substr($memberName, 0, 1))) ?>
-                            <?php endif; ?>
-                        </span>
-                        <span class="ph-grow">
-                            <span class="ph-t"><?= htmlspecialchars($memberName) ?></span>
-                            <span class="ph-s"><?= htmlspecialchars(trim((string) ($member['position'] ?? '')) ?: 'Merchant Staff') ?></span>
-                        </span>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="ph-note">
-                    <i class="fa-solid fa-user-plus"></i>
-                    <span>No staff yet. Add cashiers from <a href="<?= MERCHANT_URL ?>/staff.php">Staff</a> so they can ring up sales without your login.</span>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        </div><!-- /.ph-col -->
+        <div class="tab-pane<?= $phTab === 'details' ? ' active' : '' ?>" id="ph-pane-details" role="tabpanel" aria-labelledby="ph-tab-details" tabindex="0">
+        <button type="button" class="pf-back-link border-0 d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
+        <div class="ph-grid">
         <div class="ph-col">
 
         <!-- ── Stall & tenancy ──────────────────────────────────────────── -->
@@ -535,6 +561,9 @@ $ordinal = static function (int $n): string {
             </div>
         </section>
 
+        </div><!-- /.ph-col -->
+        <div class="ph-col">
+
         <!-- ── Proprietor & contact ─────────────────────────────────────── -->
         <section class="ph-card" id="contact">
             <div class="ph-card-head">
@@ -564,49 +593,227 @@ $ordinal = static function (int $n): string {
             </div>
         </section>
 
+        <!-- ── Team ────────────────────────────────────────────────────── -->
+        <section class="ph-card">
+            <div class="ph-card-head">
+                <div>
+                    <h3>Your team</h3>
+                    <p><?= $team
+                        ? count($team) . ' staff account' . (count($team) === 1 ? '' : 's') . ' can sign in to your POS'
+                        : 'Staff you add can sign in to your POS' ?></p>
+                </div>
+                <a class="ph-link" href="<?= MERCHANT_URL ?>/staff.php">Manage <i class="fa-solid fa-chevron-right"></i></a>
+            </div>
+            <?php if ($team): ?>
+                <?php foreach ($team as $member):
+                    $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Staff member'; ?>
+                    <div class="ph-row">
+                        <?php $memberPhoto = trim((string) ($member['profile_img'] ?? '')); ?>
+                        <span class="ph-ini">
+                            <?php if ($memberPhoto !== ''): ?>
+                                <img src="<?= htmlspecialchars(BASE_URL . '/' . ltrim($memberPhoto, '/')) ?>" alt="" loading="lazy">
+                            <?php else: ?>
+                                <?= htmlspecialchars(mb_strtoupper(mb_substr($memberName, 0, 1))) ?>
+                            <?php endif; ?>
+                        </span>
+                        <span class="ph-grow">
+                            <span class="ph-t"><?= htmlspecialchars($memberName) ?></span>
+                            <span class="ph-s"><?= htmlspecialchars(trim((string) ($member['position'] ?? '')) ?: 'Merchant Staff') ?></span>
+                        </span>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="ph-note">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>No staff yet. Add cashiers from <a href="<?= MERCHANT_URL ?>/staff.php">Staff</a> so they can ring up sales without your login.</span>
+                </div>
+            <?php endif; ?>
+        </section>
+
         </div><!-- /.ph-col -->
         </div><!-- /.ph-grid -->
+        </div>
+
+        <div class="tab-pane<?= $phTab === 'password' ? ' active' : '' ?>" id="ph-pane-password" role="tabpanel" aria-labelledby="ph-tab-password" tabindex="0">
+        <button type="button" class="pf-back-link border-0 d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
+        <section class="ph-card">
+            <div class="ph-card-head">
+                <div>
+                    <h3>Password &amp; Security</h3>
+                    <p>Keep your account secure by updating your password regularly.</p>
+                </div>
+            </div>
+            <form method="POST" class="pf-form px-4 pb-4">
+                <input type="hidden" name="profile_action" value="password">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <div class="pf-field">
+                    <label>Current Password</label>
+                    <input type="password" name="current_password" autocomplete="current-password" required>
+                </div>
+                <div class="pf-form-grid">
+                    <div class="pf-field">
+                        <label>New Password</label>
+                        <input type="password" name="new_password" minlength="8" autocomplete="new-password" required>
+                    </div>
+                    <div class="pf-field">
+                        <label>Confirm New Password</label>
+                        <input type="password" name="confirm_password" minlength="8" autocomplete="new-password" required>
+                    </div>
+                </div>
+                <button type="submit" class="pf-btn">
+                    <i class="fa-solid fa-shield-halved me-1"></i> Update Password
+                </button>
+            </form>
+        </section>
+        </div>
+
+        <div class="tab-pane" id="ph-pane-settings" role="tabpanel" aria-labelledby="ph-tab-settings" tabindex="0">
+        <!-- Settings: same menu as student and parent profile.php. -->
+        <section class="ph-card">
+            <div class="ph-card-head">
+                <div><h3>Settings</h3></div>
+            </div>
+            <nav class="ph-menu" aria-label="Profile settings">
+                <button type="button" class="ph-menu-item" data-ph-open-tab="listing">
+                    <span class="ph-ic"><i class="fa-solid fa-store"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Directory listing</span>
+                        <span class="ph-s">Display name and logo students see</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </button>
+                <button type="button" class="ph-menu-item" data-ph-open-tab="documents">
+                    <span class="ph-ic"><i class="fa-solid fa-file-lines"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Compliance documents</span>
+                        <span class="ph-s">Permits, clearance and your lease contract</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </button>
+                <button type="button" class="ph-menu-item" data-ph-open-tab="details">
+                    <span class="ph-ic"><i class="fa-solid fa-user-pen"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Stall &amp; contact</span>
+                        <span class="ph-s">Tenancy, mobile number, address and team</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </button>
+                <button type="button" class="ph-menu-item" data-ph-open-tab="password">
+                    <span class="ph-ic"><i class="fa-solid fa-shield-halved"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Password &amp; Security</span>
+                        <span class="ph-s">Change your login password</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </button>
+                <a href="<?= MERCHANT_URL ?>/rent.php" class="ph-menu-item">
+                    <span class="ph-ic"><i class="fa-solid fa-file-invoice"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Rent &amp; Lease</span>
+                        <span class="ph-s">Your rent schedule and payments</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </a>
+                <button type="button" class="ph-menu-item" data-bs-toggle="modal" data-bs-target="#phHelpModal">
+                    <span class="ph-ic"><i class="fa-solid fa-circle-question"></i></span>
+                    <span class="ph-grow">
+                        <span class="ph-t">Help &amp; FAQs</span>
+                        <span class="ph-s">GenCoin, encashment, staff and passwords</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right ph-chev"></i>
+                </button>
+            </nav>
+        </section>
+        </div>
+
+        </div><!-- /.tab-content -->
+
+        <!-- Log out stays visible whichever tab is open (on phones the sidebar is hidden). -->
+        <section class="ph-card">
+            <nav class="ph-menu" aria-label="Log out">
+                <button type="button" class="ph-menu-item is-danger" onclick="openLogoutModal(event);">
+                    <span class="ph-ic is-bad"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                    <span class="ph-grow"><span class="ph-t">Log out</span></span>
+                </button>
+            </nav>
+        </section>
+
+        <div class="ph-foot">GenPay v<?= htmlspecialchars(GJC_APP_VERSION) ?></div>
 
         </div><!-- /.ph -->
+
+        <!-- Help & FAQs (a bottom sheet on phones), same component as student/profile.php -->
+        <div class="modal fade ph-sheet" id="phHelpModal" tabindex="-1" aria-labelledby="phHelpTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="phHelpTitle">Help &amp; FAQs</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <details class="ph-faq" open>
+                            <summary>What is GenCoin (GC)?</summary>
+                            <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. Students pay with it at your stall, and every sale goes straight to your stall wallet.</p>
+                        </details>
+                        <details class="ph-faq">
+                            <summary>How do I turn my sales into cash?</summary>
+                            <p>Go to <strong>Encash</strong> and request a payout. The finance office releases the cash and records it against your wallet.</p>
+                        </details>
+                        <details class="ph-faq">
+                            <summary>How do I add cashiers?</summary>
+                            <p>Open <strong>Staff</strong> and add an account for each cashier. They sign in with their own login and can ring up sales on your POS.</p>
+                        </details>
+                        <details class="ph-faq">
+                            <summary>How do I change my name, business name or email?</summary>
+                            <p>Those are set by the finance office. You can change your display name and logo under <strong>Directory listing</strong>, and your mobile number and address under <strong>Stall &amp; contact</strong>.</p>
+                        </details>
+                        <details class="ph-faq">
+                            <summary>I forgot my password. What do I do?</summary>
+                            <p>Visit the finance office with a valid ID and request a password reset. If you're already logged in, use <strong>Password &amp; Security</strong> in Settings instead.</p>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- ── Edit contact ───────────────────────────────────────────── -->
         <div class="modal fade" id="contactModal" tabindex="-1" aria-labelledby="contactModalTitle" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content" id="contactForm" novalidate style="border:0;border-radius:12px">
-                    <div class="modal-header border-0 pb-0">
-                        <h2 class="modal-title fs-5 fw-bold" id="contactModalTitle">Edit contact details</h2>
+                <form class="modal-content gp-modal" id="contactForm" novalidate>
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="contactModalTitle"><i class="fa-solid fa-address-book"></i>Edit contact details</h2>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="action" value="update_contact">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                         <div class="mb-3">
-                            <label class="form-label fw-semibold" for="contactPhone">Mobile number</label>
+                            <label class="form-label" for="contactPhone">Mobile number</label>
                             <input type="tel" class="form-control" id="contactPhone" name="contact_number"
                                    value="<?= htmlspecialchars($ownerPhone) ?>" maxlength="13" placeholder="09XXXXXXXXX"
                                    inputmode="numeric" autocomplete="tel">
                         </div>
                         <div class="row g-3">
                             <div class="col-sm-6">
-                                <label class="form-label fw-semibold" for="contactBarangay">Barangay</label>
+                                <label class="form-label" for="contactBarangay">Barangay</label>
                                 <input type="text" class="form-control" id="contactBarangay" name="address_barangay" maxlength="120"
                                        value="<?= htmlspecialchars((string) ($merchant['address_barangay'] ?? '')) ?>" autocomplete="address-line2">
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label fw-semibold" for="contactCity">City / municipality</label>
+                                <label class="form-label" for="contactCity">City / municipality</label>
                                 <input type="text" class="form-control" id="contactCity" name="address_city" maxlength="120"
                                        value="<?= htmlspecialchars((string) ($merchant['address_city'] ?? '')) ?>" autocomplete="address-level2">
                             </div>
                             <div class="col-12">
-                                <label class="form-label fw-semibold" for="contactProvince">Province</label>
+                                <label class="form-label" for="contactProvince">Province</label>
                                 <input type="text" class="form-control" id="contactProvince" name="address_province" maxlength="120"
                                        value="<?= htmlspecialchars((string) ($merchant['address_province'] ?? '')) ?>" autocomplete="address-level1">
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-0 pt-0">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="login-btn w-auto px-4" id="contactSaveBtn">Save</button>
+                    <div class="modal-footer">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn primary" id="contactSaveBtn">Save</button>
                     </div>
                 </form>
             </div>
@@ -711,6 +918,7 @@ $ordinal = static function (int $n): string {
             removeIn.value = '0';
             refresh();
             // The hero camera opens this same picker; bring the Save button into view.
+            bootstrap.Tab.getOrCreateInstance(document.getElementById('ph-tab-listing')).show();
             document.getElementById('listing').scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
         reader.readAsDataURL(file);
@@ -774,6 +982,31 @@ $ordinal = static function (int $n): string {
 })();
 </script>
     <script>
+    // Tabs, as on student and parent profile.php. Settings shortcuts switch tabs.
+    function showPhTab(key) {
+        const tab = document.getElementById('ph-tab-' + key);
+        if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+        return !!tab;
+    }
+    document.querySelectorAll('[data-ph-open-tab]').forEach(function (item) {
+        item.addEventListener('click', function () {
+            if (!showPhTab(item.getAttribute('data-ph-open-tab'))) return;
+            // The tabs are hidden on phones, so scroll to the panes.
+            document.querySelector('.tab-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    // After an upload or contact save, reopen the tab it came from.
+    function reloadOn(key) {
+        history.replaceState(null, '', location.pathname + '#' + key);
+        location.reload();
+    }
+    <?php if (!isset($_POST['profile_action'])): ?>
+    if (!(location.hash && showPhTab(location.hash.slice(1))) && window.matchMedia('(max-width: 767.98px)').matches) {
+        // Phones open on Settings unless a form was just submitted.
+        showPhTab('settings');
+    }
+    <?php endif; ?>
+
     // Keyboard access for the <label> buttons that open a hidden file picker.
     document.querySelectorAll('label[role="button"][for]:not(#logoPickBtn)').forEach(function (lbl) {
         lbl.addEventListener('keydown', function (e) {
@@ -811,7 +1044,7 @@ $ordinal = static function (int $n): string {
                 const d = await gpFetchJson(API, fd);
                 this.value = '';
                 gpToast(d.message, !!d.success);
-                if (d.success) setTimeout(() => location.reload(), 900);
+                if (d.success) setTimeout(() => reloadOn('documents'), 900);
             });
         });
 
@@ -829,7 +1062,7 @@ $ordinal = static function (int $n): string {
                 gpToast(d.message, !!d.success);
                 if (d.success) {
                     bootstrap.Modal.getInstance(document.getElementById('contactModal'))?.hide();
-                    setTimeout(() => location.reload(), 900);
+                    setTimeout(() => reloadOn('details'), 900);
                 }
             });
         }

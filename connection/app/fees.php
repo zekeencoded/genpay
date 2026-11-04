@@ -465,9 +465,9 @@ function gjc_maintenance_fee_for_reference(PDO $db, string $referenceNo, ?int $s
 function gjc_maintenance_fee_state_label(string $status): string
 {
     return match ($status) {
-        'collected' => 'Billed to tuition · collected',
+        'collected' => 'Collected',
         'voided'    => 'Voided · sale returned',
-        default     => 'Billed to tuition',
+        default     => '',
     };
 }
 
@@ -492,6 +492,12 @@ function gjc_record_maintenance_fee(PDO $db, int $studentUserId, string $referen
 {
     $fee = gjc_maintenance_fee_for_amount($db, $txnAmount);
     if ($fee <= 0 || $studentUserId <= 0) {
+        return 0.0;
+    }
+    // Faculty pay no tuition, so there is no bill to carry the fee.
+    $role = $db->prepare("SELECT roleID FROM users WHERE userID = ?");
+    $role->execute([$studentUserId]);
+    if ((int) $role->fetchColumn() === GJC_FACULTY_ROLE_ID) {
         return 0.0;
     }
 

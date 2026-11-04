@@ -93,7 +93,7 @@ try {
 
         $parentWallet = $parentId ? gjc_parent_wallet($db, $parentId) : ['id' => 0];
         if ((int) $parentWallet['id'] <= 0) {
-            throw new RuntimeException('Parent wallet not found.');
+            throw new RuntimeException('Guardian wallet not found.');
         }
 
         $total = round((float) $order['amount'], 2);

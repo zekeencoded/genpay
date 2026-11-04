@@ -57,7 +57,7 @@ if ($detailRequested) {
     <link rel="icon" href="<?= ICONS_URL ?>/gp_logo.png">
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
 </head>

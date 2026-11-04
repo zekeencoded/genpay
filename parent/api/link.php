@@ -18,7 +18,7 @@ $pStmt->execute([$parentUserId]);
 $parentRow = $pStmt->fetch(PDO::FETCH_ASSOC);
 if (!$parentRow) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Parent record not found.']);
+    echo json_encode(['success' => false, 'error' => 'Guardian record not found.']);
     exit;
 }
 $parentId = (int) $parentRow['id'];
@@ -87,8 +87,8 @@ try {
 
             $me = gjc_current_user($db);
             gjc_notify(
-                $db, $studentUserId, 'guardian_link', 'A parent wants to link to your account',
-                $me['name'] . ' asked to link to your wallet. Approve only if this is your parent or guardian.',
+                $db, $studentUserId, 'guardian_link', 'A guardian wants to link to your account',
+                $me['name'] . ' asked to link to your wallet. Approve only if this is your guardian.',
                 'link', STUDENT_URL . '/profile.php'
             );
 

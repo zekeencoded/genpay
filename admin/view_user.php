@@ -31,12 +31,12 @@ if ($user) {
     $roleId = (int) ($user['roleID'] ?? 0);
     $roleLabels = [
         1 => 'Student', 2 => 'Merchant', 3 => 'Finance', 4 => 'Finance',
-        5 => 'Merchant', 6 => 'Merchant Staff', 7 => 'Parent',
+        6 => 'Merchant Staff', 7 => 'Guardian', GJC_FACULTY_ROLE_ID => 'Faculty',
     ];
     $roleLabel = $roleLabels[$roleId] ?? 'User';
     $roleGroup = match ($roleId) {
-        1 => 'student',
-        2, 5, 6 => 'merchant',
+        1, GJC_FACULTY_ROLE_ID => 'student', // faculty share the student wallet data
+        2, 6 => 'merchant',
         3, 4 => 'finance',
         7 => 'parent',
         default => 'other',
@@ -97,7 +97,7 @@ if ($user) {
             $q = $db->prepare(
                 "SELECT si.studentID, "
                 . ($hasEnrollments ? "COALESCE(se.yr_lvl, si.entry_yr_lvl)" : "si.entry_yr_lvl") . " AS yr_lvl,
-                        si.graduated_at, c.course_code, c.course_name
+                        si.graduated_at, c.course_code, c.course_name" . (in_array('department', gjc_table_columns($db, 'student_info'), true) ? ', si.department' : '') . "
                    FROM student_info si
                    LEFT JOIN course c ON c.courseID = si.courseID "
                 . ($hasEnrollments ? "LEFT JOIN student_enrollments se ON se.student_user_id = si.userID AND se.school_year_id = ? " : "")
@@ -142,6 +142,7 @@ if ($user) {
             $q = $db->prepare("SELECT id, low_balance_threshold FROM parents WHERE user_id = ? LIMIT 1");
             $q->execute([$userId]);
             if ($p = $q->fetch(PDO::FETCH_ASSOC)) {
+                $parentRowId = (int) $p['id'];
                 $parent['threshold'] = $p['low_balance_threshold'];
                 if (gjc_table_exists($db, 'parent_wallets')) {
                     $q2 = $db->prepare("SELECT balance FROM parent_wallets WHERE parent_id = ? LIMIT 1");
@@ -166,13 +167,13 @@ if ($user) {
             ? (string) $student['studentID']
             : 'GJC' . date('Y') . '-????';
     } elseif ($roleGroup === 'merchant') {
-        $displayId = 'MER-' . str_pad((string) $userId, 4, '0', STR_PAD_LEFT);
+        $displayId = gjc_account_id('MER', (int) $userId, $user['created_at'] ?? null);
     } elseif ($roleGroup === 'finance') {
-        $displayId = 'FIN-' . str_pad((string) $userId, 4, '0', STR_PAD_LEFT);
+        $displayId = gjc_account_id('FIN', (int) $userId, $user['created_at'] ?? null);
     } elseif ($roleGroup === 'parent') {
-        $displayId = 'PAR-' . str_pad((string) $userId, 4, '0', STR_PAD_LEFT);
+        $displayId = !empty($parentRowId) ? gjc_guardian_id($parentRowId, $user['created_at'] ?? null) : 'GRD' . date('Y') . '-????';
     } else {
-        $displayId = 'GJC-' . str_pad((string) $userId, 4, '0', STR_PAD_LEFT);
+        $displayId = gjc_account_id('USR', (int) $userId, $user['created_at'] ?? null);
     }
 }
 
@@ -195,7 +196,7 @@ $field = static function (string $icon, string $label, string $value, bool $mono
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $user ? 'User Details' : 'Content Not Available' ?> | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -251,7 +252,7 @@ $field = static function (string $icon, string $label, string $value, bool $mono
         <?php if ($roleGroup === 'student'): ?>
         <section class="gp-card uv-card">
             <div class="gp-card-head">
-                <div><h3>Academic</h3><p>Enrollment details on record.</p></div>
+                <?php if ($roleId === GJC_FACULTY_ROLE_ID): ?><div><h3>Employment</h3><p>Faculty details on record.</p></div><?php else: ?><div><h3>Academic</h3><p>Enrollment details on record.</p></div><?php endif; ?>
             </div>
             <div class="uv-fields">
                 <?php
@@ -263,10 +264,18 @@ $field = static function (string $icon, string $label, string $value, bool $mono
                 $standing = !empty($student['graduated_at'])
                     ? 'Graduated · ' . date('M Y', strtotime((string) $student['graduated_at']))
                     : 'Enrolled';
-                $field('fa-solid fa-id-card', 'Student ID', $displayId, true);
-                $field('fa-solid fa-graduation-cap', 'Course', $courseText !== '' ? $courseText : '—');
-                $field('fa-solid fa-layer-group', 'Year Level', $yrText);
-                $field('fa-solid fa-user-graduate', 'Standing', $standing);
+                if ($roleId === GJC_FACULTY_ROLE_ID) {
+                    $field('fa-solid fa-id-card', 'Employee ID', $displayId, true);
+                    $field('fa-solid fa-building', 'Department', trim((string) ($student['department'] ?? '')) ?: '—');
+                    $field('fa-solid fa-user-tie', 'Standing', !empty($student['graduated_at'])
+                        ? 'Left school · ' . date('M Y', strtotime((string) $student['graduated_at']))
+                        : 'Active');
+                } else {
+                    $field('fa-solid fa-id-card', 'Student ID', $displayId, true);
+                    $field('fa-solid fa-graduation-cap', 'Course', $courseText !== '' ? $courseText : '—');
+                    $field('fa-solid fa-layer-group', 'Year Level', $yrText);
+                    $field('fa-solid fa-user-graduate', 'Standing', $standing);
+                }
                 ?>
             </div>
         </section>

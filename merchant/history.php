@@ -55,7 +55,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -161,7 +161,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                                 <td>
                                     <?php echo gjc_e($t['notes'] ?: ucwords(str_replace('_', ' ', $t['transaction_type']))); ?>
                                     <?php if (isset($saleFees[$t['reference_no']])): $sf = $saleFees[$t['reference_no']]; ?>
-                                    <small class="d-block text-muted">Student fee <?= gjc_money($sf['fee_amount']) ?> &middot; <?= gjc_e(gjc_maintenance_fee_state_label($sf['status'])) ?> &middot; not deducted from your sale</small>
+                                    <small class="d-block text-muted">Maintenance fee <?= gjc_money($sf['fee_amount']) ?><?= $sf['status'] === 'voided' ? ' &middot; Voided' : '' ?></small>
                                     <?php endif; ?>
                                 </td>
                                 <td class="merchant-amount">
@@ -185,7 +185,7 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                                             href="<?= MERCHANT_URL ?>/view_transaction.php?token=<?= urlencode(gjc_make_view_token((int) $t['id'], 'merchant_txn')) ?>">
                                             <i class="fa-regular fa-eye"></i> View
                                         </a>
-                                        <?php if ($t['status'] === 'completed' && $t['transaction_type'] === 'payment'): ?>
+                                        <?php if ($t['status'] === 'completed' && $t['transaction_type'] === 'payment' && !gjc_is_merchant_staff()): ?>
                                         <button type="button" class="merchant-row-btn merchant-row-btn--return"
                                             onclick="openReturnModal(<?= (int) $t['id'] ?>, '<?= gjc_e($t['reference_no']) ?>')">
                                             <i class="fa-solid fa-rotate-left"></i> Issue Return
@@ -205,19 +205,26 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
 
     </div>
 
-    <div class="modal fade" id="returnModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content custom-modal">
+            <div class="modal-content gp-modal">
                 <div class="modal-header">
-                    <h5 class="modal-title">Issue Return</h5>
+                    <div>
+                        <h5 class="modal-title" id="returnTitle"><i class="fa-solid fa-rotate-left is-warning"></i>Issue Return</h5>
+                        <p class="gp-modal-sub">Transaction <strong id="returnTxnRef" style="color:var(--gp-ink)">--</strong></p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-3">Reversing transaction <strong id="returnTxnRef">--</strong>. This refunds the customer's wallet and debits yours &mdash; the original sale record is kept, only its status changes.</p>
+                    <p style="font-size:13px;margin-bottom:6px">Issuing a return:</p>
+                    <ul style="font-size:13px;color:var(--gp-muted);padding-left:18px;margin-bottom:18px">
+                        <li>refunds the customer's wallet and debits yours</li>
+                        <li>keeps the original sale record; only its status changes</li>
+                    </ul>
                     <form id="returnForm">
                         <input type="hidden" id="returnTxnId" value="">
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Reason</label>
+                            <label class="form-label">Reason</label>
                             <select class="form-select" id="returnReason" required>
                                 <?php foreach ($returnReasons as $reason): ?>
                                 <option value="<?= gjc_e($reason) ?>"><?= gjc_e($reason) ?></option>
@@ -225,15 +232,15 @@ $returnReasons = ['Defective item', 'Wrong item given', 'Customer cancelled', 'O
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Notes (optional)</label>
+                            <label class="form-label">Notes (optional)</label>
                             <textarea class="form-control" id="returnNotes" rows="3" placeholder="Any extra detail for the audit log..."></textarea>
                         </div>
                         <div id="returnMsg"></div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger" id="confirmReturnBtn">Confirm Return</button>
+                    <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="maintenance-btn danger" id="confirmReturnBtn">Confirm Return</button>
                 </div>
             </div>
         </div>

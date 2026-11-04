@@ -105,7 +105,7 @@ function gjc_wallet_user_stats(PDO $db): array
              FROM users u
              LEFT JOIN student_wallets sw ON sw.user_id = u.userID
              LEFT JOIN transactions t ON t.student_wallet_id = sw.id
-             WHERE u.roleID = 1
+             WHERE u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
              GROUP BY u.userID
          ) sub"
     );
@@ -181,13 +181,13 @@ function gjc_wallet_users_list(PDO $db): array
     $sql = "
         SELECT
             COALESCE(CONCAT(u.first_name, ' ', u.last_name), '(unknown)') AS name,
-            'Student' AS type,
+            CASE WHEN u.roleID = " . GJC_FACULTY_ROLE_ID . " THEN 'Faculty' ELSE 'Student' END AS type, -- same student_wallets pool
             COALESCE(sw.balance, 0) AS balance,
             (SELECT MAX(t.created_at) FROM transactions t
               WHERE t.student_wallet_id = sw.id) AS last_txn
         FROM users u
         LEFT JOIN student_wallets sw ON sw.user_id = u.userID
-        WHERE u.roleID = 1
+        WHERE u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
         UNION ALL
         SELECT
             COALESCE(CONCAT(u.first_name, ' ', u.last_name), '(unknown)') AS name,
@@ -200,7 +200,7 @@ function gjc_wallet_users_list(PDO $db): array
         UNION ALL
         SELECT
             COALESCE(CONCAT(u.first_name, ' ', u.last_name), '(unknown)') AS name,
-            'Parent' AS type,
+            'Guardian' AS type,
             COALESCE(pw.balance, 0) AS balance,
             (SELECT MAX(t.created_at) FROM transactions t
               WHERE t.parent_wallet_id = pw.id) AS last_txn

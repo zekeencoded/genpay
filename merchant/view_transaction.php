@@ -38,7 +38,7 @@ if ($txnId !== null && $walletId > 0 && gjc_table_exists($db, 'transactions')) {
         } elseif ((int) ($row['parent_wallet_id'] ?? 0) > 0) {
             // parent_wallets keys on parents.id, not users.userID — hop through
             // parents to reach the account the name lives on.
-            $customerLabel = 'Paid By (Parent)';
+            $customerLabel = 'Paid By (Guardian)';
             $pUserId = 0;
             if (gjc_table_exists($db, 'parent_wallets') && gjc_table_exists($db, 'parents')) {
                 $pStmt = $db->prepare(
@@ -50,7 +50,7 @@ if ($txnId !== null && $walletId > 0 && gjc_table_exists($db, 'transactions')) {
                 $pStmt->execute([(int) $row['parent_wallet_id']]);
                 $pUserId = (int) $pStmt->fetchColumn();
             }
-            $customer = $pUserId ? gjc_user_label($db, $pUserId) : 'Parent Wallet #' . (int) $row['parent_wallet_id'];
+            $customer = $pUserId ? gjc_user_label($db, $pUserId) : 'Guardian Wallet #' . (int) $row['parent_wallet_id'];
         } elseif ($type === 'merchant_settle' || $type === 'encashment') {
             $customerLabel = 'Released By';
             $customer = (int) ($row['initiated_by'] ?? 0) > 0

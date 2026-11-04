@@ -282,6 +282,10 @@ function maintenance_validate_student_rows(PDO $db, array $rows): array
         }
 
         // ── Duplicate detection: in-file first, then the database ──────────
+        if ($status === 'ready' && gjc_id_reserved_for_guardian($studentId)) {
+            $status  = 'error';
+            $message = 'IDs starting with GRD are reserved for guardians.';
+        }
         if ($status === 'ready') {
             if (isset($seenStudentIds[$studentId])) {
                 $status  = 'duplicate';
@@ -723,9 +727,9 @@ function maintenance_send_guardian_credentials(string $email, string $name, stri
 
     $body = '
             <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:var(--gjc-soft-2);padding:28px;border-radius:14px">
-                <h2 style="color:var(--gp-green-850);margin-top:0">Your GenPay Parent Account</h2>
+                <h2 style="color:var(--gp-green-850);margin-top:0">Your GenPay Guardian Account</h2>
                 <p style="color:var(--gjc-slate);line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
-                <p style="color:var(--gjc-slate);line-height:1.7">A GenPay parent account has been created so you can monitor and manage your child\'s wallet.</p>
+                <p style="color:var(--gjc-slate);line-height:1.7">A GenPay guardian account has been created so you can monitor and manage your child\'s wallet.</p>
                 <div style="background:#052e16;border-radius:10px;padding:16px;margin:16px 0;color:var(--gp-success-bg)">
                     <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#86efb2;text-transform:uppercase">Login Credentials</p>
                     <p style="margin:0"><strong>Email:</strong> ' . $safeEmail . '</p>
@@ -735,9 +739,9 @@ function maintenance_send_guardian_credentials(string $email, string $name, stri
                 <p style="color:var(--gjc-slate)">Login page: <a href="' . $loginUrl . '" style="color:#147b3a">' . $loginUrl . '</a></p>
                 <p style="font-size:12px;color:var(--gp-muted)">GenPay Team</p>
             </div>';
-    $altBody = "Dear {$name},\n\nA GenPay parent account has been created so you can monitor and manage your child's wallet.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
+    $altBody = "Dear {$name},\n\nA GenPay guardian account has been created so you can monitor and manage your child's wallet.\n\nEmail: {$email}\nTemporary Password: {$tempPassword}\n\nLog in at {$loginUrl}. You must change your password on first login.\n\nGenPay Team";
 
-    return gjc_queue_email($email, $name !== '' ? $name : 'Guardian', 'GenPay - Parent Account Credentials', $body, $altBody);
+    return gjc_queue_email($email, $name !== '' ? $name : 'Guardian', 'GenPay - Guardian Account Credentials', $body, $altBody);
 }
 
 function maintenance_ensure_restricted_products_schema(PDO $db): void
@@ -1204,11 +1208,11 @@ $vacantStalls = $db->query(
     <title>Maintenance | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=19">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=24">
 </head>
 <body class="gp-theme">
 <div class="admin-layout">
@@ -1333,19 +1337,19 @@ $vacantStalls = $db->query(
         <?php if ($previewRows && $previewReport): $rc = $previewReport['counts']; ?>
         <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-xl">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0" style="padding:20px 24px 6px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="font-size:17px">
-                                <i class="fa-solid fa-file-csv me-2" style="color:var(--gp-success)"></i>Import Preview
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-file-csv"></i>Import Preview
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">
+                            <p class="gp-modal-sub">
                                 <?= maintenance_e($previewFileName ?: 'Uploaded CSV') ?> — <?= (int) $rc['total'] ?> parsed row<?= $rc['total'] !== 1 ? 's' : '' ?>, reviewed before anything is written.
                             </p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:12px 24px 8px">
+                    <div class="modal-body">
                         <div class="import-summary-grid">
                             <div class="import-summary-card"><span>Total</span><strong><?= (int) $rc['total'] ?></strong></div>
                             <div class="import-summary-card"><span>Ready</span><strong><?= (int) $rc['ready'] ?></strong></div>
@@ -1424,7 +1428,7 @@ $vacantStalls = $db->query(
                         <p class="maintenance-help mb-0">Showing the first 100 of <?= count($previewReport['rows']) ?> rows.</p>
                         <?php endif; ?>
                     </div>
-                    <div class="modal-footer border-0" style="padding:8px 24px 22px">
+                    <div class="modal-footer">
                         <form method="POST" style="margin:0">
                             <input type="hidden" name="student_import_action" value="clear_preview">
                             <button class="maintenance-btn muted" type="submit">Clear Preview</button>
@@ -1456,19 +1460,19 @@ $vacantStalls = $db->query(
         <?php if ($feeWaiverPreviewRows && $feeWaiverPreviewReport): $fwrc = $feeWaiverPreviewReport['counts']; ?>
         <div class="modal fade" id="feeWaiverPreviewModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-xl">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0" style="padding:20px 24px 6px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="font-size:17px">
-                                <i class="fa-solid fa-file-csv me-2" style="color:var(--gp-success)"></i>Fee Waiver Import Preview
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-file-csv"></i>Fee Waiver Import Preview
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">
+                            <p class="gp-modal-sub">
                                 <?= maintenance_e($feeWaiverPreviewFileName ?: 'Uploaded CSV') ?> — <?= (int) $fwrc['total'] ?> parsed row<?= $fwrc['total'] !== 1 ? 's' : '' ?>, reviewed before anything is credited.
                             </p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:12px 24px 8px">
+                    <div class="modal-body">
                         <div class="import-summary-grid">
                             <div class="import-summary-card"><span>Total</span><strong><?= (int) $fwrc['total'] ?></strong></div>
                             <div class="import-summary-card"><span>Ready</span><strong><?= (int) $fwrc['ready'] ?></strong></div>
@@ -1527,7 +1531,7 @@ $vacantStalls = $db->query(
                         <p class="maintenance-help mb-0">Showing the first 100 of <?= count($feeWaiverPreviewReport['rows']) ?> rows.</p>
                         <?php endif; ?>
                     </div>
-                    <div class="modal-footer border-0" style="padding:8px 24px 22px">
+                    <div class="modal-footer">
                         <form method="POST" style="margin:0">
                             <input type="hidden" name="fee_waiver_import_action" value="clear_preview">
                             <button class="maintenance-btn muted" type="submit">Clear Preview</button>
@@ -1558,17 +1562,17 @@ $vacantStalls = $db->query(
         <!-- Add Merchant Modal -->
         <div class="modal fade" id="addMerchantModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0" style="padding:20px 24px 0">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="font-size:17px">
-                                <i class="fa-solid fa-store me-2" style="color:var(--gp-success)"></i>Add Merchant
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-store"></i>Add Merchant
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:3px 0 0">Same details as the public application, but approved instantly — the account is created and ready to use right away.</p>
+                            <p class="gp-modal-sub">Same details as the public application, but approved instantly — the account is created and ready to use right away.</p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:16px 24px 24px">
+                    <div class="modal-body">
                         <?php if ($merchantError !== ''): ?>
                         <div class="maintenance-alert error mb-3">
                             <?= maintenance_e($merchantError) ?>
@@ -1578,7 +1582,7 @@ $vacantStalls = $db->query(
                         <form class="merchant-bypass-form" method="POST" autocomplete="off">
                             <input type="hidden" name="merchant_bypass_action" value="create">
                             <div class="mbf-section">
-                                <div class="mbf-section-eyebrow"><i class="fa-solid fa-user"></i> Proprietor</div>
+                                <div class="mbf-section-eyebrow">Proprietor</div>
                                 <div class="maintenance-form-grid">
                                     <div>
                                         <label for="merchant_first_name">First Name *</label>
@@ -1608,7 +1612,7 @@ $vacantStalls = $db->query(
                             </div>
 
                             <div class="mbf-section">
-                                <div class="mbf-section-eyebrow"><i class="fa-solid fa-store"></i> Business &amp; contact</div>
+                                <div class="mbf-section-eyebrow">Business &amp; contact</div>
                                 <div class="maintenance-form-grid">
                                     <div class="full">
                                         <label for="merchant_business_name">Business Name *</label>
@@ -1635,7 +1639,7 @@ $vacantStalls = $db->query(
                             </div>
 
                             <div class="mbf-section">
-                                <div class="mbf-section-eyebrow"><i class="fa-solid fa-key"></i> Login credentials</div>
+                                <div class="mbf-section-eyebrow">Login credentials</div>
                                 <div class="mbf-credentials-note">
                                     <i class="fa-solid fa-circle-info"></i>
                                     <span>The merchant signs in with the email above. A temporary password is generated automatically and shown here once the account is created — share it with the merchant, who will be prompted to set a new password on first login.</span>
@@ -1643,7 +1647,7 @@ $vacantStalls = $db->query(
                             </div>
 
                             <div class="mbf-section">
-                                <div class="mbf-section-eyebrow"><i class="fa-solid fa-note-sticky"></i> Internal notes</div>
+                                <div class="mbf-section-eyebrow">Internal notes</div>
                                 <div class="maintenance-form-grid">
                                     <div class="full">
                                         <label for="merchant_notes">Notes</label>
@@ -1652,8 +1656,8 @@ $vacantStalls = $db->query(
                                 </div>
                             </div>
                             <div class="maintenance-btn-row mt-2">
-                                <button class="maintenance-btn primary" type="submit">Create Merchant</button>
                                 <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                                <button class="maintenance-btn primary" type="submit">Create Merchant</button>
                             </div>
                         </form>
                     </div>
@@ -1754,17 +1758,17 @@ $vacantStalls = $db->query(
         <!-- Flag Product Modal -->
         <div class="modal fade" id="flagProductModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0 pb-0" style="padding:20px 24px 10px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="color:var(--gp-red)">
-                                <i class="fa-solid fa-ban me-2"></i>Flag Restricted Product
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-ban is-danger"></i>Flag Restricted Product
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:4px 0 0">Flagged products will be blocked from being sold on the platform.</p>
+                            <p class="gp-modal-sub">Flagged products will be blocked from being sold on the platform.</p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:16px 24px 24px">
+                    <div class="modal-body">
                         <div class="rp-modal-field">
                             <label class="rp-modal-label">Product Name *</label>
                             <input type="text" id="rp-name" class="rp-modal-input" placeholder="e.g. Energy Drink">
@@ -1796,11 +1800,12 @@ $vacantStalls = $db->query(
                                    placeholder="e.g. High sugar content — DepEd health guidelines">
                         </div>
                         <div id="rp-modal-alert"></div>
-                        <button type="button" id="rp-flag-btn" class="rp-add-btn w-100 justify-content-center mt-2"
-                                style="border-radius:10px;padding:11px"
-                                onclick="rpFlagProduct()">
-                            <i class="fa-solid fa-ban me-1"></i> Flag This Product
-                        </button>
+                        <div class="maintenance-btn-row mt-3">
+                            <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" id="rp-flag-btn" class="maintenance-btn danger" onclick="rpFlagProduct()">
+                                <i class="fa-solid fa-ban"></i> Flag This Product
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1939,29 +1944,31 @@ $vacantStalls = $db->query(
         <!-- Fee Waiver: Set Amount Modal -->
         <div class="modal fade" id="fwcAmountModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0 pb-0" style="padding:20px 24px 10px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="color:var(--gp-success)">
-                                <i class="fa-solid fa-hand-holding-dollar me-2"></i>Fee Waiver Credit Amount
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>Fee Waiver Credit Amount
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:4px 0 0">
+                            <p class="gp-modal-sub">
                                 Enter the approved waiver amount. The credit moves to Pending until the signed waiver is uploaded.
                             </p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:16px 24px 24px">
+                    <div class="modal-body">
                         <input type="hidden" id="fwc-amount-student-id">
                         <div class="rp-modal-field">
                             <label class="rp-modal-label">Amount (₱) *</label>
                             <input type="number" id="fwc-amount-input" class="rp-modal-input" min="0.01" max="<?= gjc_setting($db, 'fee_waiver_max_amount') ?>" step="0.01" placeholder="e.g. 500.00">
                         </div>
                         <div id="fwc-amount-alert"></div>
-                        <button type="button" id="fwc-amount-btn" class="rp-add-btn w-100 justify-content-center mt-2"
-                                style="border-radius:10px;padding:11px" onclick="fwcSubmitAmount()">
-                            <i class="fa-solid fa-check me-1"></i> Save Amount
-                        </button>
+                        <div class="maintenance-btn-row mt-3">
+                            <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" id="fwc-amount-btn" class="maintenance-btn primary" onclick="fwcSubmitAmount()">
+                                <i class="fa-solid fa-check"></i> Save Amount
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1970,17 +1977,17 @@ $vacantStalls = $db->query(
         <!-- Fee Waiver: Upload Signed Waiver Modal -->
         <div class="modal fade" id="fwcUploadModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0 pb-0" style="padding:20px 24px 10px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="color:var(--gp-success)">
-                                <i class="fa-solid fa-upload me-2"></i>Upload Signed Waiver
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-upload"></i>Upload Signed Waiver
                             </h5>
-                            <p style="font-size:12px;color:var(--gp-muted);margin:4px 0 0">JPG, PNG, or PDF, up to 5&nbsp;MB.</p>
+                            <p class="gp-modal-sub">JPG, PNG, or PDF, up to 5&nbsp;MB.</p>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:16px 24px 24px">
+                    <div class="modal-body">
                         <input type="hidden" id="fwc-upload-student-id">
                         <p style="margin:0 0 14px">
                             <a id="fwc-upload-blank-link" href="#" target="_blank"
@@ -1993,10 +2000,12 @@ $vacantStalls = $db->query(
                             <input type="file" id="fwc-upload-input" class="rp-modal-input" accept=".jpg,.jpeg,.png,.pdf">
                         </div>
                         <div id="fwc-upload-alert"></div>
-                        <button type="button" id="fwc-upload-btn" class="rp-add-btn w-100 justify-content-center mt-2"
-                                style="border-radius:10px;padding:11px" onclick="fwcSubmitUpload()">
-                            <i class="fa-solid fa-upload me-1"></i> Upload &amp; Post
-                        </button>
+                        <div class="maintenance-btn-row mt-3">
+                            <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" id="fwc-upload-btn" class="maintenance-btn primary" onclick="fwcSubmitUpload()">
+                                <i class="fa-solid fa-upload"></i> Upload &amp; Post
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2005,16 +2014,16 @@ $vacantStalls = $db->query(
         <!-- Fee Waiver: Detail / Log History Modal -->
         <div class="modal fade" id="fwcDetailModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content" style="border-radius:16px;border:none">
-                    <div class="modal-header border-0" style="padding:20px 24px 6px">
+                <div class="modal-content gp-modal">
+                    <div class="modal-header">
                         <div>
-                            <h5 class="modal-title fw-bold" style="font-size:17px">
-                                <i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--gp-success)"></i>Fee Waiver Credit — Detail
+                            <h5 class="modal-title">
+                                <i class="fa-solid fa-clock-rotate-left"></i>Fee Waiver Credit — Detail
                             </h5>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" style="padding:12px 24px 8px">
+                    <div class="modal-body">
                         <div class="import-summary-grid" id="fwc-detail-summary"></div>
                         <div class="table-responsive mt-3" style="max-height:40vh;overflow:auto">
                             <table class="table table-sm align-middle">
@@ -2025,7 +2034,7 @@ $vacantStalls = $db->query(
                             </table>
                         </div>
                     </div>
-                    <div class="modal-footer border-0" style="padding:8px 24px 22px">
+                    <div class="modal-footer">
                         <a id="fwc-detail-waiver-link" href="#" onclick="return gjcViewWaiver(this.href);" class="maintenance-btn primary" style="display:none">
                             <i class="fa-solid fa-file-lines me-1"></i>View Signed Waiver
                         </a>
@@ -2037,12 +2046,12 @@ $vacantStalls = $db->query(
         <!-- Fee Waiver: Signed Waiver Viewer (inline, no new tab/window) -->
         <div class="modal fade" id="gjcWaiverModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content" style="border-radius:16px;border:none;overflow:hidden">
-                    <div class="modal-header border-0" style="padding:16px 20px">
-                        <h5 class="modal-title fw-bold" style="font-size:15px">
-                            <i class="fa-solid fa-file-lines me-2"></i>Signed Waiver
+                <div class="modal-content gp-modal" style="overflow:hidden">
+                    <div class="modal-header" style="padding-bottom:16px">
+                        <h5 class="modal-title">
+                            <i class="fa-solid fa-file-lines"></i>Signed Waiver
                         </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" style="padding:0">
                         <iframe id="gjcWaiverFrame" src="" style="width:100%;height:70vh;border:0;display:block"></iframe>
@@ -2163,7 +2172,7 @@ async function rpFlagProduct() {
     const btn       = document.getElementById('rp-flag-btn');
 
     if (!name || !reason) {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Product name and reason are required.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Product name and reason are required.</div>';
         return;
     }
 
@@ -2182,16 +2191,16 @@ async function rpFlagProduct() {
         const res  = await fetch(RP_API, { method: 'POST', body: f });
         const data = await res.json();
         if (data.success) {
-            alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-success-bg);color:#27764b"><i class="fa-solid fa-circle-check me-1"></i>Product flagged successfully.</div>';
+            alertEl.innerHTML = '<div class="maintenance-alert success"><i class="fa-solid fa-circle-check me-1"></i>Product flagged successfully.</div>';
             document.getElementById('rp-name').value   = '';
             document.getElementById('rp-reason').value = '';
             rpInjectCard({ product_name: name, category, match_type: matchType, reason, is_active: 1 });
             rpUpdateCount(1);
         } else {
-            alertEl.innerHTML = `<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">${data.message || 'Failed.'}</div>`;
+            alertEl.innerHTML = `<div class="maintenance-alert error">${data.message || 'Failed.'}</div>`;
         }
     } catch {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Network error.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Network error.</div>';
     }
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-ban me-1"></i> Flag This Product';
@@ -2240,7 +2249,7 @@ async function fwcSubmitAmount() {
     const alertEl = document.getElementById('fwc-amount-alert');
     const btn = document.getElementById('fwc-amount-btn');
     if (!amount || amount <= 0) {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Enter a valid amount.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Enter a valid amount.</div>';
         return;
     }
     btn.disabled = true;
@@ -2254,11 +2263,11 @@ async function fwcSubmitAmount() {
         if (data.success) {
             location.reload();
         } else {
-            alertEl.innerHTML = `<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">${data.message || 'Failed.'}</div>`;
+            alertEl.innerHTML = `<div class="maintenance-alert error">${data.message || 'Failed.'}</div>`;
             btn.disabled = false;
         }
     } catch {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Network error.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Network error.</div>';
         btn.disabled = false;
     }
 }
@@ -2278,7 +2287,7 @@ async function fwcSubmitUpload() {
     const alertEl = document.getElementById('fwc-upload-alert');
     const btn = document.getElementById('fwc-upload-btn');
     if (!fileInput.files.length) {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Choose a file to upload.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Choose a file to upload.</div>';
         return;
     }
     btn.disabled = true;
@@ -2292,11 +2301,11 @@ async function fwcSubmitUpload() {
         if (data.success) {
             location.reload();
         } else {
-            alertEl.innerHTML = `<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">${data.message || 'Failed.'}</div>`;
+            alertEl.innerHTML = `<div class="maintenance-alert error">${data.message || 'Failed.'}</div>`;
             btn.disabled = false;
         }
     } catch {
-        alertEl.innerHTML = '<div class="rp-modal-alert" style="background:var(--gp-danger-bg);color:var(--gp-danger)">Network error.</div>';
+        alertEl.innerHTML = '<div class="maintenance-alert error">Network error.</div>';
         btn.disabled = false;
     }
 }

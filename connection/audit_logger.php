@@ -368,7 +368,7 @@ function gjc_audit_role(string $role): string
 
     return match ($role) {
         'gjc admin', 'admin', 'finance', 'super_admin', 'cashier' => 'Finance',
-        'student' => 'Student',
+        'student', 'faculty' => 'Student', // user_role is an ENUM; sub_role keeps 'faculty'
         'merchant', 'merchant_admin' => 'Merchant',
         'vendor/staff', 'vendor', 'staff', 'merchant_staff' => 'Vendor/Staff',
         'parent' => 'Parent',
@@ -401,8 +401,8 @@ function gjc_audit_role_from_user(PDO $pdo, int $userId): string
         }
 
         return match ((int) ($user['roleID'] ?? 0)) {
-            1 => 'Student',
-            2, 5 => 'Merchant',
+            1, 9 => 'Student', // 9 = faculty (literal: this file can load without app/users.php)
+            2 => 'Merchant',
             3, 4, 8 => 'Finance',
             6 => 'Vendor/Staff',
             7 => 'Parent',

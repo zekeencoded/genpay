@@ -22,7 +22,7 @@ $currentPage = 'economy';
     <title>System Economy | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/circulation_widget.css?v=9">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
@@ -78,7 +78,7 @@ $currentPage = 'economy';
                 ? jQuery('#walletUsersTable').DataTable() : null;
 
             // Filter the table by the pool card that opened the modal:
-            // "" = all, "Student", "Merchant", or "Parent" (Type is column index 1).
+            // "" = all, "Student|Faculty", "Merchant", or "Guardian" (Type is column index 1; regex search).
             modal.addEventListener('show.bs.modal', function (ev) {
                 const card = ev.relatedTarget;
                 const filter = (card && card.dataset.walletFilter) || '';
@@ -86,7 +86,7 @@ $currentPage = 'economy';
                 const label = document.getElementById('walletUsersModalText');
                 if (label) label.textContent = title;
                 const t = dt();
-                if (t) t.column(1).search(filter).draw();
+                if (t) t.column(1).search(filter, true, false).draw();
             });
 
             // A DataTable initialised inside a hidden modal mis-measures column widths.

@@ -203,11 +203,51 @@ function gjc_sub_role_map(): array
         2 => 'merchant_admin',
         3 => 'super_admin',
         4 => 'super_admin',
-        5 => 'merchant_admin',
         6 => 'merchant_staff',
         7 => 'parent',
         8 => 'finance_staff',
+        9 => 'faculty',
     ];
+}
+
+/** Faculty (teachers/staff, roleID 9) share the student portal but skip enrollment, guardians and fee waivers. */
+const GJC_FACULTY_ROLE_ID = 9;
+
+function gjc_is_faculty(): bool
+{
+    return gjc_sub_role() === 'faculty';
+}
+
+/**
+ * Faculty role row, plus student_info.department. Faculty keep their Employee ID in
+ * student_info.studentID so every school-ID lookup (transfers, top-ups) finds them.
+ * DDL: never call inside a transaction.
+ */
+function gjc_ensure_faculty_schema(PDO $db): void
+{
+    $db->exec("INSERT IGNORE INTO role (roleID, role_name) VALUES (" . GJC_FACULTY_ROLE_ID . ", 'faculty')");
+    if (gjc_table_exists($db, 'student_info') && !in_array('department', gjc_table_columns($db, 'student_info'), true)) {
+        $db->exec("ALTER TABLE student_info ADD COLUMN department VARCHAR(100) NULL DEFAULT NULL");
+        gjc_table_columns($db, 'student_info', true);
+    }
+}
+
+/** Display ID: {PREFIX}{year the account was created}-{number}, e.g. FIN2026-0003, MER2026-0012. */
+function gjc_account_id(string $prefix, int $number, ?string $createdAt): string
+{
+    $year = ($createdAt !== null && $createdAt !== '') ? date('Y', strtotime($createdAt)) : date('Y');
+    return sprintf('%s%s-%04d', $prefix, $year, $number);
+}
+
+/** student_info.courseID is required; faculty point at this placeholder course. */
+function gjc_faculty_course_id(PDO $db): int
+{
+    $id = (int) $db->query("SELECT courseID FROM course WHERE course_code = 'FACULTY' LIMIT 1")->fetchColumn();
+    if ($id === 0) {
+        $db->exec("INSERT INTO course (course_code, course_name) VALUES ('FACULTY', 'Faculty / Staff')");
+        $id = (int) $db->lastInsertId();
+    }
+    return $id;
 }
 
 /** Admin pages finance staff (roleID 8) may open; everything else is super-admin only. */
@@ -262,7 +302,7 @@ function gjc_establish_login_session(array $user): void
     // roleID is the single source of truth; sub_role is derived (3NF).
     $_SESSION['sub_role'] = gjc_sub_role_for_role_id($roleId);
     $_SESSION['merchant_owner_id'] = (int) ($user['merchant_owner_id'] ?? 0);
-    $_SESSION['role'] = [1 => 'student', 2 => 'merchant', 3 => 'finance', 4 => 'finance', 5 => 'merchant', 6 => 'merchant', 7 => 'parent', 8 => 'finance'][$roleId] ?? 'user';
+    $_SESSION['role'] = [1 => 'student', 2 => 'merchant', 3 => 'finance', 4 => 'finance', 6 => 'merchant', 7 => 'parent', 8 => 'finance', 9 => 'student'][$roleId] ?? 'user';
 }
 
 function gjc_issue_remember_token(PDO $db, int $userId, int $days = 30): void

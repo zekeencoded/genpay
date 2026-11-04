@@ -587,7 +587,7 @@ try {
                 'student_name' => $studentName !== ''
                     ? $studentName
                     // The buyer is a parent exactly when a parent wallet paid.
-                    : (!empty($row['parent_wallet_id']) ? 'Parent' : 'Student'),
+                    : (!empty($row['parent_wallet_id']) ? 'Guardian' : 'Student'),
             ]);
             exit;
         }
@@ -624,7 +624,7 @@ try {
                 'paid_at' => $row['created_at'],
                 'student_name' => $studentName !== ''
                     ? $studentName
-                    : (!empty($row['parent_wallet_id']) ? 'Parent' : 'Student'),
+                    : (!empty($row['parent_wallet_id']) ? 'Guardian' : 'Student'),
             ]);
             exit;
         }

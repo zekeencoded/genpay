@@ -21,6 +21,13 @@ $error = '';
 // Accountancy Office hours: Mon–Fri, 8:00 AM – 5:00 PM (Asia/Manila, set in config.php).
 $officeOpen = (int) date('N') <= 5 && date('H:i') >= '08:00' && date('H:i') < '17:00';
 $officeHoursLabel = 'Monday to Friday, 8:00 AM – 5:00 PM';
+if ($officeOpen) {
+    $officeStatus = 'Office open until 5:00 PM';
+} elseif ((int) date('N') <= 5 && date('H:i') < '08:00') {
+    $officeStatus = 'Office opens today at 8:00 AM';
+} else {
+    $officeStatus = 'Office opens ' . (in_array((int) date('N'), [5, 6, 7], true) ? 'Monday' : 'tomorrow') . ' at 8:00 AM';
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['cancel_reference'])) {
     if (!gjc_csrf_verify()) { http_response_code(403); exit('Security check failed. Please refresh the page and try again.'); }
@@ -87,7 +94,7 @@ $currentPage = 'encash';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=68">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -118,8 +125,9 @@ $currentPage = 'encash';
                     <p class="sd-gc-rate"><?php echo gjc_e($merchantName); ?> &middot; Digital earnings wallet</p>
                 </div>
 
-                <div class="sd-gc-badge encash-hero-badge">
-                    <?php echo $availableBalance > 0 ? 'Ready for Request' : 'No Balance to Encash'; ?>
+                <div class="encash-office <?php echo $officeOpen ? 'is-open' : 'is-closed'; ?>" role="status">
+                    <i class="fa-solid fa-circle" aria-hidden="true"></i>
+                    <span><?php echo gjc_e($officeStatus); ?></span>
                 </div>
             </section>
 
@@ -142,31 +150,30 @@ $currentPage = 'encash';
                     <?php endif; ?>
 
                     <?php if (!$officeOpen): ?>
-                    <div class="alert alert-warning">The Accountancy Office is closed. You can submit requests <?php echo gjc_e($officeHoursLabel); ?>.</div>
+                    <p class="encash-closed-note"><i class="fa-regular fa-clock" aria-hidden="true"></i> Requests open <?php echo gjc_e($officeHoursLabel); ?>.</p>
                     <?php endif; ?>
 
                     <form method="POST" class="encash-form" data-busy="Submitting…">
 
                         <fieldset <?php echo $officeOpen ? '' : 'disabled'; ?>>
                         <div class="encash-field">
-                            <label>Encashment Amount (&#8369;)</label>
+                            <label for="encashAmount">Amount to withdraw</label>
 
                             <div class="encash-money-input">
-                                <span>&#8369;</span>
-                                <input type="number" name="amount" placeholder="0.00" min="1"
-                                    max="<?php echo $availableBalance; ?>" step="0.01" required>
+                                <span aria-hidden="true">&#8369;</span>
+                                <input type="number" id="encashAmount" name="amount" placeholder="0.00" min="1"
+                                    max="<?php echo $availableBalance; ?>" step="0.01" inputmode="decimal" required>
+                                <button type="button" class="encash-withdraw-all-btn"
+                                    onclick="document.getElementById('encashAmount').value='<?php echo $availableBalance; ?>'">
+                                    Use full balance
+                                </button>
                             </div>
 
-                            <small>Maximum available amount: <?php echo gjc_money($availableBalance); ?></small>
+                            <small>Up to <?php echo gjc_money($availableBalance); ?></small>
                         </div>
 
-                        <button type="button" class="encash-withdraw-all-btn"
-                            onclick="document.querySelector('input[name=amount]').value='<?php echo $availableBalance; ?>'">
-                            Withdraw All (<?php echo gjc_money($availableBalance); ?>)
-                        </button>
-
                         <button type="submit" class="encash-submit-btn">
-                            Submit Request
+                            Request encashment
                         </button>
                         </fieldset>
 
@@ -176,32 +183,25 @@ $currentPage = 'encash';
                 <div class="merchant-premium-panel encash-info-panel">
                     <div class="merchant-panel-header">
                         <div>
-                            <h3>Request Guidelines</h3>
-                            <p>Keep these reminders before submitting an encashment.</p>
+                            <h3>How release works</h3>
+                            <p>Cash is released in person at the Accountancy Office.</p>
                         </div>
                     </div>
 
-                    <div class="encash-guidelines">
-                        <div>
-                            <strong>1</strong>
-                            <span>Submit your request with the correct amount.</span>
-                        </div>
-
-                        <div>
-                            <strong>2</strong>
-                            <span>Bring your ID to the Accountancy Office.</span>
-                        </div>
-
-                        <div>
-                            <strong>3</strong>
-                            <span>Cashier verifies your request and releases cash.</span>
-                        </div>
-                    </div>
-
-                    <div class="encash-note">
-                        After submitting, your request will be reviewed by the cashier or finance staff before
-                        disbursement.
-                    </div>
+                    <ol class="encash-guidelines">
+                        <li>
+                            <strong>Request the amount</strong>
+                            <span>It stays pending until finance reviews it. You can cancel while pending.</span>
+                        </li>
+                        <li>
+                            <strong>Bring your ID</strong>
+                            <span>Go to the Accountancy Office during office hours.</span>
+                        </li>
+                        <li>
+                            <strong>Receive cash</strong>
+                            <span>The cashier verifies the request and releases the money.</span>
+                        </li>
+                    </ol>
                 </div>
 
             </section>

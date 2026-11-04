@@ -26,7 +26,7 @@ try {
     if ($action === 'lookup') {
         $studentIdInput = trim((string) ($_POST['student_id'] ?? ''));
         if (!$studentIdInput) {
-            echo json_encode(['success' => false, 'message' => 'Student ID required.']);
+            echo json_encode(['success' => false, 'message' => 'Enter a Student or Employee ID.']);
             exit;
         }
 
@@ -34,14 +34,14 @@ try {
             "SELECT u.userID, u.first_name, u.last_name
                FROM users u
                JOIN student_info si ON si.userID = u.userID
-              WHERE si.studentID = ? AND u.roleID = 1
+              WHERE si.studentID = ? AND u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
               LIMIT 1"
         );
         $stmt->execute([$studentIdInput]);
         $found = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$found) {
-            echo json_encode(['success' => false, 'message' => 'Student not found.']);
+            echo json_encode(['success' => false, 'message' => 'No student or faculty account has that ID.']);
             exit;
         }
 
@@ -71,7 +71,7 @@ try {
         }
 
         if ($amount < $MIN_TRANSFER) {
-            echo json_encode(['success' => false, 'message' => 'Minimum transfer amount is ' . gjc_money($MIN_TRANSFER) . '.']);
+            echo json_encode(['success' => false, 'message' => 'Minimum transfer amount is ' . gjc_money_plain($MIN_TRANSFER) . '.']);
             exit;
         }
 
@@ -80,14 +80,14 @@ try {
             "SELECT u.userID, u.first_name, u.last_name
                FROM users u
                JOIN student_info si ON si.userID = u.userID
-              WHERE si.studentID = ? AND u.roleID = 1
+              WHERE si.studentID = ? AND u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
               LIMIT 1"
         );
         $recipStmt->execute([$recipientStudentId]);
         $recipient = $recipStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$recipient) {
-            echo json_encode(['success' => false, 'message' => 'Recipient student not found. Check the Student ID and try again.']);
+            echo json_encode(['success' => false, 'message' => 'Recipient not found. Check the ID and try again.']);
             exit;
         }
 
@@ -148,7 +148,7 @@ try {
             $dailySent = gjc_p2p_daily_sent($db, $currentUserId);
             if ($dailySent + $amount > $DAILY_LIMIT) {
                 $remaining = max(0, $DAILY_LIMIT - $dailySent);
-                throw new \RuntimeException(sprintf('Daily transfer limit exceeded. Remaining today: %s', gjc_money($remaining)));
+                throw new \RuntimeException(sprintf('Daily transfer limit exceeded. Remaining today: %s', gjc_money_plain($remaining)));
             }
 
             // --- Parent wallet controls on sender ---
@@ -156,7 +156,7 @@ try {
             $wcStmt->execute([$senderWallet['id']]);
             $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
             if ($wc && (int) $wc['is_frozen'] === 1) {
-                throw new \RuntimeException('Your wallet is frozen by a parent or guardian.');
+                throw new \RuntimeException('Your wallet is frozen by a guardian.');
             }
             if ($wc && (float) $wc['daily_spend_limit'] > 0) {
                 $todaySpent = gjc_student_spent_today($db, (int) $senderWallet['id']);
@@ -280,7 +280,7 @@ try {
                 'reference' => $refNo,
                 'message'   => sprintf(
                     'Sent %s (%s GenCoins) to %s.',
-                    gjc_money($amount),
+                    gjc_money_plain($amount),
                     number_format($amount / 10, 1),
                     $recipientName
                 ),

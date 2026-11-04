@@ -124,7 +124,7 @@ class Record
                     $accountSuspension = \gjc_account_suspension(
                         $this->con,
                         (int) ($user['id'] ?? $user['userID'] ?? 0),
-                        in_array((int) ($user['roleID'] ?? 0), [2, 5, 6], true)
+                        in_array((int) ($user['roleID'] ?? 0), [2, 6], true)
                     );
                     if ($accountSuspension !== null) {
                         \logAudit(
@@ -160,7 +160,7 @@ class Record
                     \gjc_establish_login_session($user);
                     $subRole = (string) $_SESSION['sub_role'];
 
-                    if ($roleId === 1) {
+                    if (in_array($roleId, [1, \GJC_FACULTY_ROLE_ID], true)) {
                         \gjc_notify_welcome_if_new($this->con, $userId);
                     }
 

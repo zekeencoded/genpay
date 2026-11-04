@@ -253,7 +253,7 @@ $currentPage = 'dashboard';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -291,8 +291,8 @@ $currentPage = 'dashboard';
                     </div>
                     <div class="sd-balance-actions">
                         <a class="sd-btn-solid" href="<?= MERCHANT_URL ?>/pos.php"><i class="fa-solid fa-cash-register"></i>Open POS</a>
-                        <a class="sd-btn-ghost" href="<?= MERCHANT_URL ?>/pos.php?open=loadwallet"><i class="fa-solid fa-coins"></i>Send GenCoin</a>
                         <?php if ($canEncash): ?>
+                        <a class="sd-btn-ghost" href="<?= MERCHANT_URL ?>/pos.php?open=loadwallet"><i class="fa-solid fa-coins"></i>Send GenCoin</a>
                         <a class="sd-btn-ghost" href="<?= MERCHANT_URL ?>/encash.php"><i class="fa-solid fa-money-bill-wave"></i>Encash</a>
                         <?php endif; ?>
                     </div>
@@ -685,11 +685,11 @@ $currentPage = 'dashboard';
 
     </div>
 
-    <div class="modal fade" id="todaysSalesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="todaysSalesModal" tabindex="-1" aria-labelledby="todaysSalesTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content custom-modal">
+            <div class="modal-content gp-modal">
                 <div class="modal-header">
-                    <h5 class="modal-title">Today's Sales</h5>
+                    <h5 class="modal-title" id="todaysSalesTitle"><i class="fa-solid fa-receipt"></i>Today's Sales</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">

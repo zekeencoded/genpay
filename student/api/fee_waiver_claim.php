@@ -35,7 +35,7 @@ try {
 
             echo json_encode([
                 'success' => true,
-                'message' => sprintf('%s added to your wallet.', gjc_money($result['amount'])),
+                'message' => sprintf('%s added to your wallet.', gjc_money_plain($result['amount'])),
                 'reference' => $result['reference'],
             ]);
             break;

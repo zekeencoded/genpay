@@ -16,7 +16,7 @@ $pStmt->execute([$parentUserId]);
 $parentRow = $pStmt->fetch(PDO::FETCH_ASSOC);
 if (!$parentRow) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Parent record not found.']);
+    echo json_encode(['success' => false, 'error' => 'Guardian record not found.']);
     exit;
 }
 $parentId = (int) $parentRow['id'];

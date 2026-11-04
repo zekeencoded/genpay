@@ -98,7 +98,7 @@ foreach ($rows as &$r) {
     // Anything not the parent's own now always has a student wallet, so an
     // unknown id means a student who has since been unlinked — not "no wallet".
     $r['student_name'] = $r['is_own']
-        ? 'You (Parent)'
+        ? 'You (Guardian)'
         : ($studentByWallet[(int) $r['student_wallet_id']] ?? 'Unlinked student');
 
     $itemsSummary = '';
@@ -230,7 +230,7 @@ $currentPage = 'activity';
                                 <td><?= $e($r['reference_no']) ?></td>
                                 <td class="pa-wallet-cell">
                                     <?php if ($r['is_own']): ?>
-                                    <span class="pa-you-badge">You</span> Parent
+                                    <span class="pa-you-badge">You</span> Guardian
                                     <?php else: ?>
                                     <?= $e($r['student_name']) ?>
                                     <?php endif; ?>

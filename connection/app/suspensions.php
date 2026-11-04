@@ -616,7 +616,7 @@ function gjc_funds_in_block_reason(PDO $db, int $userId): ?string
 {
     $suspension = gjc_account_suspension($db, $userId);
     if ($suspension === null) {
-        $student = $db->prepare('SELECT sw.is_frozen FROM student_wallets sw JOIN users u ON u.userID = sw.user_id WHERE sw.user_id = ? AND u.roleID = 1');
+        $student = $db->prepare('SELECT sw.is_frozen FROM student_wallets sw JOIN users u ON u.userID = sw.user_id WHERE sw.user_id = ? AND u.roleID IN (1, ' . GJC_FACULTY_ROLE_ID . ')');
         $student->execute([$userId]);
         $frozen = $student->fetchColumn();
         if ($frozen !== false && ((int) $frozen === 1 || gjc_student_wallet_state($db, $userId) !== 'active')) {

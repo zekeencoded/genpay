@@ -7,7 +7,7 @@ $currentPage = $currentPage ?? '';
         <div class="sd-brand-logo"><img src="<?= ICONS_URL ?>/gp_logo.png" alt="GenPay"></div>
         <div class="sd-brand-text">
             <h4>GenPay</h4>
-            <span>Student Portal</span>
+            <span><?= gjc_is_faculty() ? 'Faculty Portal' : 'Student Portal' ?></span>
         </div>
     </div>
 

@@ -108,7 +108,7 @@ try {
         // student keeps their balance and can be re-enrolled by the registrar.
         $walletState = gjc_student_wallet_state($db, $studentUserId);
         if ($walletState === 'frozen_exit') {
-            throw new \RuntimeException('Account locked: this account has graduated or transferred out.');
+            throw new \RuntimeException('Account locked: this account is closed (graduated, transferred out, or left the school).');
         }
         if ($walletState === 'frozen_unenrolled') {
             throw new \RuntimeException('You are not enrolled for the current school year. Your balance is safe and stays in your wallet — contact the registrar to be re-enrolled.');
@@ -119,7 +119,7 @@ try {
         $wcStmt->execute([$studentWallet['id']]);
         $wc = $wcStmt->fetch(PDO::FETCH_ASSOC);
         if ($wc && (int) $wc['is_frozen'] === 1) {
-            throw new \RuntimeException('This wallet is frozen by a parent or guardian.');
+            throw new \RuntimeException('This wallet is frozen by a guardian.');
         }
         if ($wc && (float) $wc['daily_spend_limit'] > 0) {
             $todaySpent = gjc_student_spent_today($db, (int) $studentWallet['id']);

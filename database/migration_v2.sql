@@ -10,11 +10,10 @@ START TRANSACTION;
 SET time_zone = "+00:00";
 
 -- ============================================================
--- 1. EXPAND role TABLE — add Super Admin, Merchant Admin, Merchant Staff
+-- 1. EXPAND role TABLE — add Super Admin, Merchant Staff (merchant owner stays roleID 2)
 -- ============================================================
 INSERT IGNORE INTO `role` (`roleID`, `role_name`) VALUES
     (4, 'super_admin'),
-    (5, 'merchant_admin'),
     (6, 'merchant_staff');
 
 -- ============================================================

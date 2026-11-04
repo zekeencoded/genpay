@@ -38,7 +38,7 @@ if (gjc_table_exists($db, 'restricted_products')) {
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="gp-theme">
@@ -221,22 +221,28 @@ if (gjc_table_exists($db, 'restricted_products')) {
 </div>
 
 <!-- Flag Product Modal -->
-<div class="modal fade" id="restrictModal" tabindex="-1">
+<div class="modal fade" id="restrictModal" tabindex="-1" aria-labelledby="restrictTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal">
-            <div class="modal-header"><h5 class="modal-title">Flag Restricted Product</h5></div>
+        <div class="modal-content gp-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="restrictTitle"><i class="fa-solid fa-ban is-danger"></i>Flag Restricted Product</h5>
+                    <p class="gp-modal-sub">Flagged products are blocked from being sold on the platform.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
             <div class="modal-body">
                 <form id="restrictForm">
                     <input type="hidden" name="action" value="flag_product">
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Product Name / Keyword *</label>
+                            <label class="form-label">Product Name / Keyword *</label>
                             <input type="text" class="form-control" name="product_name" required
                                 placeholder="e.g. Coca-Cola, Soda, Energy Drink">
                             <div class="form-text">Use a keyword that appears in the product name. Match type controls how it's compared.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Category</label>
+                            <label class="form-label">Category</label>
                             <select class="form-select" name="category">
                                 <option value="beverage">Beverage</option>
                                 <option value="snack">Snack</option>
@@ -246,22 +252,22 @@ if (gjc_table_exists($db, 'restricted_products')) {
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Match Type</label>
+                            <label class="form-label">Match Type</label>
                             <select class="form-select" name="match_type">
                                 <option value="contains">Contains (substring match)</option>
                                 <option value="exact">Exact (full name only)</option>
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Reason / Policy Note *</label>
+                            <label class="form-label">Reason / Policy Note *</label>
                             <textarea class="form-control" name="reason" rows="2" required
-                                placeholder="e.g. High sugar content â€” DepEd nutritional guidelines prohibit this item."></textarea>
+                                placeholder="e.g. High sugar content; DepEd nutritional guidelines prohibit this item."></textarea>
                         </div>
                     </div>
                     <div id="restrictMsg" class="mt-3"></div>
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="login-btn" style="flex:1" id="restrictSubmitBtn">Flag Product</button>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn danger" id="restrictSubmitBtn">Flag Product</button>
                     </div>
                 </form>
             </div>

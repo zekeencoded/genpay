@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../connection/config.php';
 require_once __DIR__ . '/../../connection/pdo.php';
 require_once __DIR__ . '/../../connection/app.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
+require_once __DIR__ . '/../../connection/mailer.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['merchant']);
@@ -78,6 +79,13 @@ try {
                 exit;
             }
 
+            // A removed staff row keeps its history but must not hold the email hostage
+            // (sign-in looks up by email), so tag its address and free this one.
+            $db->prepare(
+                "UPDATE users SET email = CONCAT(email, '.removed', userID)
+                  WHERE email = ? AND roleID = 6 AND staff_removed_at IS NOT NULL"
+            )->execute([$email]);
+
             // Check email uniqueness
             $dup = $db->prepare("SELECT userID FROM users WHERE email = ? LIMIT 1");
             $dup->execute([$email]);
@@ -130,7 +138,15 @@ try {
                 ['target_id' => $newStaffId]
             );
 
-            echo json_encode(['success' => true, 'message' => 'Staff account created successfully.', 'user_id' => $newStaffId]);
+            $mailed = gjc_send_merchant_staff_welcome_email($email, $fullName, $position);
+
+            echo json_encode([
+                'success' => true,
+                'message' => $mailed
+                    ? 'Staff account created. A welcome email was sent to ' . $email . '.'
+                    : 'Staff account created, but the welcome email could not be sent.',
+                'user_id' => $newStaffId,
+            ]);
             break;
         }
 

@@ -287,6 +287,11 @@ function gjc_student_wallet_state(PDO $db, int $studentUserId): string
         return $cache[$studentUserId];
     }
 
+    $roleStmt = $db->prepare("SELECT roleID FROM users WHERE userID = ? LIMIT 1");
+    $roleStmt->execute([$studentUserId]);
+    $isFaculty = (int) $roleStmt->fetchColumn() === GJC_FACULTY_ROLE_ID;
+
+    // graduated_at doubles as the exit date: graduation for students, offboarding for faculty.
     if (gjc_table_exists($db, 'student_info')) {
         $stmt = $db->prepare("SELECT graduated_at FROM student_info WHERE userID = ? LIMIT 1");
         $stmt->execute([$studentUserId]);
@@ -294,6 +299,10 @@ function gjc_student_wallet_state(PDO $db, int $studentUserId): string
         if ($graduatedAt !== false && $graduatedAt !== null) {
             return $cache[$studentUserId] = 'frozen_exit';
         }
+    }
+    // Faculty are never enrolled, so school-year freezes don't apply to them.
+    if ($isFaculty) {
+        return $cache[$studentUserId] = 'active';
     }
 
     $yearId = gjc_active_school_year_id($db);

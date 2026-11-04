@@ -104,7 +104,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
         </div>
 
         <div class="ce-ledger-bar" role="img"
-             aria-label="Circulation breakdown: Cashier Vault <?= $vaultPct ?>%, Student Wallets <?= $studPct ?>%, Merchant Wallets <?= $merchPct ?>%, Parent Wallets <?= $parentPct ?>%">
+             aria-label="Circulation breakdown: Cashier Vault <?= $vaultPct ?>%, Student Wallets <?= $studPct ?>%, Merchant Wallets <?= $merchPct ?>%, Guardian Wallets <?= $parentPct ?>%">
             <div class="ce-ledger-seg ce-pool-vault"     style="width:<?= $vaultPct ?>%"></div>
             <div class="ce-ledger-seg ce-pool-students"  style="width:<?= $studPct ?>%"></div>
             <div class="ce-ledger-seg ce-pool-merchants" style="width:<?= $merchPct ?>%"></div>
@@ -115,7 +115,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
             <li class="ce-legend-item"><span class="ce-legend-dot ce-pool-vault"></span>Cashier Vault <b><?= $vaultPct ?>%</b></li>
             <li class="ce-legend-item"><span class="ce-legend-dot ce-pool-students"></span>Student Wallets <b><?= $studPct ?>%</b></li>
             <li class="ce-legend-item"><span class="ce-legend-dot ce-pool-merchants"></span>Merchant Wallets <b><?= $merchPct ?>%</b></li>
-            <li class="ce-legend-item"><span class="ce-legend-dot ce-pool-parents"></span>Parent Wallets <b><?= $parentPct ?>%</b></li>
+            <li class="ce-legend-item"><span class="ce-legend-dot ce-pool-parents"></span>Guardian Wallets <b><?= $parentPct ?>%</b></li>
         </ul>
 
     </div>
@@ -181,7 +181,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
         <div class="ce-pool-card ce-pool-students ce-pool-card--wallet ce-pool-card--clickable"
              role="button" tabindex="0"
              data-bs-toggle="modal" data-bs-target="#walletUsersModal"
-             data-wallet-filter="Student" data-wallet-title="Student Wallet Users (<?= number_format(
+             data-wallet-filter="Student|Faculty" data-wallet-title="Student Wallet Users (<?= number_format(
                  $walletStats["total"],
              ) ?>)"
              aria-label="View student wallet users in a table">
@@ -286,18 +286,18 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
         <div class="ce-pool-card ce-pool-parents ce-pool-card--wallet ce-pool-card--clickable"
              role="button" tabindex="0"
              data-bs-toggle="modal" data-bs-target="#walletUsersModal"
-             data-wallet-filter="Parent" data-wallet-title="Parent Wallet Users (<?= number_format(
+             data-wallet-filter="Guardian" data-wallet-title="Guardian Wallet Users (<?= number_format(
                  $parentWalletStats["total"],
              ) ?>)"
-             aria-label="View parent wallet users in a table">
+             aria-label="View guardian wallet users in a table">
             <div class="ce-pool-icon-wrap">
                 <i class="fa-solid fa-people-roof ce-pool-icon"></i>
             </div>
             <div class="ce-pool-info" style="flex:1;min-width:0;">
                 <span class="ce-pool-label">
-                    Parent Wallet Users
+                    Guardian Wallet Users
                     <span class="ce-info" tabindex="0" data-bs-toggle="tooltip"
-                          title="Parents with no wallet activity in the last 30 days are counted as inactive."
+                          title="Guardians with no wallet activity in the last 30 days are counted as inactive."
                           aria-label="How is inactive counted?">
                         <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                     </span>
@@ -484,10 +484,10 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
 <!-- Total Wallet Users drill-in table -->
 <div class="modal fade" id="walletUsersModal" tabindex="-1" aria-labelledby="walletUsersModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content" style="border-radius:16px;overflow:hidden;border:none">
-            <div class="modal-header" style="background:var(--gjc-soft)">
-                <h5 class="modal-title" id="walletUsersModalLabel" style="font-weight:800;color:var(--gjc-green-800)">
-                    <i class="fa-solid fa-users me-2"></i><span id="walletUsersModalText">All Wallet Users (<?= number_format(
+        <div class="modal-content gp-modal">
+            <div class="modal-header" style="padding-bottom:8px">
+                <h5 class="modal-title" id="walletUsersModalLabel">
+                    <i class="fa-solid fa-users"></i><span id="walletUsersModalText">All Wallet Users (<?= number_format(
                         $totalWalletUsers,
                     ) ?>)</span>
                 </h5>

@@ -62,7 +62,7 @@ $currentPage = 'cash';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/topups.css?v=10">
     <link rel="stylesheet" href="<?= CSS_URL ?>/encashments.css?v=10">
     <link rel="stylesheet" href="<?= CSS_URL ?>/cash_management.css?v=1">
@@ -75,7 +75,6 @@ $currentPage = 'cash';
         rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=24">
     <style>
-        .sgc-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
     </style>
 </head>
 
@@ -92,7 +91,7 @@ $currentPage = 'cash';
 
                 <div>
                     <h1>Cash Management</h1>
-                    <p>Money in and out of the system: send GenCoin to students and parents, and release merchant cash-outs.</p>
+                    <p>Money in and out of the system: send GenCoin to students and guardians, and release merchant cash-outs.</p>
                 </div>
 
                 <div class="admin-user">
@@ -166,7 +165,7 @@ $currentPage = 'cash';
                     <ol class="gp-howto-steps">
                         <li>
                             <strong>You credit the wallet directly.</strong>
-                            Use <em>Send GenCoin</em> to load a student or parent who is standing at
+                            Use <em>Send GenCoin</em> to load a student or guardian who is standing at
                             the counter. Nothing moves until you confirm.
                         </li>
                         <li>
@@ -190,7 +189,7 @@ $currentPage = 'cash';
                 <div class="topup-panel-header">
                     <div>
                         <h3>Recent Top-up History</h3>
-                        <p>Latest GenCoin top-ups to student and parent wallets.</p>
+                        <p>Latest GenCoin top-ups to student and guardian wallets.</p>
                     </div>
 
                     <button type="button" class="create-topup-btn" onclick="openSendGenCoin()">
@@ -353,13 +352,13 @@ $currentPage = 'cash';
     <!-- Send GenCoin Modal -->
     <div class="modal fade" id="sendGenCoinModal" tabindex="-1" aria-labelledby="sendGenCoinModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
-            <div class="modal-content" style="border-radius:20px;overflow:hidden;border:none;">
+            <div class="modal-content gp-modal">
 
                 <!-- Header -->
-                <div class="modal-header border-0 pb-0" style="background:var(--gjc-soft-2);padding:20px 24px 12px">
+                <div class="modal-header">
                     <div style="flex:1">
-                        <h5 class="modal-title fw-bold" id="sendGenCoinModalLabel" style="color:#27764b;font-size:18px">
-                            <i class="fa-solid fa-coins me-2"></i>Send GenCoin
+                        <h5 class="modal-title" id="sendGenCoinModalLabel">
+                            <i class="fa-solid fa-coins"></i>Send GenCoin
                         </h5>
                         <!-- Step indicator -->
                         <div style="display:flex;gap:6px;margin-top:10px;align-items:center" id="sgc-steps">
@@ -371,36 +370,23 @@ $currentPage = 'cash';
                             <span id="sgc-step-label" style="margin-left:8px;font-size:12px;color:var(--gp-muted);font-weight:600">Step 1 of 3</span>
                         </div>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="margin-top:-16px"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
-                <div class="modal-body" style="padding:20px 24px 24px;background:var(--gjc-soft-2)">
+                <div class="modal-body">
 
-                    <!-- STEP 1: Recipient type + Student ID -->
+                    <!-- STEP 1: Recipient ID (the ID tells which account it is) -->
                     <div id="sgc-step-1">
-                        <div style="display:flex;gap:8px;margin-bottom:14px">
-                            <button type="button" id="sgc-toggle-student"
-                                    style="flex:1;border:1.5px solid var(--gp-success);border-radius:12px;padding:9px;font-size:13px;font-weight:700;background:var(--gp-success);color:#fff"
-                                    onclick="sgcSetMode('student')">
-                                <i class="fa-solid fa-user-graduate me-1"></i>Student
-                            </button>
-                            <button type="button" id="sgc-toggle-parent"
-                                    style="flex:1;border:1.5px solid var(--gp-success-bg);border-radius:12px;padding:9px;font-size:13px;font-weight:700;background:#fff;color:#111"
-                                    onclick="sgcSetMode('parent')">
-                                <i class="fa-solid fa-people-roof me-1"></i>Parent
-                            </button>
-                        </div>
-                        <p id="sgc-step1-hint" style="font-size:13px;color:var(--gjc-slate);margin-bottom:16px">Enter the Student ID of the recipient.</p>
+                        <p id="sgc-step1-hint" style="font-size:13px;color:var(--gjc-slate);margin-bottom:16px">Enter the Student, Employee or Guardian ID of the recipient.</p>
                         <div style="position:relative">
                             <input type="text" id="sgc-school-id" class="form-control"
-                                   placeholder="e.g. 2024-00123" autocomplete="off"
-                                   style="border-radius:12px;padding:12px 44px 12px 14px;font-size:14px;border:1.5px solid var(--gp-success-bg)">
+                                   placeholder="e.g. GJC2026-0001 or GRD2026-0001" autocomplete="off"
+                                   style="padding-right:44px">
                             <i class="fa-solid fa-magnifying-glass" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--gp-subtle);pointer-events:none"></i>
                         </div>
                         <div id="sgc-lookup-result" style="margin-top:10px;min-height:36px"></div>
                         <div style="display:flex;justify-content:flex-end;margin-top:16px">
                             <button type="button" id="sgc-next-1" class="btn btn-success" disabled
-                                    style="border-radius:12px;padding:10px 28px;font-weight:600"
                                     onclick="sgcGoStep(2)">
                                 Next <i class="fa-solid fa-arrow-right ms-1"></i>
                             </button>
@@ -418,11 +404,11 @@ $currentPage = 'cash';
                             </div>
                         </div>
 
-                        <label style="font-size:12px;font-weight:600;color:var(--gjc-slate);margin-bottom:4px;display:block">Amount (₱)</label>
+                        <label>Amount (₱)</label>
                         <div style="position:relative;margin-bottom:6px">
                             <input type="number" id="sgc-gencoins" class="form-control" min="1" step="0.01"
                                    placeholder="e.g. 50"
-                                   style="border-radius:12px;padding:12px 70px 12px 14px;font-size:20px;font-weight:700;border:1.5px solid var(--gp-success-bg)">
+                                   style="padding-right:44px;font-size:20px;font-weight:700">
                             <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--gp-subtle)">₱</span>
                         </div>
                         <div id="sgc-peso-equiv" style="font-size:12px;color:#27764b;font-weight:600;margin-bottom:12px;padding-left:4px;min-height:18px"></div>
@@ -442,18 +428,17 @@ $currentPage = 'cash';
                             </div>
                         </div>
 
-                        <label style="font-size:12px;font-weight:600;color:var(--gjc-slate);margin-bottom:4px;display:block">Message <span style="font-weight:400;color:var(--gp-subtle)">(optional)</span></label>
+                        <label>Message <span style="font-weight:400;color:var(--gp-subtle)">(optional)</span></label>
                         <textarea id="sgc-message" class="form-control" rows="2" maxlength="120"
                                   placeholder="e.g. For school supplies"
-                                  style="border-radius:12px;font-size:13px;border:1.5px solid var(--gp-success-bg);resize:none"></textarea>
+                                  style="resize:none"></textarea>
 
                         <div style="display:flex;justify-content:space-between;margin-top:20px">
-                            <button type="button" class="btn btn-outline-secondary" style="border-radius:12px;padding:10px 20px"
+                            <button type="button" class="btn btn-outline-secondary"
                                     onclick="sgcGoStep(1)">
                                 <i class="fa-solid fa-arrow-left me-1"></i> Back
                             </button>
                             <button type="button" id="sgc-next-2" class="btn btn-success" disabled
-                                    style="border-radius:12px;padding:10px 28px;font-weight:600"
                                     onclick="sgcGoStep(3)">
                                 Next <i class="fa-solid fa-arrow-right ms-1"></i>
                             </button>
@@ -477,7 +462,7 @@ $currentPage = 'cash';
                                     <strong id="sgc-prev-name"></strong>
                                 </div>
                                 <div style="display:flex;justify-content:space-between">
-                                    <span style="color:var(--gp-muted)">Student ID</span>
+                                    <span style="color:var(--gp-muted)">ID</span>
                                     <span id="sgc-prev-id" style="font-family:monospace"></span>
                                 </div>
                                 <div style="display:flex;justify-content:space-between" id="sgc-prev-msg-row">
@@ -513,12 +498,11 @@ $currentPage = 'cash';
                         <div id="sgc-send-error" style="margin-top:10px;font-size:13px;color:var(--gp-red);min-height:18px"></div>
 
                         <div style="display:flex;justify-content:space-between;margin-top:16px">
-                            <button type="button" class="btn btn-outline-secondary" style="border-radius:12px;padding:10px 20px"
+                            <button type="button" class="btn btn-outline-secondary"
                                     onclick="sgcGoStep(2)">
                                 <i class="fa-solid fa-arrow-left me-1"></i> Back
                             </button>
                             <button type="button" id="sgc-send-btn" class="btn btn-success" disabled
-                                    style="border-radius:12px;padding:10px 28px;font-weight:700;font-size:15px"
                                     onclick="sgcSend()">
                                 <i class="fa-solid fa-paper-plane me-1"></i> Send
                             </button>
@@ -536,7 +520,7 @@ $currentPage = 'cash';
                             <span style="font-size:11px;color:var(--gp-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Reference No.</span><br>
                             <span id="sgc-success-ref" style="font-size:13px;font-weight:700;color:#27764b;font-family:monospace;letter-spacing:.5px"></span>
                         </div>
-                        <button type="button" class="btn btn-success mt-4 d-block mx-auto" style="border-radius:12px;padding:10px 32px;font-weight:600"
+                        <button type="button" class="btn btn-success mt-4 d-block mx-auto"
                                 data-bs-dismiss="modal">Done</button>
                     </div>
 
@@ -652,7 +636,7 @@ $currentPage = 'cash';
 
     function sgcReset() {
         sgcWalletId = null; sgcParentId = null; sgcStudentName = ''; sgcSchoolId = '';
-        sgcSetMode('student');
+        sgcMode = 'student';
         document.getElementById('sgc-school-id').value = '';
         document.getElementById('sgc-lookup-result').innerHTML = '';
         document.getElementById('sgc-next-1').disabled = true;
@@ -669,40 +653,6 @@ $currentPage = 'cash';
         });
         document.getElementById('sgc-step-1').style.display = '';
         sgcUpdateStepUI(1);
-    }
-
-    function sgcSetMode(mode) {
-        sgcMode = mode;
-        sgcWalletId = null; sgcParentId = null; sgcStudentName = '';
-        document.getElementById('sgc-school-id').value = '';
-        document.getElementById('sgc-lookup-result').innerHTML = '';
-        document.getElementById('sgc-next-1').disabled = true;
-
-        const studentBtn = document.getElementById('sgc-toggle-student');
-        const parentBtn  = document.getElementById('sgc-toggle-parent');
-        const isStudent  = mode === 'student';
-        studentBtn.style.background  = isStudent ? 'var(--gp-success)' : '#fff';
-        studentBtn.style.color       = isStudent ? '#fff' : '#111';
-        studentBtn.style.borderColor = isStudent ? 'var(--gp-success)' : '#d1fae5';
-        parentBtn.style.background   = isStudent ? '#fff' : 'var(--gp-success)';
-        parentBtn.style.color        = isStudent ? '#111' : '#fff';
-        parentBtn.style.borderColor  = isStudent ? '#d1fae5' : 'var(--gp-success)';
-
-        document.getElementById('sgc-step1-hint').textContent = isStudent
-            ? 'Enter the Student ID of the recipient.'
-            : 'Enter the Student ID of a linked student to find their parent.';
-    }
-
-    function sgcSelectParent(parentId, name) {
-        sgcParentId = parentId;
-        sgcStudentName = name; // reused as the generic "recipient name"
-        document.getElementById('sgc-next-1').disabled = false;
-        document.getElementById('sgc-recipient-avatar').textContent = name.charAt(0).toUpperCase();
-        document.getElementById('sgc-recipient-name-2').textContent = name;
-        document.getElementById('sgc-recipient-id-2').textContent = sgcSchoolId;
-        document.querySelectorAll('.sgc-parent-choice').forEach(el => {
-            el.classList.toggle('sgc-parent-choice--active', el.dataset.parentId == parentId);
-        });
     }
 
     function sgcUpdateStepUI(step) {
@@ -759,7 +709,6 @@ $currentPage = 'cash';
         document.getElementById('sgc-send-btn').disabled = true;
     }
 
-    // Student ID lookup on Enter or blur
     async function sgcLookup() {
         const schoolId = document.getElementById('sgc-school-id').value.trim();
         const resultEl = document.getElementById('sgc-lookup-result');
@@ -770,73 +719,40 @@ $currentPage = 'cash';
         nextBtn.disabled = true;
         sgcWalletId = null;
         sgcParentId = null;
-        sgcSchoolId = schoolId;
 
-        if (sgcMode === 'student') {
-            try {
-                const res  = await fetch(SGC_API, {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({action:'lookup_student', school_id: schoolId}),
-                });
-                const data = await res.json();
-                if (data.success) {
-                    sgcWalletId    = data.wallet_id;
-                    sgcStudentName = data.name;
-                    resultEl.innerHTML = `
-                        <div style="display:flex;align-items:center;gap:8px;background:var(--gp-success-bg);border-radius:10px;padding:8px 12px">
-                            <i class="fa-solid fa-circle-check" style="color:var(--gp-success)"></i>
-                            <div>
-                                <strong style="font-size:13px;color:#27764b">${data.name}</strong>
-                                <div style="font-size:11px;color:var(--gp-muted)">${schoolId}</div>
-                            </div>
-                        </div>`;
-                    nextBtn.disabled = false;
-                    // prefill step 2 recipient pill
-                    document.getElementById('sgc-recipient-avatar').textContent = data.name.charAt(0).toUpperCase();
-                    document.getElementById('sgc-recipient-name-2').textContent = data.name;
-                    document.getElementById('sgc-recipient-id-2').textContent   = schoolId;
-                } else {
-                    resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i>${data.error || 'Student not found.'}</div>`;
-                }
-            } catch {
-                resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red)">Network error. Try again.</div>`;
-            }
-            return;
-        }
-
-        // Parent mode — parents have no school ID of their own, resolved
-        // through the linked student's school ID instead.
+        // The ID itself says who it is: GRD… is a guardian, anything else a student or faculty wallet.
         try {
-            const res = await fetch(SGC_API, {
+            const res  = await fetch(SGC_API, {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({action:'lookup_parent_by_student', school_id: schoolId}),
+                body: JSON.stringify({action:'lookup_recipient', school_id: schoolId}),
             });
             const data = await res.json();
-            if (data.success && data.parents && data.parents.length) {
-                if (data.parents.length === 1) {
-                    const p = data.parents[0];
-                    resultEl.innerHTML = `
-                        <div style="display:flex;align-items:center;gap:8px;background:var(--gp-success-bg);border-radius:10px;padding:8px 12px">
-                            <i class="fa-solid fa-circle-check" style="color:var(--gp-success)"></i>
-                            <div>
-                                <strong style="font-size:13px;color:#27764b">${p.name}</strong>
-                                <div style="font-size:11px;color:var(--gp-muted)">Parent of ${schoolId}</div>
-                            </div>
-                        </div>`;
-                    sgcSelectParent(p.parent_id, p.name);
-                } else {
-                    resultEl.innerHTML = '<div style="font-size:12px;color:var(--gjc-slate);margin-bottom:6px">Multiple parents linked — choose one:</div>' +
-                        data.parents.map(p => `
-                            <div class="sgc-parent-choice" data-parent-id="${p.parent_id}" onclick="sgcSelectParent(${p.parent_id}, '${p.name.replace(/'/g, "\\'")}')"
-                                 style="cursor:pointer;padding:8px 12px;border-radius:10px;border:1.5px solid var(--gp-success-bg);margin-bottom:6px;font-size:13px;font-weight:600;color:#111">
-                                ${p.name}
-                            </div>`).join('');
-                }
-            } else {
-                resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i>${data.error || 'No parent found.'}</div>`;
+            if (!data.success) {
+                resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i><span></span></div>';
+                resultEl.querySelector('span').textContent = data.error || 'No account found with that ID.';
+                return;
             }
+            sgcMode = data.kind;
+            sgcWalletId = data.kind === 'student' ? data.wallet_id : null;
+            sgcParentId = data.kind === 'parent' ? data.parent_id : null;
+            sgcStudentName = data.name;
+            sgcSchoolId = data.id;
+            resultEl.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;background:var(--gp-success-bg);border-radius:10px;padding:8px 12px">
+                    <i class="fa-solid fa-circle-check" style="color:#27764b"></i>
+                    <div>
+                        <strong style="font-size:13px;color:#27764b"></strong>
+                        <div class="rcp-sub" style="font-size:11px;color:var(--gp-muted)"></div>
+                    </div>
+                </div>`;
+            resultEl.querySelector('strong').textContent = data.name;
+            resultEl.querySelector('.rcp-sub').textContent = data.label + ' · ' + data.id;
+            nextBtn.disabled = false;
+            document.getElementById('sgc-recipient-avatar').textContent = data.name.charAt(0).toUpperCase();
+            document.getElementById('sgc-recipient-name-2').textContent  = data.name;
+            document.getElementById('sgc-recipient-id-2').textContent    = data.id;
         } catch {
-            resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red)">Network error. Try again.</div>`;
+            resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-red)">Network error. Try again.</div>';
         }
     }
 

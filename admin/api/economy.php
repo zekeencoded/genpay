@@ -92,58 +92,9 @@ try {
             echo json_encode($snapshot);
             break;
 
-        case 'lookup_student':
-            $schoolId = trim($body['school_id'] ?? '');
-            if (!$schoolId) throw new InvalidArgumentException('Student ID is required.');
-
-            $stmt = $db->prepare(
-                "SELECT u.userID, u.first_name, u.last_name, sw.id AS wallet_id
-                   FROM users u
-                   JOIN student_info si ON si.userID = u.userID
-                   LEFT JOIN student_wallets sw ON sw.user_id = u.userID
-                  WHERE si.studentID = ? AND u.roleID = 1
-                  LIMIT 1"
-            );
-            $stmt->execute([$schoolId]);
-            $student = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$student) throw new RuntimeException('Student not found. Check the ID and try again.');
-            if (!$student['wallet_id']) throw new RuntimeException('This student does not have a wallet yet.');
-
-            echo json_encode([
-                'success'   => true,
-                'name'      => trim($student['first_name'] . ' ' . $student['last_name']),
-                'user_id'   => (int) $student['userID'],
-                'wallet_id' => (int) $student['wallet_id'],
-            ]);
-            break;
-
-        // Parents are found through their linked student's school ID.
-        case 'lookup_parent_by_student':
-
-            $schoolId = trim($body['school_id'] ?? '');
-            if (!$schoolId) throw new InvalidArgumentException('Student ID is required.');
-
-            $stmt = $db->prepare(
-                "SELECT p.id AS parent_id, u.first_name, u.last_name
-                   FROM student_info si
-                   JOIN parent_student_links psl ON psl.student_user_id = si.userID
-                   JOIN parents p ON p.id = psl.parent_id
-                   JOIN users u ON u.userID = p.user_id
-                  WHERE si.studentID = ?"
-            );
-            $stmt->execute([$schoolId]);
-            $parents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (!$parents) throw new RuntimeException('No parent is linked to that student. Check the ID and try again.');
-
-            echo json_encode([
-                'success' => true,
-                'parents' => array_map(static fn(array $p): array => [
-                    'parent_id' => (int) $p['parent_id'],
-                    'name' => trim($p['first_name'] . ' ' . $p['last_name']),
-                ], $parents),
-            ]);
+        // One box for every recipient: Student/Employee ID, or a guardian's GRD2026-0001 ID.
+        case 'lookup_recipient':
+            echo json_encode(['success' => true] + gjc_find_topup_recipient($db, (string) ($body['school_id'] ?? '')));
             break;
 
         case 'topup_parent':
@@ -152,7 +103,7 @@ try {
             $amount   = (float)($body['amount'] ?? 0);
             $notes    = trim((string)($body['notes'] ?? ''));
 
-            if ($parentId <= 0) throw new InvalidArgumentException('Invalid parent.');
+            if ($parentId <= 0) throw new InvalidArgumentException('Invalid guardian.');
 
             $parentWallet = gjc_parent_wallet($db, $parentId);
 

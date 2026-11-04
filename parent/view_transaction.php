@@ -63,7 +63,7 @@ if ($txnId !== null && ($walletIds || $parentWalletId > 0) && gjc_table_exists($
         $meta = gjc_student_txn_meta($type);
 
         $whose = ((int) ($row['parent_wallet_id'] ?? 0) > 0 && (int) $row['parent_wallet_id'] === $parentWalletId)
-            ? 'You (Parent)'
+            ? 'You (Guardian)'
             : ($studentByWallet[(int) ($row['student_wallet_id'] ?? 0)] ?? 'Linked Student');
 
         $counterLabel = 'Counterparty';
@@ -186,13 +186,6 @@ if ($record) {
                     <div>
                         <div class="uv-field-label">Wallet</div>
                         <div class="uv-field-value"><?= $e($record['whose']) ?></div>
-                    </div>
-                </div>
-                <div class="uv-field">
-                    <div class="uv-field-ic"><i class="fa-solid fa-store"></i></div>
-                    <div>
-                        <div class="uv-field-label"><?= $e($record['counter_label']) ?></div>
-                        <div class="uv-field-value"><?= $record['counterparty'] !== '' ? $e($record['counterparty']) : '&mdash;' ?></div>
                     </div>
                 </div>
                 <div class="uv-field">

@@ -16,6 +16,7 @@ if (!$sessionUserId || !in_array($sessionRole, $allowedRoles, true)) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']);
     exit;
 }
+gjc_csrf_require_json();
 
 $encashmentId = filter_input(INPUT_POST, 'encashment_id', FILTER_VALIDATE_INT);
 $merchantWalletId = filter_input(INPUT_POST, 'merchant_wallet_id', FILTER_VALIDATE_INT);
@@ -57,10 +58,9 @@ try {
         exit;
     }
 
-    $engine = new CirculationEngine($db);
-    $result = $engine->merchantSettle($requestWalletId, $requestAmount, $sessionUserId);
-
-    $update = $db->prepare(
+    // Claim the request before moving money, so two releases (or a release
+    // racing a reject) can never settle the same request twice.
+    $claim = $db->prepare(
         "UPDATE encashment_requests
             SET status = 'released',
                 released_by = ?,
@@ -68,11 +68,28 @@ try {
           WHERE id = ?
             AND status = 'pending'"
     );
-    $update->execute([$sessionUserId, $encashmentId]);
-
-    if ($update->rowCount() !== 1) {
-        throw new RuntimeException('Encashment release state changed before completion. Please refresh and verify the record.');
+    $claim->execute([$sessionUserId, $encashmentId]);
+    if ($claim->rowCount() !== 1) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'message' => 'This encashment request has already been processed.']);
+        exit;
     }
+
+    try {
+        $result = (new CirculationEngine($db))->merchantSettle($requestWalletId, $requestAmount, $sessionUserId);
+    } catch (\Throwable $e) {
+        // No money moved; hand the request back so it can be retried or rejected.
+        $db->prepare(
+            "UPDATE encashment_requests
+                SET status = 'pending', released_by = NULL, released_at = NULL
+              WHERE id = ? AND status = 'released' AND reference_no IS NULL"
+        )->execute([$encashmentId]);
+        throw $e;
+    }
+
+    // Links the request to its ledger row (admin counts skip linked requests).
+    $db->prepare("UPDATE encashment_requests SET reference_no = ? WHERE id = ?")
+        ->execute([$result['reference'], $encashmentId]);
 
     logAudit(
         $db,

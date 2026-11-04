@@ -8,7 +8,7 @@ $currentPage = $currentPage ?? '';
         </div>
         <div class="parent-brand-text">
             <h4>GenPay</h4>
-            <span>Parent Portal</span>
+            <span>Guardian Portal</span>
         </div>
     </div>
     <nav class="parent-menu">

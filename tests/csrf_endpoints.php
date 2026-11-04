@@ -12,7 +12,7 @@ $endpoints = [
     'merchant/api/returns.php', 'merchant/api/topup.php', 'merchant/api/inventory.php',
     'merchant/api/profile.php', 'parent/api/controls.php', 'parent/api/link.php',
     'parent/api/cart.php', 'parent/api/alerts.php', 'student/api/cart.php',
-    'api/profile_photo.php',
+    'api/profile_photo.php', 'admin/release_encashment.php', 'admin/reject_encashment.php',
 ];
 
 $failures = 0;

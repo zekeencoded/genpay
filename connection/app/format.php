@@ -110,10 +110,10 @@ function gjc_role_name($role): string
             2 => 'merchant',
             3 => 'finance',
             4 => 'finance',
-            5 => 'merchant',
             6 => 'merchant',
             7 => 'parent',
             8 => 'finance',
+            9 => 'student', // faculty use the student portal; gjc_is_faculty() tells them apart
         ][(int) $role] ?? 'guest';
     }
 

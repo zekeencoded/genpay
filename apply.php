@@ -34,6 +34,12 @@ if (isset($_SESSION['apply_success']) && isset($_GET['submitted'])) {
     unset($_SESSION['apply_success']);
 }
 
+// After a submit, Back/refresh to the form lands on an "expired" page instead of a re-submittable form.
+if (isset($_GET['new'])) unset($_SESSION['apply_done']);
+$expired = !$success && $_SERVER['REQUEST_METHOD'] !== 'POST' && !empty($_SESSION['apply_done']);
+// no-store keeps the browser from restoring the filled form from cache on Back.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
 // ── POST - validate, upload, insert ──────────────────────────
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $old = [
@@ -269,6 +275,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 'email'   => $old['email'],
                 'meeting' => $meetingInfo,
             ];
+            $_SESSION['apply_done'] = $appId;
             header('Location: ' . BASE_URL . '/apply?submitted=1');
             exit;
         } catch (Throwable $e) {
@@ -350,7 +357,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
 <header class="hero-simple apply-hero">
     <div class="wrap hero-text">
         <h1>Stall <span>Application</span></h1>
-        <?php if (!$success): ?>
+        <?php if (!$success && !$expired): ?>
         <p>Complete all sections and upload the required documents. A specific stall will be assigned during the review process.</p>
         <?php endif; ?>
     </div>
@@ -413,6 +420,23 @@ function apply_photo_preview_data_uri(array $attached): ?string
         <?php endif; ?>
 
         <div class="success-ref">Application #<?= str_pad($appId, 5, "0", STR_PAD_LEFT) ?></div>
+    </div>
+
+<?php elseif ($expired): ?>
+
+    <div class="success-card">
+        <div class="success-icon" style="color:#c0392b"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="success-title">Confirm Form Resubmission</div>
+        <p class="success-sub">
+            This page has expired. Your application
+            <strong>#<?= str_pad((int) $_SESSION['apply_done'], 5, "0", STR_PAD_LEFT) ?></strong>
+            was already submitted, so the form can't be sent again from here.
+            Your meeting schedule was sent to your email.
+        </p>
+        <p class="success-sub">
+            <a href="<?= BASE_URL ?>/">Back to home</a> &middot;
+            <a href="<?= BASE_URL ?>/apply?new=1">Submit a different application</a>
+        </p>
     </div>
 
 <?php else: ?>
@@ -699,7 +723,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
                         "business_permit"  => ["icon" => "fa-briefcase",      "label" => "Business Permit"],
                         "sanitary_permit"  => ["icon" => "fa-pump-soap",       "label" => "Sanitary Permit"],
                         "gjc_requirements" => ["icon" => "fa-graduation-cap",  "label" => "GJC Requirements"],
-                        "clearance"        => ["icon" => "fa-clipboard-check", "label" => "Clearance"],
+                        "clearance"        => ["icon" => "fa-clipboard-check", "label" => "Barangay Clearance"],
                     ];
                     foreach ($docFields as $field => $meta):
                         $docAttached = $attachedFiles[$field]['orig'] ?? null;
@@ -819,6 +843,9 @@ function apply_photo_preview_data_uri(array $attached): ?string
 <script src="<?= JS_URL ?>/bootstrap.bundle.min.js"></script>
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <script>
+// Back-forward cache can still restore the old form; reload so the server shows the expired page.
+window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
+
 // Submit stays locked until reCAPTCHA is ticked and fresh.
 let recaptchaDone = false;
 function gjcRecaptchaSet()   { recaptchaDone = true;  checkSubmitReady(); }

@@ -27,9 +27,9 @@ $memberSince = $createdAt !== '' ? date('F Y', strtotime($createdAt)) : 'N/A';
 $profileImg = (string) ($rawUser['profile_img'] ?? '');
 $profilePhotoUrl = ($profileImg !== '') ? (BASE_URL . '/' . ltrim($profileImg, '/')) : '';
 
-// Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
-// for accounts that never got a student_info row.
-$studentID = 'GJC-' . str_pad((string) $currentUser['id'], 5, '0', STR_PAD_LEFT);
+// Real school-issued ID (GJC2026-0001); placeholder (same as admin) for accounts
+// that never got a student_info row.
+$studentID = 'GJC' . date('Y') . '-????';
 if (gjc_table_exists($db, 'student_info')) {
     $sidStmt = $db->prepare("SELECT studentID FROM student_info WHERE userID = ? LIMIT 1");
     $sidStmt->execute([(int) $currentUser['id']]);
@@ -37,6 +37,13 @@ if (gjc_table_exists($db, 'student_info')) {
     if ($realID !== '') {
         $studentID = $realID;
     }
+}
+// Faculty rows always have the column: gjc_ensure_faculty_schema runs when they are created.
+$facultyDept = '';
+if (gjc_is_faculty()) {
+    $deptStmt = $db->prepare("SELECT department FROM student_info WHERE userID = ? LIMIT 1");
+    $deptStmt->execute([(int) $currentUser['id']]);
+    $facultyDept = trim((string) $deptStmt->fetchColumn());
 }
 
 // Live wallet freeze status instead of hardcoded text.
@@ -158,7 +165,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=8">
 </head>
 
 <body class="sd-body">
@@ -208,6 +215,7 @@ $currentPage = 'profile';
                             <div class="ph-id-who">
                                 <h2 class="ph-id-name"><?= $e($studentName) ?></h2>
                                 <p class="ph-id-no"><?= $e($studentID) ?></p>
+                                <?php if ($facultyDept !== ''): ?><p class="ph-id-since"><?= $e($facultyDept) ?></p><?php endif; ?>
                                 <p class="ph-id-since">Member since <?= $e($memberSince) ?></p>
                             </div>
                         </div>
@@ -234,7 +242,7 @@ $currentPage = 'profile';
                             <div>
                                 <?php if ($isFrozen): ?>
                                     <dt>Spending today</dt>
-                                    <dd class="is-paused">Paused by your guardian</dd>
+                                    <dd class="is-paused"><?= gjc_is_faculty() ? 'Paused by the Finance Office' : 'Paused by your guardian' ?></dd>
                                 <?php else: ?>
                                     <dt>Spent today</dt>
                                     <dd><?= gjc_gc_amount($spentToday) ?> GC</dd>
@@ -272,6 +280,9 @@ $currentPage = 'profile';
                      guardian request opens first: it is waiting on the student. -->
                 <?php
                 $phTabs = ['details' => 'Details', 'guardian' => 'Guardian', 'status' => 'Status', 'settings' => 'Settings'];
+                if (gjc_is_faculty()) {
+                    unset($phTabs['guardian']); // guardians link to students only
+                }
                 // ?tab= comes from notification links (e.g. fee waiver -> status).
                 $phTabParam = is_string($_GET['tab'] ?? null) ? $_GET['tab'] : '';
                 $phTab = isset($phTabs[$phTabParam]) ? $phTabParam : ($linkRequests ? 'guardian' : 'details');
@@ -342,12 +353,12 @@ $currentPage = 'profile';
                         </div>
                     </div>
                     <?php foreach ($linkRequests as $r):
-                        $rName = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')) ?: 'A parent'; ?>
+                        $rName = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')) ?: 'A guardian'; ?>
                     <div class="ph-row" data-link-request="<?= (int) $r['id'] ?>" data-name="<?= $e($rName) ?>">
                         <span class="ph-ic"><i class="fa-solid fa-user-clock"></i></span>
                         <span class="ph-grow">
                             <span class="ph-t"><?= $e($rName) ?> wants to link to your account</span>
-                            <span class="ph-s"><?= $e($r['email'] ?? '') ?> &middot; requested <?= $e(date('M j, Y g:i A', strtotime($r['requested_at']))) ?>. Approve only if this is your parent or guardian.</span>
+                            <span class="ph-s"><?= $e($r['email'] ?? '') ?> &middot; requested <?= $e(date('M j, Y g:i A', strtotime($r['requested_at']))) ?>. Approve only if this is your guardian.</span>
                         </span>
                         <button type="button" class="ph-mini-btn" data-link-action="approve">Approve</button>
                         <button type="button" class="ph-link" data-link-action="decline">Decline</button>
@@ -360,7 +371,7 @@ $currentPage = 'profile';
                             <span class="ph-ini"><?= $e(strtoupper(substr($gName, 0, 1))) ?></span>
                             <span class="ph-grow">
                                 <span class="ph-t"><?= $e($gName) ?></span>
-                                <span class="ph-s">Parent / guardian<?= !empty($g['linked_at']) ? ' &middot; linked ' . $e(date('F Y', strtotime($g['linked_at']))) : '' ?></span>
+                                <span class="ph-s">Guardian<?= !empty($g['linked_at']) ? ' &middot; linked ' . $e(date('F Y', strtotime($g['linked_at']))) : '' ?></span>
                             </span>
                         </div>
                         <?php endforeach; ?>
@@ -369,7 +380,7 @@ $currentPage = 'profile';
                             <span class="ph-ic"><i class="fa-solid fa-link"></i></span>
                             <span class="ph-grow">
                                 <span class="ph-t">No guardian linked yet</span>
-                                <span class="ph-s">Send your parent your Student ID, <strong><?= $e($studentID) ?></strong>. They link you from the Parent Portal.</span>
+                                <span class="ph-s">Send your guardian your Student ID, <strong><?= $e($studentID) ?></strong>. They link you from the Guardian Portal.</span>
                             </span>
                             <button type="button" class="ph-mini-btn" id="copyStudentId" data-id="<?= $e($studentID) ?>">
                                 <i class="fa-regular fa-copy me-1"></i>Copy ID
@@ -398,6 +409,7 @@ $currentPage = 'profile';
                         <span>Payments &amp; transfers</span>
                         <div><span class="ph-pill has-dot <?= $transactionsEnabled ? 'is-ok' : 'is-warn' ?>"><?= $transactionsEnabled ? 'Enabled' : ($isFrozen ? 'Paused' : 'Wallet pending') ?></span></div>
                     </div>
+                    <?php if (!gjc_is_faculty()): ?>
                     <div class="ph-kv">
                         <span>Fee waiver credit</span>
                         <div>
@@ -430,10 +442,15 @@ $currentPage = 'profile';
                             <?php endif; ?>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <div class="ph-note">
                         <i class="fa-solid fa-lock"></i>
+                        <?php if (gjc_is_faculty()): ?>
+                        <span>Only the Finance Office can pause your wallet.</span>
+                        <?php else: ?>
                         <span>Limits and freezes are set by your guardian or the Finance Office. Maintenance fees are billed with tuition, never taken from your wallet.</span>
+                        <?php endif; ?>
                     </div>
                 </section>
                 </div><!-- /.tab-pane -->
@@ -507,24 +524,26 @@ $currentPage = 'profile';
                 <div class="modal-body">
                     <details class="ph-faq" open>
                         <summary>What is GenCoin (GC)?</summary>
-                        <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. It's used to pay at the canteen, send money to other students, and top up your wallet &mdash; no separate balance is stored, it's just a display conversion of your peso balance.</p>
+                        <p>GenCoin is GenPay's in-app currency, fixed at &#8369;10 = 1 GC. It's used to pay at the canteen, send money to other students and faculty, and top up your wallet &mdash; no separate balance is stored, it's just a display conversion of your peso balance.</p>
                     </details>
                     <details class="ph-faq">
                         <summary>How do I top up my wallet?</summary>
                         <p>Hand your cash to the <strong>Finance Office</strong> or any participating canteen merchant. They load it straight into your wallet at the counter &mdash; there is nothing to submit beforehand, and the credit shows up in your History right away.</p>
                     </details>
                     <details class="ph-faq">
-                        <summary>How do I send GenCoin to another student?</summary>
-                        <p>Go to <strong>Send GenCoin</strong>, enter their Student ID to look them up, then the amount. Transfers are instant and cannot be undone, so double-check the recipient before confirming.</p>
+                        <summary>How do I send GenCoin to someone?</summary>
+                        <p>Go to <strong>Send GenCoin</strong>, enter their Student or Employee ID to look them up, then the amount. Transfers are instant and cannot be undone, so double-check the recipient before confirming.</p>
                     </details>
+                    <?php if (!gjc_is_faculty()): ?>
                     <details class="ph-faq">
                         <summary>Why is my wallet frozen?</summary>
-                        <p>A parent or guardian linked to your account can freeze your wallet from the Parent Portal. Check <strong>Account status</strong> on your profile, or ask them directly if you think this is a mistake.</p>
+                        <p>A guardian linked to your account can freeze your wallet from the Guardian Portal. Check <strong>Account status</strong> on your profile, or ask them directly if you think this is a mistake.</p>
                     </details>
                     <details class="ph-faq">
                         <summary>What is the Fee Waiver Credit?</summary>
                         <p>It's a school-managed credit that Finance applies toward your tuition once your signed waiver is on file &mdash; separate from your GenCoin wallet. Its status appears in <strong>Account status</strong> on your profile.</p>
                     </details>
+                    <?php endif; ?>
                     <details class="ph-faq">
                         <summary>I forgot my password. What do I do?</summary>
                         <p>Visit the Finance Office with a valid ID and request a password reset. If you're already logged in and just want to change it, use <strong>Change password</strong> in Settings instead.</p>
@@ -716,7 +735,7 @@ $currentPage = 'profile';
             const confirmed = await gpConfirm({
                 title: approve ? 'Approve this guardian?' : 'Decline this request?',
                 body: approve
-                    ? 'Approve only if this is really your parent or guardian.'
+                    ? 'Approve only if this is really your guardian.'
                     : 'They will not be linked to your account. They can send a new request later.',
                 detail: [['Requested by', row.dataset.name]],
                 note: approve ? 'They will be able to view your wallet and transactions, send you allowance, and set spending limits or freeze your wallet.' : '',

@@ -17,7 +17,7 @@ $parentUserId = gjc_user_id();
 $parentId = gjc_parent_id_for_user($db, $parentUserId);
 if (!$parentId) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Parent record not found.']);
+    echo json_encode(['success' => false, 'error' => 'Guardian record not found.']);
     exit;
 }
 
@@ -119,7 +119,7 @@ try {
 
             echo json_encode([
                 'success' => true,
-                'message' => sprintf('Sent %s to %s.', gjc_money($amount), $studentName),
+                'message' => sprintf('Sent %s to %s.', gjc_money_plain($amount), $studentName),
                 'reference' => $result['reference'],
             ]);
             break;

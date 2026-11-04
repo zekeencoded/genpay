@@ -139,7 +139,7 @@ $currentPage = 'profile';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_shell.css?v=27">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=8">
     <link rel="stylesheet" href="<?= CSS_URL ?>/parent_profile.css?v=13">
 </head>
 <body class="gp-theme">
@@ -185,7 +185,7 @@ $currentPage = 'profile';
                         </div>
                         <div class="ph-id-who">
                             <h2 class="ph-id-name"><?= htmlspecialchars($fullName) ?></h2>
-                            <p class="ph-id-no is-text">Parent / Guardian</p>
+                            <p class="ph-id-no"><?= htmlspecialchars(gjc_guardian_id($parentId, $createdAt)) ?></p>
                             <p class="ph-id-since">Member since <?= htmlspecialchars($memberSince) ?></p>
                         </div>
                     </div>

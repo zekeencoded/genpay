@@ -143,7 +143,7 @@ function sa_meeting_label(?string $dt): string
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=11">
@@ -421,73 +421,78 @@ function sa_meeting_label(?string $dt): string
 </div>
 
 <!-- Reject reason modal -->
-<div class="modal fade" id="reasonModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="reasonModal" tabindex="-1" aria-labelledby="reasonTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title" id="reasonTitle">Reason</h5>
+                <div>
+                    <h5 class="modal-title"><i class="fa-solid fa-circle-xmark is-danger"></i><span id="reasonTitle">Reason</span></h5>
+                    <p class="gp-modal-sub" id="reasonHelp"></p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small" id="reasonHelp"></p>
-                <textarea id="reasonText" class="form-control" rows="3" placeholder="Enter the reason..."></textarea>
+                <label for="reasonText">Reason *</label>
+                <textarea id="reasonText" rows="3"></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
-                <button type="button" class="btn btn-danger" id="reasonConfirm">Confirm</button>
+                <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="maintenance-btn danger" id="reasonConfirm">Confirm</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Award confirmation modal -->
-<div class="modal fade" id="awardModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="awardModal" tabindex="-1" aria-labelledby="awardTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title" id="awardTitle">Award Stall</h5>
+                <h5 class="modal-title" id="awardTitle"><i class="fa-solid fa-award"></i>Award Stall</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p class="mb-2" id="awardConfirmText"></p>
-                <p class="text-danger small mb-0"><strong>This cannot be undone.</strong></p>
+                <div class="maintenance-alert warning mb-0">This cannot be undone.</div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
-                <button type="button" class="btn btn-success" id="awardConfirm">Award Stall</button>
+                <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="maintenance-btn primary" id="awardConfirm">Award Stall</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Reschedule meeting modal -->
-<div class="modal fade" id="rescheduleModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title">Reschedule Meeting</h5>
+                <div>
+                    <h5 class="modal-title" id="rescheduleTitle"><i class="fa-solid fa-calendar-days"></i>Reschedule Meeting</h5>
+                    <p class="gp-modal-sub" id="resCurrent"></p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small" id="resCurrent"></p>
-                <div class="row g-2">
+                <div class="row g-3">
                     <div class="col-6">
-                        <label class="form-label small mb-1" for="resDate">New Date</label>
-                        <input type="date" class="form-control form-control-sm" id="resDate">
+                        <label for="resDate">New Date</label>
+                        <input type="date" id="resDate">
                     </div>
                     <div class="col-6">
-                        <label class="form-label small mb-1" for="resTime">New Time</label>
-                        <select class="form-select form-select-sm" id="resTime" disabled>
+                        <label for="resTime">New Time</label>
+                        <select id="resTime" disabled>
                             <option value="">Pick a date first&hellip;</option>
                         </select>
                     </div>
                 </div>
                 <div class="small mt-2" id="resHint"></div>
-                <div class="small text-muted mt-3"><i class="fa-solid fa-envelope me-1"></i>The applicant will automatically receive an email with the new schedule.</div>
+                <div class="form-text mt-3"><i class="fa-solid fa-envelope me-1" aria-hidden="true"></i>The applicant is emailed the new schedule automatically.</div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
-                <button type="button" class="btn btn-success" id="resConfirm" disabled><i class="fa-solid fa-calendar-pen me-1"></i>Reschedule</button>
+                <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="maintenance-btn primary" id="resConfirm" disabled>Reschedule</button>
             </div>
         </div>
     </div>
@@ -1018,7 +1023,7 @@ function askReason(id) {
     document.getElementById('reasonTitle').textContent = 'Reject Application';
     document.getElementById('reasonHelp').textContent = 'The application will be terminated. The applicant must submit a brand-new application.';
     document.getElementById('reasonText').value = '';
-    document.getElementById('reasonConfirm').className = 'btn btn-danger';
+    document.getElementById('reasonConfirm').className = 'maintenance-btn danger';
     reasonModal.show();
 }
 document.getElementById('reasonConfirm').addEventListener('click', () => {

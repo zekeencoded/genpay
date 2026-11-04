@@ -16,9 +16,9 @@ $wallet      = gjc_student_wallet($db, (int) $currentUser['id']);
 $studentName = $currentUser['name'];
 $balance     = (float) $wallet['balance'];
 
-// Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
-// for accounts that never got a student_info row.
-$studentID = 'GJC-' . str_pad((string) $currentUser['id'], 5, '0', STR_PAD_LEFT);
+// Real school-issued ID (GJC2026-0001); placeholder (same as admin) for accounts
+// that never got a student_info row.
+$studentID = 'GJC' . date('Y') . '-????';
 if (gjc_table_exists($db, 'student_info')) {
     $sidStmt = $db->prepare("SELECT studentID FROM student_info WHERE userID = ? LIMIT 1");
     $sidStmt->execute([(int) $currentUser['id']]);
@@ -84,7 +84,7 @@ $csrfToken = gjc_csrf_token();
                     <div class="sd-balance-holder">
                         <strong><?= $e($studentName) ?></strong>
                         <span class="sd-holder-id"><?= $e($studentID) ?></span>
-                        <span class="sd-role-badge">STUDENT</span>
+                        <span class="sd-role-badge"><?= gjc_is_faculty() ? 'FACULTY' : 'STUDENT' ?></span>
                     </div>
                 </section>
 

@@ -158,7 +158,7 @@ try {
             $parentId = gjc_parent_id_for_user($db, $parentUserId);
             $parentWallet = $parentId ? gjc_parent_wallet($db, $parentId) : [ 'id' => 0 ];
             if ((int) $parentWallet['id'] <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Parent wallet not found.']);
+                echo json_encode(['success' => false, 'message' => 'Guardian wallet not found.']);
                 exit;
             }
 

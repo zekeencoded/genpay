@@ -67,7 +67,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/settings.css?v=16">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=4">
 
@@ -248,7 +248,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                     <div class="settings-grid">
                         <div class="settings-field money-field">
                             <label>Default Daily Spend Cap</label>
-                            <small>0 = no cap. Parents can still override per student.</small>
+                            <small>0 = no cap. Guardians can still override per student.</small>
                             <div class="input-with-prefix">
                                 <span>₱</span>
                                 <input type="number" name="wallet_default_spend_cap" step="0.01" min="0"
@@ -496,7 +496,7 @@ $whole = fn(string $key): string => (string) (int) round((float) ($settings[$key
                                     ) ?></strong>
                                     <small>Students <?= gjc_money((float) ($snapshot['student_wallets_total'] ?? 0)) ?>
                                          · Merchants <?= gjc_money((float) ($snapshot['merchant_wallets_total'] ?? 0)) ?>
-                                         · Parents <?= gjc_money((float) ($snapshot['parent_wallets_total'] ?? 0)) ?></small>
+                                         · Guardians <?= gjc_money((float) ($snapshot['parent_wallets_total'] ?? 0)) ?></small>
                                 </div>
                             </div>
                             <div class="system-info-row">

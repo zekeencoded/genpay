@@ -72,7 +72,7 @@ $currentPage = "staff";
     <title>Staff Management | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=4">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -97,40 +97,41 @@ $currentPage = "staff";
             <div class="sd-stat">
                 <div class="sd-stat-top"><span>Total Staff</span><span class="sd-stat-icon is-txns"><i class="fa-solid fa-users"></i></span></div>
                 <h2 class="sd-num"><?= $totalStaff ?></h2>
-                <p><?= $activeStaff ?> active &middot; <?= $inactiveStaff ?> inactive</p>
+                <p><?= $activeStaff ?> active, <?= $inactiveStaff ?> inactive</p>
             </div>
             <div class="sd-stat">
-                <div class="sd-stat-top"><span>Remitted Today</span><span class="sd-stat-icon is-spent"><i class="fa-solid fa-paper-plane"></i></span></div>
+                <div class="sd-stat-top"><span>Handed in today</span><span class="sd-stat-icon is-spent"><i class="fa-solid fa-paper-plane"></i></span></div>
                 <h2 class="sd-num"><?= gjc_gc_amount($remittedToday) ?> GC</h2>
-                <p>&asymp; <?= gjc_money($remittedToday) ?> &middot; handed in today</p>
+                <p>&asymp; <?= gjc_money($remittedToday) ?></p>
             </div>
             <div class="sd-stat">
-                <div class="sd-stat-top"><span>Total Remitted</span><span class="sd-stat-icon is-status"><i class="fa-solid fa-money-bill-wave"></i></span></div>
+                <div class="sd-stat-top"><span>Handed in, all time</span><span class="sd-stat-icon is-status"><i class="fa-solid fa-money-bill-wave"></i></span></div>
                 <h2 class="sd-num"><?= gjc_gc_amount($remittedTotal) ?> GC</h2>
-                <p>&asymp; <?= gjc_money($remittedTotal) ?> &middot; all-time across your team</p>
+                <p>&asymp; <?= gjc_money($remittedTotal) ?> across your team</p>
             </div>
         </section>
 
-        <section class="merchant-premium-panel">
-            <div class="merchant-panel-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h3>Staff Accounts</h3>
-                    <p><?= count($staffList) ?> staff member(s) registered.</p>
+        <section class="merchant-premium-panel staff-panel">
+            <header class="staff-head">
+                <div class="staff-summary">
+                    <h3 class="staff-summary-line">Staff accounts</h3>
+                    <p class="staff-summary-today">People who can run POS sales for your stall.</p>
                 </div>
-                <button class="merchant-view-btn" data-bs-toggle="modal" data-bs-target="#staffModal">+ Add Staff</button>
-            </div>
+                <button class="staff-add-btn" data-bs-toggle="modal" data-bs-target="#staffModal">
+                    <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Add staff member
+                </button>
+            </header>
 
-            <!-- Status Filter -->
-            <div class="staff-toolbar mb-3">
-            <div class="staff-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" id="staffSearch" class="form-control" placeholder="Search name, email, position…" autocomplete="off">
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-success active" id="filter-Active" onclick="setStatusFilter('Active')">Active Only</button>
-                <button class="btn btn-sm btn-outline-secondary" id="filter-Inactive" onclick="setStatusFilter('Inactive')">Inactive</button>
-                <button class="btn btn-sm btn-outline-secondary" id="filter-All" onclick="setStatusFilter('All')">Show All</button>
-            </div>
+            <div class="staff-toolbar">
+                <div class="staff-search">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" id="staffSearch" class="form-control" placeholder="Search name, email, position or number" aria-label="Search staff" autocomplete="off">
+                </div>
+                <div class="staff-seg" role="group" aria-label="Filter by access">
+                    <button type="button" id="filter-Active" aria-pressed="true" onclick="setStatusFilter('Active')">Active <span><?= $activeStaff ?></span></button>
+                    <button type="button" id="filter-Inactive" aria-pressed="false" onclick="setStatusFilter('Inactive')">Inactive <span><?= $inactiveStaff ?></span></button>
+                    <button type="button" id="filter-All" aria-pressed="false" onclick="setStatusFilter('All')">All <span><?= $totalStaff ?></span></button>
+                </div>
             </div>
 
             <div class="table-responsive">
@@ -139,23 +140,25 @@ $currentPage = "staff";
                         <tr>
                             <th data-card="title">Name</th>
                             <th>Position</th>
-                            <th data-card="hide">Date Hired</th>
-                            <th data-card="hide">Remitted</th>
-                            <th data-card="hide">Last Remit</th>
-                            <th style="cursor:pointer" onclick="sortByStatus()" title="Sort by status">
-                                Status <i class="fa-solid fa-sort ms-1" id="statusSortIcon"></i>
+                            <th data-card="hide">Joined</th>
+                            <th>Handed in</th>
+                            <th data-card="hide">Last hand-in</th>
+                            <th style="cursor:pointer" onclick="sortByStatus()" title="Sort by access">
+                                Access <i class="fa-solid fa-sort ms-1" id="statusSortIcon"></i>
                             </th>
-                            <th class="text-end">Action</th>
+                            <th class="text-end"><span class="visually-hidden">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody id="staffTableBody">
                     <?php if (empty($staffList)): ?>
-                        <tr><td colspan="7" class="text-center text-muted py-5">No staff accounts yet. Add your first staff member.</td></tr>
+                        <tr><td colspan="7" class="staff-empty">No staff yet. Use <b>Add staff member</b> to give someone their own POS login.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($staffList as $s): ?>
                         <?php
                         $isActive = ($s['status'] ?? 'Active') === 'Active';
                         $act = $activity[(int) $s['userID']] ?? null;
+                        $amount = (float) ($act['total_amount'] ?? 0);
+                        $share = $remittedTotal > 0 ? (int) round($amount / $remittedTotal * 100) : 0;
                         // Same path convention as view_staff.php.
                         $photo = trim((string) ($s['profile_img'] ?? ''));
                         $photoUrl = $photo !== '' ? BASE_URL . '/' . ltrim($photo, '/') : '';
@@ -169,21 +172,23 @@ $currentPage = "staff";
                         <tr data-status="<?= $isActive ? 'Active' : 'Inactive' ?>"
                             data-search="<?= $e(strtolower($fullName . ' ' . $s['email'] . ' ' . ($s['position'] ?? '') . ' ' . ($s['contact_number'] ?? ''))) ?>">
                             <td><div class="staff-namecell"><span class="staff-mini-avatar"><?php if ($photoUrl !== ''): ?><img src="<?= $e($photoUrl) ?>" alt="" onerror="this.remove()"><?php endif; ?><?= $e(strtoupper(mb_substr((string) $s['first_name'], 0, 1) . mb_substr((string) $s['last_name'], 0, 1))) ?></span><div class="staff-name-text"><strong><?= $e($fullName) ?></strong>
-                                <div class="staff-sub"><?= $e($s["email"]) ?><?= trim((string) $s["contact_number"]) !== '' ? ' &middot; ' . $e($s["contact_number"]) : '' ?></div></div></div></td>
+                                <div class="staff-sub"><?= $e($s["email"]) ?></div>
+                                <?php if (trim((string) $s["contact_number"]) !== ''): ?><div class="staff-sub"><?= $e($s["contact_number"]) ?></div><?php endif; ?></div></div></td>
                             <td><span class="merchant-type-pill"><?= $e($s["position"] !== null && trim((string) $s["position"]) !== '' ? $s["position"] : 'Merchant Staff') ?></span></td>
-                            <td><?= date("M d, Y", strtotime($s["created_at"])) ?></td>
-                            <td><strong><?= gjc_gc_amount($act['total_amount'] ?? 0) ?> GC</strong>
-                                <div class="staff-sub">&asymp; <?= gjc_money($act['total_amount'] ?? 0) ?><?php if ($act): ?> &middot; <?= (int) $act['total_txns'] ?> sale(s)<?php endif; ?></div></td>
-                            <td><?= $act && $act['last_at'] ? $e(date("M d, g:i A", strtotime($act['last_at']))) : '<span class="text-muted">Never</span>' ?></td>
+                            <td class="staff-muted"><?= date("M j, Y", strtotime($s["created_at"])) ?></td>
+                            <td class="staff-remit">
+                                <div class="staff-remit-top"><strong><?= gjc_gc_amount($amount) ?> GC</strong><span><?= $share ?>%</span></div>
+                                <div class="staff-meter" role="img" aria-label="<?= $share ?>% of everything your team has handed in"><i style="width: <?= $share ?>%"></i></div>
+                                <div class="staff-sub">&asymp; <?= gjc_money($amount) ?><?php if ($act): ?>, <?= (int) $act['total_txns'] ?> <?= (int) $act['total_txns'] === 1 ? 'sale' : 'sales' ?><?php endif; ?></div>
+                            </td>
+                            <td class="staff-muted"><?= $act && $act['last_at'] ? $e(date("M j, g:i A", strtotime($act['last_at']))) : 'Never' ?></td>
                             <td>
-                                <div class="staff-status-cell">
-                                    <span class="badge <?= $isActive ? 'bg-success' : 'bg-secondary' ?> status-badge"><?= $isActive ? 'Active' : 'Inactive' ?></span>
-                                    <div class="form-check form-switch mb-0">
-                                        <input class="form-check-input" type="checkbox" role="switch" title="Activate / deactivate"
-                                            <?= $isActive ? 'checked' : '' ?>
-                                            onchange="toggleStaffStatus(<?= (int) $s['userID'] ?>, this)">
-                                    </div>
-                                </div>
+                                <label class="staff-status-cell form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                        <?= $isActive ? 'checked' : '' ?>
+                                        onchange="toggleStaffStatus(<?= (int) $s['userID'] ?>, this)">
+                                    <span class="staff-state status-badge <?= $isActive ? 'is-on' : 'is-off' ?>"><?= $isActive ? 'Active' : 'Inactive' ?></span>
+                                </label>
                             </td>
                             <td class="text-end">
                                 <div class="merchant-row-actions">
@@ -191,7 +196,7 @@ $currentPage = "staff";
                                      against this owner's roster before rendering. -->
                                 <a class="merchant-row-btn merchant-row-btn--view"
                                     href="<?= MERCHANT_URL ?>/view_staff.php?token=<?= urlencode(gjc_make_view_token((int) $s['userID'], 'merchant_staff')) ?>">
-                                    <i class="fa-regular fa-eye"></i> View
+                                    View
                                 </a>
                                 <button type="button" class="merchant-row-btn"
                                     onclick="openManageStaff(this)"
@@ -209,12 +214,13 @@ $currentPage = "staff";
                                     data-sales="<?= (int) ($act['total_txns'] ?? 0) ?>"
                                     data-photo="<?= $e($photoUrl) ?>"
                                     data-lastremit="<?= $act && $act['last_at'] ? $e(date('M d, g:i A', strtotime($act['last_at']))) : 'Never' ?>">
-                                    <i class="fa-solid fa-user-gear"></i> Manage
+                                    Manage
                                 </button>
                                 </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
+                    <tr class="staff-nomatch" hidden><td colspan="7" class="staff-empty">No staff match this search or filter.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -223,13 +229,13 @@ $currentPage = "staff";
 </div>
 
 <!-- Add Staff Modal -->
-<div class="modal fade" id="staffModal" tabindex="-1">
+<div class="modal fade" id="staffModal" tabindex="-1" aria-labelledby="staffModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered staff-modal-dialog">
-        <div class="modal-content custom-modal staff-modal">
-            <div class="modal-header staff-modal-header">
+        <div class="modal-content gp-modal staff-modal">
+            <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">Create Staff Account</h5>
-                    <p class="staff-modal-subtitle">Give a team member their own POS login for your stall.</p>
+                    <h5 class="modal-title" id="staffModalTitle"><i class="fa-solid fa-user-plus"></i>Create Staff Account</h5>
+                    <p class="gp-modal-sub">Give a team member their own POS login for your stall.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -250,32 +256,32 @@ $currentPage = "staff";
 
                     <div class="staff-fields">
                         <div class="staff-section">
-                            <div class="staff-section-title"><i class="fa-solid fa-id-card"></i>Full legal name</div>
+                            <div class="staff-section-title">Full legal name</div>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">First Name *</label>
+                                    <label class="form-label">First Name *</label>
                                     <input type="text" class="form-control staff-name-input" name="first_name" placeholder="Juan" maxlength="60" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Middle Name</label>
+                                    <label class="form-label">Middle Name</label>
                                     <input type="text" class="form-control staff-name-input" name="middle_name" placeholder="Santos" maxlength="60">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Last Name *</label>
+                                    <label class="form-label">Last Name *</label>
                                     <input type="text" class="form-control staff-name-input" name="last_name" placeholder="Dela Cruz" maxlength="60" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Suffix</label>
+                                    <label class="form-label">Suffix</label>
                                     <input type="text" class="form-control" name="suffix" placeholder="Jr., Sr., III" maxlength="20">
                                 </div>
                             </div>
                         </div>
 
                         <div class="staff-section">
-                            <div class="staff-section-title"><i class="fa-solid fa-briefcase"></i>Role &amp; contact</div>
+                            <div class="staff-section-title">Role &amp; contact</div>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Position</label>
+                                    <label class="form-label">Position</label>
                                     <input type="text" class="form-control staff-name-input" name="position" id="staffPositionInput" placeholder="e.g. Cashier" list="staffPositionOptions" maxlength="60">
                                     <datalist id="staffPositionOptions">
                                         <option value="Cashier">
@@ -286,19 +292,19 @@ $currentPage = "staff";
                                     </datalist>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Contact Number</label>
+                                    <label class="form-label">Contact Number</label>
                                     <input type="text" class="form-control" name="contact_number" placeholder="09XXXXXXXXX" maxlength="20">
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label fw-semibold">Email *</label>
+                                    <label class="form-label">Email *</label>
                                     <input type="email" class="form-control" name="email" required>
                                 </div>
                             </div>
                         </div>
 
                         <div class="staff-section">
-                            <div class="staff-section-title"><i class="fa-solid fa-lock"></i>Account access</div>
-                            <label class="form-label fw-semibold">Temporary Password *</label>
+                            <div class="staff-section-title">Account access</div>
+                            <label class="form-label">Temporary Password *</label>
                             <div class="staff-password-row">
                                 <div class="staff-password-wrap">
                                     <input type="password" class="form-control" name="password" id="staffPasswordInput" required minlength="8">
@@ -306,13 +312,13 @@ $currentPage = "staff";
                                 </div>
                                 <button type="button" class="btn btn-outline-secondary staff-pw-generate" id="staffPwGenerate"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
                             </div>
-                            <div class="staff-pw-hint" id="staffPwHint">At least 6 characters. Share it with them directly — this field isn't emailed automatically.</div>
+                            <div class="staff-pw-hint" id="staffPwHint">At least 8 characters. They'll get a welcome email with a sign-in link, but the password isn't included, so give it to them directly.</div>
                         </div>
 
                         <div id="staffMsg"></div>
-                        <div class="staff-form-actions">
-                            <button type="submit" class="login-btn" id="staffSubmitBtn">Create Account</button>
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <div class="maintenance-btn-row mt-3">
+                            <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="maintenance-btn primary" id="staffSubmitBtn">Create Account</button>
                         </div>
                     </div>
                 </form>
@@ -323,13 +329,13 @@ $currentPage = "staff";
 
 <!-- Manage Staff Modal — details, password reset, remove. Filled per row by
      openManageStaff() from the Manage button's data-* attributes. -->
-<div class="modal fade" id="manageStaffModal" tabindex="-1">
+<div class="modal fade" id="manageStaffModal" tabindex="-1" aria-labelledby="manageStaffTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered staff-manage-dialog">
-        <div class="modal-content custom-modal staff-modal">
-            <div class="modal-header staff-modal-header">
+        <div class="modal-content gp-modal staff-modal">
+            <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">Manage Staff</h5>
-                    <p class="staff-modal-subtitle">Review their activity, edit details, reset their password or remove them.</p>
+                    <h5 class="modal-title" id="manageStaffTitle"><i class="fa-solid fa-user-gear"></i>Manage Staff</h5>
+                    <p class="gp-modal-sub">Review their activity, edit details, reset their password or remove them.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -363,37 +369,39 @@ $currentPage = "staff";
                     <input type="hidden" name="action" value="update_staff">
                     <input type="hidden" name="user_id">
                     <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
-                    <div class="staff-section-title"><i class="fa-solid fa-id-card"></i>Name &amp; position</div>
+                    <div class="staff-section-title">Name &amp; position</div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">First Name *</label>
+                            <label class="form-label">First Name *</label>
                             <input type="text" class="form-control" name="first_name" maxlength="60" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Middle Name</label>
+                            <label class="form-label">Middle Name</label>
                             <input type="text" class="form-control" name="middle_name" maxlength="60">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Last Name *</label>
+                            <label class="form-label">Last Name *</label>
                             <input type="text" class="form-control" name="last_name" maxlength="60" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Suffix</label>
+                            <label class="form-label">Suffix</label>
                             <input type="text" class="form-control" name="suffix" maxlength="20">
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Position</label>
+                            <label class="form-label">Position</label>
                             <input type="text" class="form-control" name="position" placeholder="e.g. Cashier" list="staffPositionOptions" maxlength="60">
                         </div>
                     </div>
-                    <button type="submit" class="login-btn mt-3 w-100" id="manageSaveBtn">Save Details</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="submit" class="maintenance-btn primary" id="manageSaveBtn">Save Details</button>
+                    </div>
                 </form>
 
                 <form id="resetStaffPwForm" class="staff-section">
                     <input type="hidden" name="action" value="reset_staff_password">
                     <input type="hidden" name="user_id">
                     <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
-                    <div class="staff-section-title"><i class="fa-solid fa-key"></i>Reset password</div>
+                    <div class="staff-section-title">Reset password</div>
                     <div class="staff-password-row">
                         <div class="staff-password-wrap">
                             <input type="text" class="form-control" name="password" id="resetPwInput" minlength="8" placeholder="New temporary password" autocomplete="new-password" required>
@@ -401,15 +409,19 @@ $currentPage = "staff";
                         <button type="button" class="btn btn-outline-secondary staff-pw-generate" id="resetPwGenerate"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
                     </div>
                     <div class="staff-pw-hint">Give this to them in person. They will have to choose their own password when they next sign in.</div>
-                    <button type="submit" class="btn btn-outline-secondary mt-3 w-100 fw-bold" id="resetPwBtn">Reset Password</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="submit" class="maintenance-btn warning" id="resetPwBtn">Reset Password</button>
+                    </div>
                 </form>
 
                 <div class="staff-section">
-                    <div class="staff-section-title"><i class="fa-solid fa-user-xmark"></i>Remove from stall</div>
+                    <div class="staff-section-title">Remove from stall</div>
                     <p class="staff-pw-hint mt-0">Signs them out and blocks their login. Their past sales stay in your history. This cannot be undone from here.</p>
-                    <button type="button" class="btn btn-outline-danger w-100 fw-bold" id="removeStaffBtn">
-                        <i class="fa-solid fa-trash-can me-1"></i> Remove Staff Member
-                    </button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn danger" id="removeStaffBtn">
+                            <i class="fa-solid fa-trash-can"></i> Remove Staff Member
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -417,19 +429,87 @@ $currentPage = "staff";
 </div>
 
 <style>
-.staff-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-.staff-search { position: relative; flex: 1 1 260px; max-width: 360px; }
+/* ── Roster panel: one summary sentence, then the table. ── */
+.staff-panel { padding: 0; overflow: hidden; }
+.staff-head {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px;
+    padding: 20px 28px 18px; border-bottom: 1px solid var(--gp-line);
+}
+.staff-head { align-items: center; }
+.staff-summary { min-width: 0; }
+.staff-summary-line { margin: 0; font-size: 18px; font-weight: 800; color: var(--gp-ink); }
+.staff-summary-today { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+.staff-add-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px;
+    border: 0; border-radius: var(--gp-radius); background: var(--gp-green-900); color: #fff;
+    font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.staff-add-btn i { color: var(--gp-gold-light); }
+.staff-add-btn:hover { background: var(--gp-green-950); }
+
+.staff-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 16px 28px; background: var(--gp-cream); border-bottom: 1px solid var(--gp-line); }
+.staff-search { position: relative; flex: 1 1 260px; max-width: 380px; }
 .staff-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px; }
-.staff-search input { padding-left: 34px; }
-.staff-namecell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.staff-search input { padding-left: 34px; height: 38px; background: #fff; }
+
+/* Segmented filter; the pressed state comes from aria-pressed. */
+.staff-seg { display: inline-flex; padding: 3px; border: 1px solid var(--gp-line); border-radius: var(--gp-radius); background: #fff; }
+.staff-seg button {
+    border: 0; background: none; height: 30px; padding: 0 12px; border-radius: 3px;
+    font-size: 13px; font-weight: 600; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px;
+}
+.staff-seg button span { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .75; }
+.staff-seg button:hover { color: var(--gp-ink); }
+.staff-seg button[aria-pressed="true"] { background: var(--gp-green-900); color: #fff; }
+.staff-seg button[aria-pressed="true"] span { color: var(--gp-gold-light); opacity: 1; }
+.staff-seg button:focus-visible, .staff-add-btn:focus-visible { outline: 2px solid var(--gp-gold); outline-offset: 2px; }
+
+.staff-panel .table-responsive { padding: 4px 28px 12px; }
+#staffTable { width: 100%; margin: 0; }
+#staffTable thead th { font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+#staffTable td { padding-top: 16px; padding-bottom: 16px; }
+.staff-muted { color: var(--text-muted); font-size: 13px; }
+.staff-empty { text-align: center; color: var(--text-muted); padding: 48px 16px !important; }
+
+.staff-namecell { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .staff-name-text { min-width: 0; }
+.staff-name-text strong { font-weight: 700; }
 .staff-name-text .staff-sub { overflow-wrap: anywhere; }
-.staff-status-cell { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.staff-mini-avatar { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 36px; background: var(--gp-green-900); color: var(--gp-gold-light); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.staff-sub { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+#staffTable .merchant-type-pill { background: none; padding: 3px 10px; font-weight: 600; color: var(--gp-green-700); border-color: currentColor; }
+
+/* Handed-in: each person's share of the team total, as a gold meter. */
+.staff-remit { min-width: 150px; }
+.staff-remit-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.staff-remit-top strong { font-size: 15px; font-weight: 800; color: var(--gp-green-950); }
+.staff-remit-top span { font-size: 12px; color: var(--text-muted); }
+.staff-meter { height: 4px; margin: 6px 0 5px; border-radius: 2px; background: var(--gp-line); overflow: hidden; }
+.staff-meter i { display: block; height: 100%; background: var(--gp-gold); border-radius: 2px; }
+
+.staff-status-cell { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; padding-left: 0; cursor: pointer; }
+.staff-status-cell .form-check-input { margin: 0; float: none; cursor: pointer; }
+.staff-state { font-size: 13px; font-weight: 600; }
+.staff-state.is-on { color: var(--gp-green-700); }
+.staff-state.is-off { color: var(--text-muted); }
+#staffTable tr[data-status="Inactive"] .staff-namecell { opacity: .6; }
+
 .merchant-row-actions { flex-wrap: nowrap; }
-#staffTable { width: 100%; }
-.staff-mini-avatar { width: 32px; height: 32px; border-radius: 50%; flex: 0 0 32px; background: var(--gp-green-900); color: var(--gp-gold-light); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-.staff-sub { font-size: 11px; color: var(--text-muted); }
-.staff-empty-search { display: none; }
+#staffTable .merchant-row-btn { height: 32px; border-radius: var(--gp-radius); }
+#staffTable .merchant-row-btn--view { border-color: var(--gp-line); color: var(--gp-ink); }
+#staffTable .merchant-row-btn--view:hover { background: var(--gp-cream); color: var(--gp-ink); border-color: var(--gp-green-700); }
+#staffTable .merchant-row-btn:not(.merchant-row-btn--view) { background: var(--gp-green-900); border-color: var(--gp-green-900); color: #fff; }
+#staffTable .merchant-row-btn:not(.merchant-row-btn--view):hover { background: var(--gp-green-950); }
+
+@media (max-width: 767.98px) {
+    .staff-head { padding: 20px 16px 18px; align-items: stretch; }
+    .staff-add-btn { width: 100%; justify-content: center; }
+    .staff-toolbar { padding: 12px 16px; }
+    .staff-search { max-width: none; }
+    .staff-seg { width: 100%; }
+    .staff-seg button { flex: 1; justify-content: center; }
+    .staff-panel .table-responsive { padding: 8px 16px 12px; }
+}
 .staff-modal-dialog { max-width: 760px; }
 .staff-manage-dialog { max-width: 860px; }
 .staff-profile { border: 1px solid var(--ad-line); border-radius: 12px; padding: 16px; margin-bottom: 20px; background: var(--gp-cream, #faf8f2); }
@@ -449,8 +529,7 @@ $currentPage = "staff";
 @media (max-width: 480px) { .staff-profile-grid { grid-template-columns: 1fr; } }
 .staff-manage-body { padding: 20px 24px 24px; max-height: 76vh; overflow-y: auto; }
 .staff-modal { overflow: hidden; }
-.staff-modal-header { align-items: flex-start; border-bottom: 1px solid var(--ad-line); padding: 20px 24px 16px; }
-.staff-modal-subtitle { margin: 3px 0 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.staff-modal > .modal-header { padding-bottom: 16px; border-bottom: 1px solid var(--gp-line); }
 
 .staff-form-grid { display: flex; align-items: stretch; }
 
@@ -483,14 +562,9 @@ $currentPage = "staff";
 .staff-id-perks li i { color: var(--gp-gold-light); width: 14px; margin-top: 2px; }
 
 .staff-fields { flex: 1; min-width: 0; padding: 22px 26px 24px; max-height: 72vh; overflow-y: auto; }
-.staff-section + .staff-section { margin-top: 20px; }
-.staff-section-title {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--emerald-800); margin-bottom: 12px; padding-bottom: 8px;
-    border-bottom: 1px dashed var(--ad-line);
-}
-.staff-section-title i { color: var(--gp-gold-deep); }
+/* Same section rhythm as the admin Add User form (.mbf-section). */
+.staff-section + .staff-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--gp-line); }
+.staff-section-title { font-size: 14px; font-weight: 700; color: var(--gp-ink); margin-bottom: 12px; }
 
 .staff-password-row { display: flex; gap: 8px; }
 .staff-password-wrap { position: relative; flex: 1; min-width: 0; }
@@ -503,8 +577,6 @@ $currentPage = "staff";
 .staff-pw-generate { white-space: nowrap; font-size: 13px; font-weight: 700; }
 .staff-pw-hint { margin-top: 7px; font-size: 12px; color: var(--text-muted); }
 
-.staff-form-actions { display: flex; gap: 8px; margin-top: 22px; }
-.staff-form-actions .login-btn { flex: 1; }
 
 @media (max-width: 650px) {
     .staff-form-grid { flex-direction: column; }
@@ -597,6 +669,10 @@ document.getElementById('staffModal').addEventListener('show.bs.modal', function
 });
 
 // ── Create staff ──────────────────────────────────────────────────────────────
+// Drop a stale server error once the user edits the form.
+document.getElementById('staffForm').addEventListener('input', () => {
+    document.getElementById('staffMsg').innerHTML = '';
+});
 document.getElementById('staffForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = document.getElementById('staffSubmitBtn');
@@ -627,7 +703,7 @@ async function toggleStaffStatus(userId, checkbox) {
             const isActive = d.new_status === 'Active';
             row.dataset.status = d.new_status;
             const badge = row.querySelector('.status-badge');
-            badge.className = 'badge status-badge ' + (isActive ? 'bg-success' : 'bg-secondary');
+            badge.className = 'staff-state status-badge ' + (isActive ? 'is-on' : 'is-off');
             badge.textContent = d.new_status;
             checkbox.checked = isActive;
             applyStatusFilter();
@@ -648,7 +724,7 @@ const manageModalEl = document.getElementById('manageStaffModal');
 
 function refreshManageStatus(isActive) {
     const badge = document.getElementById('manageStatusBadge');
-    badge.className = 'badge status-badge ' + (isActive ? 'bg-success' : 'bg-secondary');
+    badge.className = 'staff-state status-badge ' + (isActive ? 'is-on' : 'is-off');
     badge.textContent = isActive ? 'Active' : 'Inactive';
     document.getElementById('manageStatusSwitch').checked = isActive;
 }
@@ -767,23 +843,23 @@ let currentFilter = 'Active';
 function setStatusFilter(value) {
     currentFilter = value;
     ['Active','Inactive','All'].forEach(v => {
-        const btn = document.getElementById('filter-' + v);
-        if (!btn) return;
-        const isActive = v === value;
-        btn.className = 'btn btn-sm ' + (isActive
-            ? (v === 'Active' ? 'btn-success active' : v === 'Inactive' ? 'btn-secondary active' : 'btn-dark active')
-            : 'btn-outline-secondary');
+        document.getElementById('filter-' + v)?.setAttribute('aria-pressed', v === value);
     });
     applyStatusFilter();
 }
 
 function applyStatusFilter() {
-    document.querySelectorAll('#staffTableBody tr[data-status]').forEach(row => {
-        const q = (document.getElementById('staffSearch')?.value || '').trim().toLowerCase();
+    const q = (document.getElementById('staffSearch')?.value || '').trim().toLowerCase();
+    const rows = document.querySelectorAll('#staffTableBody tr[data-status]');
+    let shown = 0;
+    rows.forEach(row => {
         const show = (currentFilter === 'All' || row.dataset.status === currentFilter)
             && (!q || (row.dataset.search || '').includes(q));
         row.style.display = show ? '' : 'none';
+        shown += show;
     });
+    const none = document.querySelector('#staffTableBody .staff-nomatch');
+    if (none) none.hidden = shown > 0 || rows.length === 0;
 }
 
 // ── Sort by status ────────────────────────────────────────────────────────────
@@ -801,6 +877,8 @@ function sortByStatus() {
     const icon = document.getElementById('statusSortIcon');
     if (icon) icon.className = 'fa-solid ms-1 ' + (statusSortAsc ? 'fa-sort-down' : 'fa-sort-up');
     rows.forEach(row => tbody.appendChild(row));
+    const none = tbody.querySelector('.staff-nomatch');
+    if (none) tbody.appendChild(none);
 }
 
 document.getElementById('staffSearch').addEventListener('input', applyStatusFilter);

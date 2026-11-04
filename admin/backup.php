@@ -43,7 +43,7 @@ function backup_size(int $bytes): string
     <title>Backup &amp; Restore | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-clear.css?v=24">
@@ -166,17 +166,22 @@ function backup_size(int $bytes): string
 
     <div class="modal fade" id="restoreModal" tabindex="-1" aria-hidden="true" aria-labelledby="restoreTitle">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius:16px;border:none;">
+            <div class="modal-content gp-modal">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="restoreTitle">Restore backup</h5>
+                    <div>
+                        <h5 class="modal-title" id="restoreTitle"><i class="fa-solid fa-clock-rotate-left is-danger"></i>Restore backup</h5>
+                        <p class="gp-modal-sub"><span class="bk-name" id="restoreName"></span></p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" style="font-size:14px;">
+                <div class="modal-body">
                     <div id="restoreForm">
-                        <p>This replaces <strong>all</strong> data and uploaded documents with the copy in
-                            <span class="bk-name" id="restoreName"></span>.
-                            Everything since then (payments, top-ups, new accounts) will be lost.
-                            The site is unavailable to everyone while it runs. A safety backup of the current state is taken first.</p>
+                        <p style="font-size:13px;margin-bottom:6px">Restoring replaces <strong>all</strong> data and uploaded documents with this copy:</p>
+                        <ul style="font-size:13px;color:var(--gp-muted);padding-left:18px;margin-bottom:12px">
+                            <li>everything since then (payments, top-ups, new accounts) is lost</li>
+                            <li>the site is unavailable to everyone while it runs</li>
+                        </ul>
+                        <div class="maintenance-alert success" style="margin-top:0">A safety backup of the current state is taken first.</div>
                         <div class="bk-field">
                             <label for="restorePassword">Your password</label>
                             <input type="password" id="restorePassword" autocomplete="current-password">
@@ -190,8 +195,8 @@ function backup_size(int $bytes): string
                     <ul class="bk-checks" id="restoreChecks" hidden></ul>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="bk-btn ghost" data-bs-dismiss="modal" id="restoreCancel">Cancel</button>
-                    <button type="button" class="bk-btn danger" id="restoreGo">Restore</button>
+                    <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal" id="restoreCancel">Cancel</button>
+                    <button type="button" class="maintenance-btn danger" id="restoreGo">Restore</button>
                 </div>
             </div>
         </div>

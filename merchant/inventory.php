@@ -37,7 +37,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -190,29 +190,35 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 
 <!-- Add Product Modal (Merchant Admin only) -->
 <?php if ($isMerchAdmin): ?>
-<div class="modal fade" id="addProductModal" tabindex="-1">
+<div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="productModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content custom-modal">
-            <div class="modal-header"><h5 class="modal-title" id="productModalTitle">Add Product</h5></div>
+        <div class="modal-content gp-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title"><i class="fa-solid fa-box-open"></i><span id="productModalTitle">Add Product</span></h5>
+                    <p class="gp-modal-sub">Students can scan and buy available products from your stall.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
             <div class="modal-body">
                 <form id="productForm">
                     <input type="hidden" name="action" value="add_product" id="productAction">
                     <input type="hidden" name="item_id" id="productId" value="">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">SKU (optional)</label>
+                            <label class="form-label">SKU (optional)</label>
                             <input type="text" class="form-control" name="sku" id="pSku" placeholder="e.g. RICE-001">
                         </div>
                         <div class="col-md-8">
-                            <label class="form-label fw-semibold">Product Name *</label>
+                            <label class="form-label">Product Name *</label>
                             <input type="text" class="form-control" name="product_name" id="pName" required>
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Description</label>
+                            <label class="form-label">Description</label>
                             <input type="text" class="form-control" name="description" id="pDesc" placeholder="Short description">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Category *</label>
+                            <label class="form-label">Category *</label>
                             <select class="form-select" name="category" id="pCategory">
                                 <?php foreach ($categories as $c): ?>
                                     <option value="<?= $c ?>"><?= ucwords($c) ?></option>
@@ -220,7 +226,7 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Unit *</label>
+                            <label class="form-label">Unit *</label>
                             <select class="form-select" name="unit" id="pUnit">
                                 <?php foreach ($units as $u): ?>
                                     <option value="<?= $u ?>"><?= ucwords($u) ?></option>
@@ -228,16 +234,16 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Price (₱) *</label>
+                            <label class="form-label">Price (₱) *</label>
                             <input type="number" class="form-control" name="price" id="pPrice" step="0.01" min="0" required>
                             <div class="form-text" id="pPriceGcHint" style="min-height:18px"></div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Stock Quantity *</label>
+                            <label class="form-label">Stock Quantity *</label>
                             <input type="number" class="form-control" name="stock_qty" id="pStock" min="0" required value="0">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Min Stock Alert</label>
+                            <label class="form-label">Min Stock Alert</label>
                             <input type="number" class="form-control" name="min_stock_alert" id="pMinStock" min="0" value="5">
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
@@ -248,9 +254,9 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                         </div>
                     </div>
                     <div id="productMsg" class="mt-3"></div>
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="login-btn" style="flex:1" id="productSubmitBtn">Save Product</button>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn primary" id="productSubmitBtn">Save Product</button>
                     </div>
                 </form>
             </div>
@@ -260,23 +266,28 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 <?php endif; ?>
 
 <!-- Edit Stock Modal -->
-<div class="modal fade" id="stockModal" tabindex="-1">
+<div class="modal fade" id="stockModal" tabindex="-1" aria-labelledby="stockTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal">
-            <div class="modal-header"><h5 class="modal-title">Update Stock Level</h5></div>
+        <div class="modal-content gp-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="stockTitle"><i class="fa-solid fa-boxes-stacked"></i>Update Stock Level</h5>
+                    <p class="gp-modal-sub"><strong id="stockProductName" style="color:var(--gp-ink)"></strong></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
             <div class="modal-body">
                 <form id="stockForm">
                     <input type="hidden" name="action" value="update_stock">
                     <input type="hidden" name="item_id" id="stockItemId">
-                    <p>Product: <strong id="stockProductName"></strong></p>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">New Stock Quantity</label>
-                        <input type="number" class="form-control form-control-lg" name="stock_qty" id="stockQtyInput" min="0" required>
+                    <div>
+                        <label class="form-label" for="stockQtyInput">New Stock Quantity *</label>
+                        <input type="number" class="form-control" name="stock_qty" id="stockQtyInput" min="0" required>
                     </div>
-                    <div id="stockMsg" class="mb-3"></div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="login-btn" style="flex:1">Update Stock</button>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <div id="stockMsg"></div>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn primary">Update Stock</button>
                     </div>
                 </form>
             </div>
@@ -285,22 +296,24 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 </div>
 
 <!-- Item QR Modal -->
-<div class="modal fade" id="itemQrModal" tabindex="-1">
+<div class="modal fade" id="itemQrModal" tabindex="-1" aria-labelledby="itemQrTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title">Item QR Code</h5>
+                <div>
+                    <h5 class="modal-title" id="itemQrTitle"><i class="fa-solid fa-qrcode"></i>Item QR Code</h5>
+                    <p class="gp-modal-sub">Print it and stick it next to the item on your menu. Students scan it to add the item to their cart.</p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <p class="text-muted mb-3">Print this and stick it next to the item on your cardboard menu. Students scan it to add this item to their cart.</p>
                 <img id="itemQrImage" src="" alt="Item QR" style="width:240px;height:240px;border-radius:12px;background:#fff;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
                 <h5 class="mt-3 mb-1" id="itemQrName">--</h5>
                 <p class="text-muted mb-0" id="itemQrPrice">--</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-success" id="itemQrPrintBtn"><i class="fa-solid fa-print"></i> Print</button>
+                <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="maintenance-btn primary" id="itemQrPrintBtn"><i class="fa-solid fa-print"></i> Print</button>
             </div>
         </div>
     </div>
@@ -308,21 +321,26 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 
 <!-- Delete Product Confirm Modal (Merchant Admin only) -->
 <?php if ($isMerchAdmin): ?>
-<div class="modal fade" id="deleteProductModal" tabindex="-1">
+<div class="modal fade" id="deleteProductModal" tabindex="-1" aria-labelledby="deleteProductTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title text-danger"><i class="fa-solid fa-trash-can me-2"></i>Delete Product</h5>
+                <div>
+                    <h5 class="modal-title" id="deleteProductTitle"><i class="fa-solid fa-trash-can is-danger"></i>Delete Product</h5>
+                    <p class="gp-modal-sub"><strong id="deleteProductName" style="color:var(--gp-ink)">--</strong></p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-1">Permanently remove this product from your catalog?</p>
-                <p class="fw-bold fs-5 mb-3" id="deleteProductName">--</p>
-                <p class="text-muted small mb-3"><i class="fa-solid fa-circle-info me-1"></i>Past sales records are not affected. Students will no longer be able to scan or buy this item.</p>
-                <div id="deleteProductMsg" class="mb-3"></div>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-danger" style="flex:1" id="confirmDeleteBtn"><i class="fa-solid fa-trash-can me-1"></i>Delete</button>
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <p style="font-size:13px;margin-bottom:6px">Deleting permanently removes this product from your catalog:</p>
+                <ul style="font-size:13px;color:var(--gp-muted);padding-left:18px;margin-bottom:0">
+                    <li>students can no longer scan or buy it</li>
+                    <li>past sales records are not affected</li>
+                </ul>
+                <div id="deleteProductMsg"></div>
+                <div class="maintenance-btn-row mt-3">
+                    <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="maintenance-btn danger" id="confirmDeleteBtn"><i class="fa-solid fa-trash-can"></i>Delete</button>
                 </div>
             </div>
         </div>
@@ -330,17 +348,18 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 </div>
 
 <!-- Restricted Product Blocked Modal (strikes below the risk threshold) -->
-<div class="modal fade" id="restrictedWarnModal" tabindex="-1">
+<div class="modal fade" id="restrictedWarnModal" tabindex="-1" aria-labelledby="restrictedWarnTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal" style="border-top:4px solid var(--gp-warning)">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
-                <h5 class="modal-title" style="color:var(--gp-warning)"><i class="fa-solid fa-triangle-exclamation me-2"></i>Restricted Product Blocked</h5>
+                <div>
+                    <h5 class="modal-title" id="restrictedWarnTitle"><i class="fa-solid fa-triangle-exclamation is-warning"></i>Restricted Product Blocked</h5>
+                    <p class="gp-modal-sub">This item cannot be added to your catalog: <strong id="rvProductName" style="color:var(--gp-ink)">--</strong></p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-1">This item cannot be added to your catalog:</p>
-                <p class="fw-bold fs-5 mb-2" id="rvProductName">--</p>
-                <div class="alert alert-warning" style="border-radius:10px;font-size:13px">
+                <div class="alert alert-warning">
                     <i class="fa-solid fa-ban me-1"></i><span id="rvReasonText">--</span>
                 </div>
                 <div class="mb-3">
@@ -350,30 +369,33 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
                     </div>
                     <div id="rvStrikePips" class="d-flex gap-1"></div>
                 </div>
-                <div class="alert alert-danger d-none" style="border-radius:10px;font-size:13px" id="rvEscalation"></div>
-                <p class="text-muted small mb-3"><i class="fa-solid fa-circle-info me-1"></i>Every blocked attempt is logged and visible to the GenPay finance team.</p>
-                <button type="button" class="login-btn w-100" data-bs-dismiss="modal">I Understand</button>
+                <div class="alert alert-danger d-none" id="rvEscalation"></div>
+                <div class="form-text"><i class="fa-solid fa-circle-info me-1"></i>Every blocked attempt is logged and visible to the GenPay finance team.</div>
+                <div class="maintenance-btn-row mt-3">
+                    <button type="button" class="maintenance-btn primary" data-bs-dismiss="modal">I Understand</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Account Suspended Modal (fires when the strike limit is hit) -->
-<div class="modal fade" id="accountRiskModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="accountRiskModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="accountRiskTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal" style="border-top:4px solid var(--gp-danger)">
-            <div class="modal-body text-center pt-4">
-                <div style="width:64px;height:64px;border-radius:50%;background:var(--gp-danger-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-                    <i class="fa-solid fa-user-lock" style="font-size:26px;color:var(--gp-danger)"></i>
-                </div>
-                <h4 class="fw-bold mb-2" style="color:var(--gp-danger)">Account Temporarily Suspended</h4>
+        <div class="modal-content gp-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountRiskTitle"><i class="fa-solid fa-user-lock is-danger"></i>Account Temporarily Suspended</h5>
+            </div>
+            <div class="modal-body">
                 <p class="mb-2">"<span class="fw-semibold" id="arProductName">--</span>" is a restricted product and was not saved.</p>
                 <p class="mb-3">This account reached <strong id="arStrikeCount">--</strong> blocked attempts to list restricted products. <strong>Your merchant account — including staff logins and stall sales — is now suspended for <span id="arSuspendDays">3</span> days</strong>, until <strong id="arSuspendUntil">--</strong>.</p>
-                <div class="alert alert-danger text-start" style="border-radius:10px;font-size:13px">
+                <div class="alert alert-danger">
                     <i class="fa-solid fa-ban me-1"></i><span id="arReasonText">--</span>
                 </div>
-                <p class="text-muted small mb-3">The GenPay finance team has been notified and may lift the suspension early. You will be logged out now and can log back in once the suspension ends.</p>
-                <button type="button" class="btn btn-danger w-100" id="arLogoutBtn"><i class="fa-solid fa-right-from-bracket me-1"></i>Log Out</button>
+                <div class="form-text">The GenPay finance team has been notified and may lift the suspension early. You will be logged out now and can log back in once the suspension ends.</div>
+                <div class="maintenance-btn-row mt-3">
+                    <button type="button" class="maintenance-btn danger" id="arLogoutBtn"><i class="fa-solid fa-right-from-bracket"></i>Log Out</button>
+                </div>
             </div>
         </div>
     </div>

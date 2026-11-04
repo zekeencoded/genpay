@@ -10,6 +10,11 @@ require_once __DIR__ . '/../../connection/CirculationEngine.php';
 require_once __DIR__ . '/../../connection/audit_logger.php';
 
 gjc_require_role(['merchant']);
+if (gjc_is_merchant_staff()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Only the stall owner can send GenCoin.']);
+    exit;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_operational_tables($db);
 gjc_ensure_parent_wallet_schema($db);
@@ -30,30 +35,9 @@ $maxTopup = gjc_setting($db, 'topup_max_per_request');
 try {
     switch ($action) {
 
-        case 'lookup_student': {
-            $schoolId = trim((string)($body['school_id'] ?? ''));
-            if (!$schoolId) throw new \InvalidArgumentException('Student ID is required.');
-
-            $stmt = $db->prepare(
-                "SELECT u.userID, u.first_name, u.last_name,
-                        sw.id AS wallet_id
-                   FROM users u
-                   JOIN student_info si ON si.userID = u.userID
-                   JOIN student_wallets sw ON sw.user_id = u.userID
-                  WHERE si.studentID = ? AND u.roleID = 1
-                  LIMIT 1"
-            );
-            $stmt->execute([$schoolId]);
-            $student = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$student) throw new \RuntimeException('Student not found. Check the ID and try again.');
-
-            echo json_encode([
-                'success'   => true,
-                'name'      => trim($student['first_name'] . ' ' . $student['last_name']),
-                'user_id'   => (int) $student['userID'],
-                'wallet_id' => (int) $student['wallet_id'],
-            ]);
+        // One box for every recipient: Student/Employee ID, or a guardian's GRD2026-0001 ID.
+        case 'lookup_recipient': {
+            echo json_encode(['success' => true] + gjc_find_topup_recipient($db, (string) ($body['school_id'] ?? '')));
             break;
         }
 
@@ -126,46 +110,21 @@ try {
             break;
         }
 
-        case 'lookup_parent_by_student': {
-            // Parents have no school ID of their own — merchants resolve them
-            // through the linked student's school ID instead.
-            $schoolId = trim((string) ($body['school_id'] ?? ''));
-            if (!$schoolId) throw new \InvalidArgumentException('Student ID is required.');
-
-            $stmt = $db->prepare(
-                "SELECT p.id AS parent_id, u.first_name, u.last_name
-                   FROM student_info si
-                   JOIN parent_student_links psl ON psl.student_user_id = si.userID
-                   JOIN parents p ON p.id = psl.parent_id
-                   JOIN users u ON u.userID = p.user_id
-                  WHERE si.studentID = ?"
-            );
-            $stmt->execute([$schoolId]);
-            $parents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (!$parents) throw new \RuntimeException('No parent is linked to that student. Check the ID and try again.');
-
-            echo json_encode([
-                'success' => true,
-                'parents' => array_map(static fn(array $p): array => [
-                    'parent_id' => (int) $p['parent_id'],
-                    'name' => trim($p['first_name'] . ' ' . $p['last_name']),
-                ], $parents),
-            ]);
-            break;
-        }
-
         case 'load_parent_wallet': {
             $parentId   = (int) ($body['parent_id'] ?? 0);
             $cashAmount = (float) ($body['cash_amount'] ?? 0);
 
-            if ($parentId <= 0) throw new \InvalidArgumentException('Invalid parent.');
+            if ($parentId <= 0) throw new \InvalidArgumentException('Invalid guardian.');
             if ($cashAmount <= 0) throw new \InvalidArgumentException('Cash amount must be greater than zero.');
             if ($cashAmount > $maxTopup) {
                 throw new \InvalidArgumentException('Maximum top-up per request is ' . gjc_money_plain($maxTopup) . '.');
             }
 
             $parentWallet = gjc_parent_wallet($db, $parentId);
+
+            $targetUserId = gjc_wallet_owner_user_id($db, 'parent', $parentWallet['id']);
+            $blocked = $targetUserId > 0 ? gjc_funds_in_block_reason($db, $targetUserId) : null;
+            if ($blocked !== null) throw new RuntimeException($blocked);
 
             $engine = new CirculationEngine($db);
             $result = $engine->merchantSendToParent(
@@ -218,7 +177,7 @@ try {
                     $ownerMerchId,
                     'topup',
                     'Wallet Credited',
-                    'Your ' . CirculationEngine::ratePct(CirculationEngine::FEE_MERCHANT_RATE) . ' cut of ' . gjc_money_plain($result['merchant_fee']) . ' was credited for loading a parent wallet.',
+                    'Your ' . CirculationEngine::ratePct(CirculationEngine::FEE_MERCHANT_RATE) . ' cut of ' . gjc_money_plain($result['merchant_fee']) . ' was credited for loading a guardian wallet.',
                     'circle-plus',
                     MERCHANT_URL . '/history.php'
                 );

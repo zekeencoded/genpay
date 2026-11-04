@@ -53,14 +53,13 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
     <title>POS Terminal | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=66">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/merchant.css?v=67">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/pos.css?v=28">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        .lw-parent-choice--active { border-color: var(--gp-success) !important; background: var(--gp-success-bg); }
     </style>
 </head>
 <body class="gp-theme">
@@ -108,9 +107,11 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                 <div class="pos-product-toolbar">
                     <input type="search" class="pos-search-input" id="posProductSearch"
                         placeholder="Search products by name, SKU, or category" autocomplete="off">
+                    <?php if (!$isStaff): ?>
                     <button type="button" class="merchant-loadwallet-btn" style="flex-shrink:0" onclick="lwOpen()">
                         <i class="fa-solid fa-coins"></i> <span class="merchant-loadwallet-label">Send GenCoin</span>
                     </button>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Category filter -->
@@ -847,7 +848,7 @@ async function openQueueOrder(uid, previousOrder = null) {
             </table>
             <div class="pq-total"><span>Total</span>${gcPriceHtml(Number(data.amount || 0), true)}</div>
             ${data.maintenance_fee ? `
-            <div class="pq-note">Student maintenance fee &middot; ${escapeHtml(data.maintenance_fee.state)}: &#8369;${Number(data.maintenance_fee.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Billed to tuition &mdash; not deducted from your sale.</div>` : ''}
+            <div class="pq-note">Maintenance fee: &#8369;${Number(data.maintenance_fee.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
             ${paidTime ? `<div class="pq-note">Paid: ${paidTime}</div>` : ''}
             ${payBlock}
             ${isPending ? `<div class="pq-note">Hand the order over only after this ticket turns <strong>Paid</strong>.</div>
@@ -869,14 +870,14 @@ setInterval(refreshLiveQueue, 3000);
 </script>
 
 <!-- ── Load Wallet Modal ──────────────────────────────────────────────── -->
-<div class="modal fade" id="lwModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="lwModal" tabindex="-1" aria-labelledby="lwTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
-        <div class="modal-content" style="border-radius:20px;overflow:hidden;border:none">
+        <div class="modal-content gp-modal">
 
-            <div class="modal-header border-0 pb-0" style="background:var(--gp-success-bg);padding:20px 24px 12px">
+            <div class="modal-header">
                 <div style="flex:1">
-                    <h5 class="modal-title fw-bold" style="color:var(--gp-green-700);font-size:18px">
-                        <i class="fa-solid fa-coins me-2"></i>Send GenCoin
+                    <h5 class="modal-title" id="lwTitle">
+                        <i class="fa-solid fa-coins"></i>Send GenCoin
                     </h5>
                     <div style="display:flex;gap:6px;margin-top:10px;align-items:center" id="lw-steps">
                         <div class="lw-dot lw-dot--active" data-step="1"></div>
@@ -887,36 +888,23 @@ setInterval(refreshLiveQueue, 3000);
                         <span id="lw-step-label" style="margin-left:8px;font-size:12px;color:var(--gp-muted);font-weight:600">Step 1 of 3</span>
                     </div>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" style="margin-top:-16px"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <div class="modal-body" style="background:var(--gp-success-bg);padding:20px 24px 24px">
+            <div class="modal-body">
 
-                <!-- STEP 1: Recipient type + Student ID -->
+                <!-- STEP 1: Recipient ID (the ID tells which account it is) -->
                 <div id="lw-step-1">
-                    <div style="display:flex;gap:8px;margin-bottom:14px">
-                        <button type="button" class="lw-toggle-btn lw-toggle-btn--active" id="lw-toggle-student"
-                                style="flex:1;border:1.5px solid var(--gp-success);border-radius:12px;padding:9px;font-size:13px;font-weight:700;background:var(--gp-success);color:#fff"
-                                onclick="lwSetMode('student')">
-                            <i class="fa-solid fa-user-graduate me-1"></i>Student
-                        </button>
-                        <button type="button" class="lw-toggle-btn" id="lw-toggle-parent"
-                                style="flex:1;border:1.5px solid #a8dcbe;border-radius:12px;padding:9px;font-size:13px;font-weight:700;background:#fff;color:var(--gp-ink)"
-                                onclick="lwSetMode('parent')">
-                            <i class="fa-solid fa-people-roof me-1"></i>Parent
-                        </button>
-                    </div>
-                    <p id="lw-step1-hint" style="font-size:13px;color:var(--gp-ink);margin-bottom:14px">Enter the Student ID of the wallet to load.</p>
+                    <p id="lw-step1-hint" style="font-size:13px;color:var(--gp-ink);margin-bottom:14px">Enter the Student, Employee or Guardian ID of the wallet to load.</p>
                     <div style="position:relative">
-                        <input type="text" id="lw-school-id" class="form-control" placeholder="e.g. GJC2026-0001"
+                        <input type="text" id="lw-school-id" class="form-control" placeholder="e.g. GJC2026-0001 or GRD2026-0001"
                                autocomplete="off"
-                               style="border-radius:12px;padding:12px 44px 12px 14px;font-size:14px;border:1.5px solid #a8dcbe">
+                               style="padding-right:44px">
                         <i class="fa-solid fa-magnifying-glass" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--gp-muted);pointer-events:none"></i>
                     </div>
                     <div id="lw-lookup-result" style="margin-top:10px;min-height:36px"></div>
                     <div style="display:flex;justify-content:flex-end;margin-top:16px">
                         <button type="button" id="lw-next-1" class="btn btn-success" disabled
-                                style="border-radius:12px;padding:10px 28px;font-weight:600"
                                 onclick="lwGoStep(2)">
                             Next <i class="fa-solid fa-arrow-right ms-1"></i>
                         </button>
@@ -933,11 +921,11 @@ setInterval(refreshLiveQueue, 3000);
                         </div>
                     </div>
 
-                    <label style="font-size:12px;font-weight:600;color:var(--gp-ink);margin-bottom:4px;display:block">Amount (₱)</label>
+                    <label>Amount (₱)</label>
                     <div style="position:relative;margin-bottom:6px">
                         <input type="number" id="lw-gc" class="form-control" min="1" step="0.01"
                                placeholder="e.g. 50"
-                               style="border-radius:12px;padding:12px 60px 12px 14px;font-size:20px;font-weight:700;border:1.5px solid #a8dcbe">
+                               style="padding-right:44px;font-size:20px;font-weight:700">
                         <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--gp-muted)">₱</span>
                     </div>
                     <div id="lw-gc-equiv" style="font-size:12px;color:var(--gp-green-700);font-weight:600;margin-bottom:12px;padding-left:4px;min-height:18px"></div>
@@ -971,11 +959,10 @@ setInterval(refreshLiveQueue, 3000);
                     </div>
 
                     <div style="display:flex;justify-content:space-between;margin-top:4px">
-                        <button type="button" class="btn btn-outline-secondary" style="border-radius:12px;padding:10px 20px" onclick="lwGoStep(1)">
+                        <button type="button" class="btn btn-outline-secondary" onclick="lwGoStep(1)">
                             <i class="fa-solid fa-arrow-left me-1"></i> Back
                         </button>
                         <button type="button" id="lw-next-2" class="btn btn-success" disabled
-                                style="border-radius:12px;padding:10px 28px;font-weight:600"
                                 onclick="lwGoStep(3)">
                             Next <i class="fa-solid fa-arrow-right ms-1"></i>
                         </button>
@@ -988,7 +975,7 @@ setInterval(refreshLiveQueue, 3000);
                     <div style="background:#fff;border-radius:16px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px;font-size:13px">
                         <div style="display:flex;flex-direction:column;gap:7px">
                             <div style="display:flex;justify-content:space-between"><span style="color:var(--gp-muted)" id="lw-prev-name-label">Student</span><strong id="lw-prev-name"></strong></div>
-                            <div style="display:flex;justify-content:space-between"><span style="color:var(--gp-muted)">Student ID</span><span id="lw-prev-id" style="font-family:monospace"></span></div>
+                            <div style="display:flex;justify-content:space-between"><span style="color:var(--gp-muted)">ID</span><span id="lw-prev-id" style="font-family:monospace"></span></div>
                         </div>
                         <div style="border-top:1px dashed #a8dcbe;margin:12px 0;padding-top:12px;display:flex;flex-direction:column;gap:6px;font-size:12px">
                             <div style="display:flex;justify-content:space-between"><span style="color:var(--gp-muted)">GenCoins</span><span id="lw-prev-gc-count" style="font-weight:600;color:var(--gp-green-700)"></span></div>
@@ -1010,11 +997,10 @@ setInterval(refreshLiveQueue, 3000);
                     <div id="lw-send-error" style="margin-top:10px;font-size:13px;color:var(--gp-red);min-height:18px"></div>
 
                     <div style="display:flex;justify-content:space-between;margin-top:16px">
-                        <button type="button" class="btn btn-outline-secondary" style="border-radius:12px;padding:10px 20px" onclick="lwGoStep(2)">
+                        <button type="button" class="btn btn-outline-secondary" onclick="lwGoStep(2)">
                             <i class="fa-solid fa-arrow-left me-1"></i> Back
                         </button>
                         <button type="button" id="lw-load-btn" class="btn btn-success" disabled
-                                style="border-radius:12px;padding:10px 28px;font-weight:700;font-size:15px"
                                 onclick="lwLoad()">
                             <i class="fa-solid fa-paper-plane me-1"></i> Send
                         </button>
@@ -1032,8 +1018,7 @@ setInterval(refreshLiveQueue, 3000);
                         <span style="font-size:11px;color:var(--gp-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Reference No.</span><br>
                         <span id="lw-success-ref" style="font-size:13px;font-weight:700;color:var(--gp-green-700);font-family:monospace;letter-spacing:.5px"></span>
                     </div>
-                    <button type="button" class="btn btn-success mt-4 d-block mx-auto" data-bs-dismiss="modal"
-                            style="border-radius:12px;padding:10px 32px;font-weight:600">Done</button>
+                    <button type="button" class="btn btn-success mt-4 d-block mx-auto" data-bs-dismiss="modal">Done</button>
                 </div>
 
             </div>
@@ -1077,7 +1062,7 @@ function lwOpen() {
 
 function lwReset() {
     lwWalletId = 0; lwStudentName = ''; lwSchoolId = ''; lwParentId = 0;
-    lwSetMode('student');
+    lwMode = 'student';
     ['lw-school-id','lw-gc'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     document.getElementById('lw-gc-equiv').textContent = '';
     document.getElementById('lw-lookup-result').innerHTML = '';
@@ -1092,43 +1077,6 @@ function lwReset() {
     });
     document.getElementById('lw-step-1').style.display = '';
     lwUpdateStepUI(1);
-}
-
-function lwSetMode(mode) {
-    lwMode = mode;
-    lwWalletId = 0; lwParentId = 0; lwStudentName = ''; lwSchoolId = '';
-    document.getElementById('lw-school-id').value = '';
-    document.getElementById('lw-lookup-result').innerHTML = '';
-    document.getElementById('lw-next-1').disabled = true;
-
-    const studentBtn = document.getElementById('lw-toggle-student');
-    const parentBtn  = document.getElementById('lw-toggle-parent');
-    const isStudent  = mode === 'student';
-    studentBtn.style.background = isStudent ? 'var(--gp-success)' : '#fff';
-    studentBtn.style.color      = isStudent ? '#fff' : 'var(--gp-ink)';
-    studentBtn.style.borderColor= isStudent ? 'var(--gp-success)' : '#a8dcbe';
-    parentBtn.style.background  = isStudent ? '#fff' : 'var(--gp-success)';
-    parentBtn.style.color       = isStudent ? 'var(--gp-ink)' : '#fff';
-    parentBtn.style.borderColor = isStudent ? '#a8dcbe' : 'var(--gp-success)';
-
-    document.getElementById('lw-step1-hint').textContent = isStudent
-        ? 'Enter the Student ID of the wallet to load.'
-        : 'Enter the Student ID of a linked student to find their parent.';
-    document.getElementById('lw-fp-recipient-label').textContent = isStudent ? 'student' : 'parent';
-    document.getElementById('lw-prev-recipient-label').textContent = isStudent ? 'student' : 'parent';
-    document.getElementById('lw-prev-name-label').textContent = isStudent ? 'Student' : 'Parent';
-}
-
-function lwSelectParent(parentId, name) {
-    lwParentId = parentId;
-    lwStudentName = name; // reused as "recipient name" for preview/confirm/success text
-    document.getElementById('lw-next-1').disabled = false;
-    document.getElementById('lw-avatar').textContent = name.charAt(0).toUpperCase();
-    document.getElementById('lw-name-2').textContent = name;
-    document.getElementById('lw-id-2').textContent = lwSchoolId;
-    document.querySelectorAll('.lw-parent-choice').forEach(el => {
-        el.classList.toggle('lw-parent-choice--active', el.dataset.parentId == parentId);
-    });
 }
 
 function lwUpdateStepUI(step) {
@@ -1176,70 +1124,42 @@ async function lwLookup() {
     nextBtn.disabled = true;
     lwWalletId = 0;
     lwParentId = 0;
-    lwSchoolId = schoolId;
 
-    if (lwMode === 'student') {
-        try {
-            const res  = await fetch(LW_API, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({action:'lookup_student', school_id: schoolId}),
-            });
-            const data = await res.json();
-            if (data.success) {
-                lwWalletId    = data.wallet_id;
-                lwStudentName = data.name;
-                resultEl.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;background:var(--gp-info-bg);border-radius:10px;padding:8px 12px">
-                        <i class="fa-solid fa-circle-check" style="color:var(--gp-info)"></i>
-                        <div>
-                            <strong style="font-size:13px;color:var(--gp-info)">${data.name}</strong>
-                            <div style="font-size:11px;color:var(--gp-muted)">${schoolId}</div>
-                        </div>
-                    </div>`;
-                nextBtn.disabled = false;
-                document.getElementById('lw-avatar').textContent  = data.name.charAt(0).toUpperCase();
-                document.getElementById('lw-name-2').textContent  = data.name;
-                document.getElementById('lw-id-2').textContent    = schoolId;
-            } else {
-                resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i>${data.error||'Student not found.'}</div>`;
-            }
-        } catch {
-            resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-red)">Network error. Try again.</div>';
-        }
-        return;
-    }
-
-    // Parent mode — parents have no school ID of their own, resolved through
-    // the linked student's school ID instead.
+    // The ID itself says who it is: GRD… is a guardian, anything else a student or faculty wallet.
     try {
         const res  = await fetch(LW_API, {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({action:'lookup_parent_by_student', school_id: schoolId}),
+            body: JSON.stringify({action:'lookup_recipient', school_id: schoolId}),
         });
         const data = await res.json();
-        if (data.success && data.parents && data.parents.length) {
-            if (data.parents.length === 1) {
-                const p = data.parents[0];
-                resultEl.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;background:var(--gp-info-bg);border-radius:10px;padding:8px 12px">
-                        <i class="fa-solid fa-circle-check" style="color:var(--gp-info)"></i>
-                        <div>
-                            <strong style="font-size:13px;color:var(--gp-info)">${p.name}</strong>
-                            <div style="font-size:11px;color:var(--gp-muted)">Parent of ${schoolId}</div>
-                        </div>
-                    </div>`;
-                lwSelectParent(p.parent_id, p.name);
-            } else {
-                resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-ink);margin-bottom:6px">Multiple parents linked — choose one:</div>' +
-                    data.parents.map(p => `
-                        <div class="lw-parent-choice" data-parent-id="${p.parent_id}" onclick="lwSelectParent(${p.parent_id}, '${p.name.replace(/'/g, "\\'")}')"
-                             style="cursor:pointer;padding:8px 12px;border-radius:10px;border:1.5px solid #a8dcbe;margin-bottom:6px;font-size:13px;font-weight:600;color:var(--gp-ink)">
-                            ${p.name}
-                        </div>`).join('');
-            }
-        } else {
-            resultEl.innerHTML = `<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i>${data.error||'No parent found.'}</div>`;
+        if (!data.success) {
+            resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-red);padding:4px 2px"><i class="fa-solid fa-triangle-exclamation me-1"></i><span></span></div>';
+            resultEl.querySelector('span').textContent = data.error || 'No account found with that ID.';
+            return;
         }
+        lwMode = data.kind;
+        lwWalletId = data.kind === 'student' ? data.wallet_id : 0;
+        lwParentId = data.kind === 'parent' ? data.parent_id : 0;
+        lwStudentName = data.name;
+        lwSchoolId = data.id;
+        resultEl.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;background:var(--gp-info-bg);border-radius:10px;padding:8px 12px">
+                <i class="fa-solid fa-circle-check" style="color:var(--gp-info)"></i>
+                <div>
+                    <strong style="font-size:13px;color:var(--gp-info)"></strong>
+                    <div class="rcp-sub" style="font-size:11px;color:var(--gp-muted)"></div>
+                </div>
+            </div>`;
+        resultEl.querySelector('strong').textContent = data.name;
+        resultEl.querySelector('.rcp-sub').textContent = data.label + ' · ' + data.id;
+        nextBtn.disabled = false;
+        document.getElementById('lw-avatar').textContent = data.name.charAt(0).toUpperCase();
+        document.getElementById('lw-name-2').textContent  = data.name;
+        document.getElementById('lw-id-2').textContent    = data.id;
+        const noun = data.kind === 'parent' ? 'guardian' : data.label.toLowerCase();
+        document.getElementById('lw-fp-recipient-label').textContent   = noun;
+        document.getElementById('lw-prev-recipient-label').textContent = noun;
+        document.getElementById('lw-prev-name-label').textContent      = data.label;
     } catch {
         resultEl.innerHTML = '<div style="font-size:12px;color:var(--gp-red)">Network error. Try again.</div>';
     }
@@ -1258,7 +1178,7 @@ async function lwLoad() {
     const payload = lwMode === 'student'
         ? { action: 'load_wallet', student_wallet_id: lwWalletId, cash_amount: cash }
         : { action: 'load_parent_wallet', parent_id: lwParentId, cash_amount: cash };
-    const recipientNoun = lwMode === 'student' ? 'student' : 'parent';
+    const recipientNoun = document.getElementById('lw-prev-recipient-label').textContent;
 
     try {
         const res  = await fetch(LW_API, {
@@ -1292,7 +1212,7 @@ async function lwLoad() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    if (new URLSearchParams(location.search).get('open') === 'loadwallet') lwOpen();
+    if (<?= $isStaff ? 'false' : 'true' ?> && new URLSearchParams(location.search).get('open') === 'loadwallet') lwOpen();
 
     const idInput = document.getElementById('lw-school-id');
     idInput.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();lwLookup();} });

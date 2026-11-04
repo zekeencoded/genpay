@@ -244,7 +244,7 @@ class CirculationEngine
             $this->validateCirculation($settings["total_circulation_cap"]);
 
             $feeNote =
-                "Parent top-up via {$source}. Credited: ₱{$credited}, " .
+                "Guardian top-up via {$source}. Credited: ₱{$credited}, " .
                 "System fee (" . self::ratePct(self::FEE_SYSTEM_RATE) . "): ₱{$systemFee}" .
                 ($merchantFee > 0
                     ? ", Merchant fee (" . self::ratePct(self::FEE_MERCHANT_RATE) . "): ₱{$merchantFee}"
@@ -335,7 +335,7 @@ class CirculationEngine
                     throw new RuntimeException('Your wallet is frozen by your enrollment status. Your balance is kept safe; if you have graduated, you can still send it to another student.');
                 }
                 if ((int) $payer['is_frozen'] === 1) {
-                    throw new RuntimeException('Your wallet is frozen by a parent or guardian.');
+                    throw new RuntimeException('Your wallet is frozen by a guardian.');
                 }
                 if ((float) $payer['daily_spend_limit'] > 0) {
                     if (gjc_student_spent_today($this->db, (int) $payer['id']) + $amount > (float) $payer['daily_spend_limit']) {
@@ -592,7 +592,7 @@ class CirculationEngine
             $this->validateCirculation($settings["total_circulation_cap"]);
 
             $feeNote =
-                "Merchant send to parent. Credited: ₱{$credited}, " .
+                "Merchant send to guardian. Credited: ₱{$credited}, " .
                 "System fee (" . self::ratePct(self::FEE_SYSTEM_RATE) . "): ₱{$systemFee}, " .
                 "Merchant cut (" . self::ratePct(self::FEE_MERCHANT_RATE) . "): ₱{$merchantFee}, " .
                 "Charged to merchant: ₱{$totalDebit}." .

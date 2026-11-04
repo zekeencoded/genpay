@@ -222,13 +222,6 @@ if ($record) {
             </div>
             <div class="uv-fields">
                 <div class="uv-field">
-                    <div class="uv-field-ic"><i class="fa-solid fa-store"></i></div>
-                    <div>
-                        <div class="uv-field-label"><?= $e($record['counter_label']) ?></div>
-                        <div class="uv-field-value"><?= $record['counterparty'] !== '' ? $e($record['counterparty']) : '&mdash;' ?></div>
-                    </div>
-                </div>
-                <div class="uv-field">
                     <div class="uv-field-ic"><i class="fa-solid fa-layer-group"></i></div>
                     <div>
                         <div class="uv-field-label">Type</div>

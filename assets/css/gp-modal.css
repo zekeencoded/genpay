@@ -1,0 +1,170 @@
+/* Shared modal look for admin and merchant pages (Users → Suspend / Ban / Reset Password). Imported by admin.css and merchant.css.
+   Add .gp-modal to .modal-content; header = icon + title + .gp-modal-sub,
+   buttons right-aligned with Cancel first. Bootstrap buttons inside are
+   restyled so older markup lines up without rewriting every button. */
+.maintenance-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.modal .maintenance-btn-row { justify-content: flex-end; }
+
+.maintenance-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity .15s;
+}
+.maintenance-btn:hover { opacity: .88; }
+.maintenance-btn:disabled { opacity: .55; cursor: not-allowed; }
+.maintenance-btn:focus-visible { outline: none; box-shadow: var(--gp-focus-ring); }
+.maintenance-btn.primary { background: var(--gp-success); color: #fff; }
+.maintenance-btn.warning { background: var(--gp-warning); color: #fff; }
+.maintenance-btn.danger  { background: var(--gp-danger); color: #fff; }
+.maintenance-btn.muted   { background: var(--gjc-soft-2); color: var(--gjc-slate); border: 1px solid var(--gp-line); }
+
+.maintenance-alert {
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+.maintenance-alert.success { background: var(--gjc-soft-2); border: 1px solid #bbf7d4; color: var(--gp-success); }
+.maintenance-alert.error   { background: var(--gp-danger-bg); border: 1px solid #f0b8b2; color: var(--gp-danger); }
+.maintenance-alert.warning { background: var(--gp-warning-bg); border: 1px solid #f3d19b; color: var(--gp-warning); }
+
+.modal-content.gp-modal {
+    border: none !important;
+    border-radius: 16px !important;
+    background: #fff !important;
+    box-shadow: 0 24px 60px rgba(13, 36, 24, 0.25) !important;
+}
+.gp-modal > .modal-header {
+    align-items: flex-start;
+    border: 0;
+    padding: 20px 24px 0;
+    background: none;
+}
+.gp-modal .modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--gp-ink);
+}
+.gp-modal .modal-title > i:first-child { margin-right: .5rem; color: var(--gp-success); }
+.gp-modal .modal-title > i.is-warning { color: var(--gp-warning); }
+.gp-modal .modal-title > i.is-danger  { color: var(--gp-danger); }
+.gp-modal-sub { font-size: 13px; color: var(--gp-muted); margin: 3px 0 0; }
+.gp-modal > .modal-body { padding: 16px 24px 24px; font-size: 14px; }
+.gp-modal > .modal-footer {
+    gap: 8px;
+    justify-content: flex-end;
+    border: 0;
+    padding: 0 24px 24px;
+}
+.gp-modal > .modal-footer > * { margin: 0; }
+
+/* Fields (:where keeps specificity low so page and error styles still win) */
+.gp-modal .modal-body :where(label:not(.form-check-label):not(.btn)),
+.gp-modal .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    margin-bottom: 6px;
+}
+.gp-modal .modal-body :where(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]), select, textarea) {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--gp-line);
+    border-radius: var(--gjc-radius);
+    background-color: #fff;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--gp-ink);
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+}
+.gp-modal .modal-body :where(input, select, textarea):focus {
+    border-color: var(--gp-focus-border);
+    box-shadow: var(--gp-focus-ring);
+}
+.gp-modal .modal-body :where(select) {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    padding-right: 38px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2366756c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 14px;
+}
+.gp-modal .modal-body :where(select):disabled { cursor: not-allowed; background-color: var(--gjc-soft-2); }
+/* Out-rank theme.css's body.gp-theme .form-control / .form-label weights. */
+.gp-modal .modal-body .form-control,
+.gp-modal .modal-body .form-select { font-weight: 400; }
+.gp-modal .modal-body .form-label { font-size: 12px; font-weight: 600; }
+.gp-modal .form-text { display: block; margin-top: 5px; font-size: 12px; color: var(--gp-muted); }
+
+/* Bootstrap buttons inside a .gp-modal take the .maintenance-btn look.
+   (.login-btn is !important in gjc-clear.css, so swap it for .maintenance-btn in markup.) */
+.modal .gp-modal .btn:not(.btn-close) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: none;
+}
+.modal .gp-modal .btn-success,
+.modal .gp-modal .btn-primary { background: var(--gp-success); color: #fff; }
+.modal .gp-modal .btn-danger  { background: var(--gp-danger); color: #fff; }
+.modal .gp-modal .btn-warning { background: var(--gp-warning); color: #fff; }
+.modal .gp-modal .btn-secondary,
+.modal .gp-modal .btn-outline-secondary {
+    background: var(--gjc-soft-2);
+    color: var(--gjc-slate);
+    border: 1px solid var(--gp-line);
+}
+.modal .gp-modal .btn:not(.btn-close):hover { opacity: .88; }
+.modal .gp-modal .btn:disabled { opacity: .55; }
+
+/* Bootstrap alerts and the remaining button variants inside a .gp-modal. */
+.gp-modal .alert {
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+.gp-modal .alert-success { background: var(--gjc-soft-2); border: 1px solid #bbf7d4; color: var(--gp-success); }
+.gp-modal .alert-danger  { background: var(--gp-danger-bg); border: 1px solid #f0b8b2; color: var(--gp-danger); }
+.gp-modal .alert-warning { background: var(--gp-warning-bg); border: 1px solid #f3d19b; color: var(--gp-warning); }
+.modal .gp-modal .btn-light {
+    background: var(--gjc-soft-2);
+    color: var(--gjc-slate);
+    border: 1px solid var(--gp-line);
+}
+.modal .gp-modal .btn-outline-danger {
+    background: #fff;
+    color: var(--gp-danger);
+    border: 1px solid #f0b8b2;
+}
+.modal .gp-modal .btn-outline-danger:hover { background: var(--gp-danger-bg); }

@@ -112,7 +112,7 @@ try {
     $read->execute([$id]);
     reset_expect($read->fetch()['password'] === $changed['password'], 'Failed email reset must restore the previous password.');
 
-    $nonStudent = $db->query('SELECT userID FROM users WHERE roleID <> 1 LIMIT 1')->fetchColumn();
+    $nonStudent = $db->query('SELECT userID FROM users WHERE roleID NOT IN (1, 9) LIMIT 1')->fetchColumn();
     reset_expect($nonStudent !== false, 'A non-student fixture is required.');
     foreach ([0, (int) $nonStudent] as $invalidId) {
         $rejected = false;

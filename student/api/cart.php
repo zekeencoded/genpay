@@ -131,7 +131,7 @@ try {
 
             $walletState = gjc_student_wallet_state($db, $studentUserId);
             if ($walletState === 'frozen_exit') {
-                echo json_encode(['success' => false, 'message' => 'Account locked: this account has graduated or transferred out.']);
+                echo json_encode(['success' => false, 'message' => 'Account locked: this account is closed (graduated, transferred out, or left the school).']);
                 exit;
             }
             if ($walletState === 'frozen_unenrolled') {

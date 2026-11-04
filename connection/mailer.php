@@ -251,6 +251,34 @@ function gjc_send_stall_meeting_reschedule_email(
     return ['sent' => $queued, 'error' => $queued ? '' : 'Could not queue the reschedule email.'];
 }
 
+/** Queue the new merchant staff welcome email. The password is never emailed. */
+function gjc_send_merchant_staff_welcome_email(string $toEmail, string $toName, string $position = ''): bool
+{
+    $safeName  = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
+    $safeEmail = htmlspecialchars($toEmail, ENT_QUOTES, 'UTF-8');
+    $safePos   = htmlspecialchars($position, ENT_QUOTES, 'UTF-8');
+    $loginUrl  = BASE_URL . '/login.php';
+    $body = '
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f0fdf6;padding:28px;border-radius:14px">
+            <h2 style="color:#0e6332;margin-top:0">Your GenPay Staff Account Is Ready</h2>
+            <p style="color:#374151;line-height:1.7">Dear <strong>' . $safeName . '</strong>,</p>
+            <p style="color:#374151;line-height:1.7">Your merchant has created a GenPay staff account for you' . ($position !== '' ? ' as <strong>' . $safePos . '</strong>' : '') . '.</p>
+            <div style="background:#fff;border:1px solid #bbf7d4;border-radius:10px;padding:16px;margin:16px 0">
+                <p style="margin:0;color:#111827"><strong>Sign-in email:</strong> ' . $safeEmail . '</p>
+                <p style="margin:4px 0 0;color:#111827"><strong>Password:</strong> provided to you directly by your merchant</p>
+            </div>
+            <p style="color:#374151"><a href="' . $loginUrl . '" style="color:#147b3a;font-weight:700">Sign in to GenPay</a></p>
+            <p style="color:#374151;line-height:1.7">If you weren\'t expecting this, please let your merchant or the GJC Finance Office know.</p>
+            <p style="font-size:12px;color:#6b7280">GenPay Team</p>
+        </div>';
+    $altBody = "Dear {$toName},\n\n"
+        . "Your merchant has created a GenPay staff account for you" . ($position !== '' ? " as {$position}" : '') . ".\n\n"
+        . "Sign-in email: {$toEmail}\nPassword: provided to you directly by your merchant\n\n"
+        . "Sign in at {$loginUrl}\n\nGenPay Team";
+
+    return gjc_queue_email($toEmail, $toName, 'GenPay - Your Staff Account Is Ready', $body, $altBody);
+}
+
 /** Queue the application rejected/expired email. */
 function gjc_send_stall_application_termination_email(array $app, string $heading, string $intro, string $reason): void
 {

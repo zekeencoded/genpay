@@ -6,7 +6,7 @@ function gjc_recent_cash_in_history(PDO $db): array
     return $db->query(
         "SELECT t.id, t.reference_no, t.amount, t.top_up_source, t.status, t.created_at,
                 COALESCE(p.user_id, sw.user_id) AS recipient_user_id,
-                CASE WHEN t.parent_wallet_id IS NOT NULL THEN 'Parent' ELSE 'Student' END AS recipient_role
+                CASE WHEN t.parent_wallet_id IS NOT NULL THEN 'Guardian' ELSE 'Student' END AS recipient_role
            FROM transactions t
            LEFT JOIN student_wallets sw ON sw.id = t.student_wallet_id
            LEFT JOIN parent_wallets pw ON pw.id = t.parent_wallet_id

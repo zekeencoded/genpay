@@ -61,7 +61,8 @@ function users_suspend_guard(array $user, int $adminId, string $verb = 'suspend'
 const USERS_CREATABLE_ROLES = [
     'student'       => [1, 'Student'],
     'merchant'      => [2, 'Merchant'],
-    'parent'        => [7, 'Parent'],
+    'parent'        => [7, 'Guardian'],
+    'faculty'       => [GJC_FACULTY_ROLE_ID, 'Faculty'],
     'finance_staff' => [8, 'Finance Staff'],
 ];
 
@@ -122,11 +123,11 @@ try {
             logAudit(
                 $db, $adminId, gjc_current_role(), 'PASSWORD_CHANGE', 'users', null,
                 ['event' => 'admin_reset', 'userID' => $userId, 'force_password_change' => 1, 'email_sent' => true],
-                null, ['target_id' => $userId, 'reason' => 'Student requested password recovery.']
+                null, ['target_id' => $userId, 'reason' => 'Account holder requested password recovery.']
             );
             users_json([
                 'success' => true,
-                'message' => "Password reset. The temporary password was emailed to {$studentEmail}. The student must change it when they sign in.",
+                'message' => "Password reset. The temporary password was emailed to {$studentEmail}. They must change it when they sign in.",
             ]);
         }
 
@@ -184,24 +185,45 @@ try {
             $sex           = strtolower(trim((string) ($_POST['sex'] ?? '')));
             $stallId       = trim((string) ($_POST['stall_id'] ?? ''));
             $linkStudentId = trim((string) ($_POST['link_student_id'] ?? ''));
+            $employeeId    = trim((string) ($_POST['employee_id'] ?? ''));
+            $department    = trim((string) ($_POST['department'] ?? ''));
             $linkStudentUserId = 0;
 
             if ($roleKey === 'student') {
                 if ($studentId === '' || mb_strlen($studentId) > 80) {
                     users_json(['success' => false, 'message' => 'Enter the Student ID (up to 80 characters).']);
                 }
+                if (gjc_id_reserved_for_guardian($studentId)) {
+                    users_json(['success' => false, 'message' => 'IDs starting with GRD are reserved for guardians.']);
+                }
                 $chk = $db->prepare("SELECT 1 FROM student_info WHERE studentID = ? LIMIT 1");
                 $chk->execute([$studentId]);
                 if ($chk->fetchColumn()) {
                     users_json(['success' => false, 'message' => 'That Student ID already exists.']);
                 }
-                $chk = $db->prepare("SELECT 1 FROM course WHERE courseID = ? LIMIT 1");
+                $chk = $db->prepare("SELECT 1 FROM course WHERE courseID = ? AND course_code <> 'FACULTY' LIMIT 1");
                 $chk->execute([$courseId]);
                 if (!$chk->fetchColumn()) {
                     users_json(['success' => false, 'message' => "Pick the student's course."]);
                 }
                 if ($yearLevel < 1 || $yearLevel > 12) {
                     users_json(['success' => false, 'message' => 'Year level must be 1–12.']);
+                }
+            } elseif ($roleKey === 'faculty') {
+                if ($employeeId === '' || mb_strlen($employeeId) > 80) {
+                    users_json(['success' => false, 'message' => 'Enter the Employee ID (up to 80 characters).']);
+                }
+                if (gjc_id_reserved_for_guardian($employeeId)) {
+                    users_json(['success' => false, 'message' => 'IDs starting with GRD are reserved for guardians.']);
+                }
+                // Employee IDs share student_info.studentID with Student IDs, so they must not collide.
+                $chk = $db->prepare("SELECT 1 FROM student_info WHERE studentID = ? LIMIT 1");
+                $chk->execute([$employeeId]);
+                if ($chk->fetchColumn()) {
+                    users_json(['success' => false, 'message' => 'That ID is already used by another student or faculty account.']);
+                }
+                if ($department === '' || mb_strlen($department) > 100) {
+                    users_json(['success' => false, 'message' => 'Enter the department (up to 100 characters).']);
                 }
             } elseif ($roleKey === 'merchant') {
                 if ($businessName === '' || mb_strlen($businessName) > 255) {
@@ -223,6 +245,10 @@ try {
             gjc_ensure_finance_staff_role($db);
             if ($roleKey === 'parent') {
                 gjc_ensure_parent_schema($db);
+            }
+            if ($roleKey === 'faculty') {
+                gjc_ensure_faculty_schema($db);
+                $facultyCourseId = gjc_faculty_course_id($db);
             }
 
             // A failure anywhere below is rolled back by the outer catch.
@@ -246,6 +272,12 @@ try {
                    ->execute(array_merge([$newId, $studentId], array_fill(0, $yrCount, (string) $yearLevel), [$courseId]));
                 gjc_student_wallet($db, $newId);
                 $db->prepare("INSERT IGNORE INTO fee_waiver_credits (student_user_id, status) VALUES (?, 'empty')")->execute([$newId]);
+            } elseif ($roleKey === 'faculty') {
+                // No fee_waiver_credits row: fee waivers are for students only.
+                [$yrCols, $yrMarks, $yrCount] = gjc_student_entry_year_write_columns($db);
+                $db->prepare("INSERT INTO student_info (userID, studentID, {$yrCols}, courseID, department) VALUES (?, ?, {$yrMarks}, ?, ?)")
+                   ->execute(array_merge([$newId, $employeeId], array_fill(0, $yrCount, ''), [$facultyCourseId, $department]));
+                gjc_student_wallet($db, $newId);
             } elseif ($roleKey === 'merchant') {
                 $merchantId = gjc_insert_merchant_record($db, $newId, $businessName, '', $stallId !== '' ? $stallId : null);
                 gjc_merchant_wallet($db, $newId);
@@ -283,6 +315,93 @@ try {
                     ? "{$roleLabel} account created for {$fullName}. The login credentials were emailed to {$email}; they must change the password at first sign-in."
                     : "{$roleLabel} account created for {$fullName}, but the credentials email could not be sent. Give them the temporary password yourself; they must change it at first sign-in.",
             ]);
+        }
+
+        case 'update_faculty': {
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
+                http_response_code(403);
+                users_json(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
+            }
+            if (gjc_sub_role() !== 'super_admin') {
+                users_json(['success' => false, 'message' => 'Only the super admin can edit faculty details.']);
+            }
+            $userId     = (int) ($_POST['user_id'] ?? 0);
+            $employeeId = trim((string) ($_POST['employee_id'] ?? ''));
+            $department = trim((string) ($_POST['department'] ?? ''));
+
+            $user = users_fetch($db, $userId);
+            if (!$user || (int) $user['roleID'] !== GJC_FACULTY_ROLE_ID) {
+                users_json(['success' => false, 'message' => 'Faculty account not found.']);
+            }
+            // Same rules as add_user.
+            if ($employeeId === '' || mb_strlen($employeeId) > 80) {
+                users_json(['success' => false, 'message' => 'Enter the Employee ID (up to 80 characters).']);
+            }
+            if (gjc_id_reserved_for_guardian($employeeId)) {
+                users_json(['success' => false, 'message' => 'IDs starting with GRD are reserved for guardians.']);
+            }
+            if ($department === '' || mb_strlen($department) > 100) {
+                users_json(['success' => false, 'message' => 'Enter the department (up to 100 characters).']);
+            }
+            gjc_ensure_faculty_schema($db);
+            $old = $db->prepare("SELECT studentID, department FROM student_info WHERE userID = ? LIMIT 1");
+            $old->execute([$userId]);
+            $before = $old->fetch(PDO::FETCH_ASSOC);
+            if (!$before) {
+                users_json(['success' => false, 'message' => 'This faculty account has no details on record.']);
+            }
+            // Employee IDs share student_info.studentID with Student IDs, so they must not collide.
+            $chk = $db->prepare("SELECT 1 FROM student_info WHERE studentID = ? AND userID <> ? LIMIT 1");
+            $chk->execute([$employeeId, $userId]);
+            if ($chk->fetchColumn()) {
+                users_json(['success' => false, 'message' => 'That ID is already used by another student or faculty account.']);
+            }
+            if ($before['studentID'] === $employeeId && (string) $before['department'] === $department) {
+                users_json(['success' => true, 'message' => 'Nothing changed.']);
+            }
+
+            $db->prepare("UPDATE student_info SET studentID = ?, department = ? WHERE userID = ?")
+               ->execute([$employeeId, $department, $userId]);
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'USER_ACCOUNT', 'student_info',
+                ['employee_id' => $before['studentID'], 'department' => $before['department']],
+                ['event' => 'faculty_updated', 'user_id' => $userId, 'employee_id' => $employeeId, 'department' => $department],
+                null, ['target_id' => $userId]
+            );
+            users_json(['success' => true, 'message' => 'Faculty details saved.']);
+        }
+
+        case 'offboard_faculty':
+        case 'reinstate_faculty': {
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
+                http_response_code(403);
+                users_json(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
+            }
+            if (gjc_sub_role() !== 'super_admin') {
+                users_json(['success' => false, 'message' => 'Only the super admin can offboard or reinstate faculty.']);
+            }
+            $userId = (int) ($_POST['user_id'] ?? 0);
+            $user = users_fetch($db, $userId);
+            if (!$user || (int) $user['roleID'] !== GJC_FACULTY_ROLE_ID) {
+                users_json(['success' => false, 'message' => 'Faculty account not found.']);
+            }
+            gjc_ensure_school_year_schema($db); // adds student_info.graduated_at if missing
+            $offboard = $action === 'offboard_faculty';
+            // Only flips when the state actually changes, so a double click logs once.
+            $stmt = $db->prepare($offboard
+                ? "UPDATE student_info SET graduated_at = NOW() WHERE userID = ? AND graduated_at IS NULL"
+                : "UPDATE student_info SET graduated_at = NULL WHERE userID = ? AND graduated_at IS NOT NULL");
+            $stmt->execute([$userId]);
+            if ($stmt->rowCount() === 0) {
+                users_json(['success' => false, 'message' => $offboard ? 'This faculty member is already offboarded.' : 'This faculty member is not offboarded.']);
+            }
+            logAudit(
+                $db, $adminId, gjc_current_role(), 'USER_ACCOUNT', 'student_info',
+                ['userID' => $userId, 'left_school' => !$offboard],
+                ['event' => $offboard ? 'faculty_offboarded' : 'faculty_reinstated', 'userID' => $userId, 'left_school' => $offboard],
+                null, ['target_id' => $userId]
+            );
+            users_json(['success' => true, 'message' => $offboard ? 'Faculty member offboarded.' : 'Faculty member reinstated.']);
         }
 
         case 'suspend': {

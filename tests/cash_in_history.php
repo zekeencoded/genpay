@@ -30,7 +30,7 @@ $rows = gjc_recent_cash_in_history($db);
 if (array_column($rows, 'reference_no') !== ['PARENT', 'STUDENT', 'MERCHANT', 'FAILED', 'OLD']) {
     throw new RuntimeException('History must include cash-ins only, newest first.');
 }
-if ((int) $rows[0]['recipient_user_id'] !== 202 || $rows[0]['recipient_role'] !== 'Parent'
+if ((int) $rows[0]['recipient_user_id'] !== 202 || $rows[0]['recipient_role'] !== 'Guardian'
     || (int) $rows[1]['recipient_user_id'] !== 101 || $rows[1]['recipient_role'] !== 'Student') {
     throw new RuntimeException('Student and parent wallet owners must resolve separately.');
 }

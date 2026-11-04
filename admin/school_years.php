@@ -68,7 +68,7 @@ $currentPage = 'school_years';
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -277,19 +277,19 @@ $currentPage = 'school_years';
     </div>
 
     <!-- 6. Rollover confirm modal -->
-    <div class="modal fade" id="syRolloverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="syRolloverModal" tabindex="-1" aria-labelledby="syRolloverTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius:16px;border:none;">
+            <div class="modal-content gp-modal">
                 <div class="modal-header">
-                    <h5 class="modal-title">Activate School Year</h5>
+                    <h5 class="modal-title" id="syRolloverTitle"><i class="fa-solid fa-calendar-check"></i>Activate School Year</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="syRolloverBody" style="font-size:14px;">
+                <div class="modal-body" id="syRolloverBody">
                     Loading…
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="sy-btn ghost" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="sy-btn primary" id="syRolloverConfirmBtn" disabled onclick="syConfirmRollover()">Activate Year</button>
+                    <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="maintenance-btn primary" id="syRolloverConfirmBtn" disabled onclick="syConfirmRollover()">Activate Year</button>
                 </div>
             </div>
         </div>
@@ -497,7 +497,7 @@ $currentPage = 'school_years';
         const status = select.value;
         if (!await gpConfirm({
             title: "Update student status?",
-            body: status === "enrolled" ? "Enrollment allows wallet use, subject to any parent or account restrictions." : "Spending, transfers, and cash-in will stop. The remaining balance is kept in the wallet.",
+            body: status === "enrolled" ? "Enrollment allows wallet use, subject to any guardian or account restrictions." : "Spending, transfers, and cash-in will stop. The remaining balance is kept in the wallet.",
             detail: [["Student", student.name], ["Status", select.options[select.selectedIndex].text]],
             confirmLabel: "Save status",
         })) return;

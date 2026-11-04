@@ -202,7 +202,7 @@
                 </details>
                 <details>
                     <summary>Who can use GenPay?</summary>
-                    <p>Students, parents and campus merchants. Students pay at stalls and send GenCoin to other students. Parents can pay at stalls too, send allowance to their child, and manage their child's wallet. Merchants accept payments, sell top-ups and cash out their earnings.</p>
+                    <p>Students, guardians and campus merchants. Students pay at stalls and send GenCoin to other students. Guardians can pay at stalls too, send allowance to their child, and manage their child's wallet. Merchants accept payments, sell top-ups and cash out their earnings.</p>
                 </details>
                 <details>
                     <summary>Is my money safe in GenPay?</summary>
@@ -221,8 +221,8 @@
                     <p>Visit the Finance Office with your ID and request a password reset. A temporary password will be emailed to you, and you'll be asked to set a new one when you sign in.</p>
                 </details>
                 <details>
-                    <summary>Can parents monitor their child's spending?</summary>
-                    <p>Yes. A parent linked to a student can see the wallet balance and transaction history, set a daily spending limit, and freeze the wallet to block purchases and transfers.</p>
+                    <summary>Can guardians monitor their child's spending?</summary>
+                    <p>Yes. A guardian linked to a student can see the wallet balance and transaction history, set a daily spending limit, and freeze the wallet to block purchases and transfers.</p>
                 </details>
             </div>
         </div>

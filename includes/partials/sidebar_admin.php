@@ -25,7 +25,7 @@ $__badge = static function (int $count, string $noun): string {
         </div>
         <div class="brand-text">
             <h4>GenPay</h4>
-            <span>Finance</span>
+            <span><?= function_exists('gjc_sub_role') && gjc_sub_role() === 'finance_staff' ? 'Finance Staff' : 'Finance Admin' ?></span>
         </div>
     </div>
     <nav class="sidebar-menu">

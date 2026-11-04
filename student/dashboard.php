@@ -28,9 +28,9 @@ $isUnenrolled = $walletState === 'frozen_unenrolled';
 $isExited     = $walletState === 'frozen_exit';
 $activeYearName = gjc_active_school_year_name($db);
 
-// Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
-// for accounts that never got a student_info row.
-$studentID = 'GJC-' . str_pad((string) $currentUser['id'], 5, '0', STR_PAD_LEFT);
+// Real school-issued ID (GJC2026-0001); placeholder (same as admin) for accounts
+// that never got a student_info row.
+$studentID = 'GJC' . date('Y') . '-????';
 if (gjc_table_exists($db, 'student_info')) {
     $sidStmt = $db->prepare("SELECT studentID FROM student_info WHERE userID = ? LIMIT 1");
     $sidStmt->execute([(int) $currentUser['id']]);
@@ -104,7 +104,7 @@ $currentPage = 'dashboard';
     <link rel="apple-touch-icon" sizes="180x180" href="<?= ICONS_URL ?>/gp_logo.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Dashboard | GenPay</title>
+    <title><?= gjc_is_faculty() ? 'Faculty' : 'Student' ?> Dashboard | GenPay</title>
 
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -146,8 +146,8 @@ $currentPage = 'dashboard';
                     <div>
                         <h3>Your wallet is frozen</h3>
                         <p>
-                            Spending, receiving, and cash-in are paused because you have graduated or transferred out. Your remaining
-                            balance below is safe &mdash; you can still send it to another student.
+                            Spending, receiving, and cash-in are paused because <?= gjc_is_faculty() ? 'you have left the school' : 'you have graduated or transferred out' ?>. Your remaining
+                            balance below is safe &mdash; you can still send it to someone, or ask the Finance Office to pay it out.
                         </p>
                         <a href="<?= STUDENT_URL ?>/transfer.php" class="btn btn-success btn-sm mt-2">
                             <i class="fa-solid fa-paper-plane"></i> Send GenCoin
@@ -186,7 +186,7 @@ $currentPage = 'dashboard';
                     <div class="sd-balance-holder">
                         <strong><?= $e($studentName) ?></strong>
                         <span class="sd-holder-id"><?= $e($studentID) ?></span>
-                        <span class="sd-role-badge">STUDENT</span>
+                        <span class="sd-role-badge"><?= gjc_is_faculty() ? 'FACULTY' : 'STUDENT' ?></span>
                     </div>
                 </section>
 
@@ -216,7 +216,7 @@ $currentPage = 'dashboard';
                             </span>
                         </div>
                         <h2 id="sdStatus" class="<?= $isFrozen ? 'is-frozen-text' : '' ?>"><?= $e($accountStatus) ?></h2>
-                        <p>Student wallet access</p>
+                        <p><?= gjc_is_faculty() ? 'Faculty' : 'Student' ?> wallet access</p>
                     </div>
                 </section>
 

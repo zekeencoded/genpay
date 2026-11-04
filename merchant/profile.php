@@ -26,7 +26,7 @@ if (($_GET['updated'] ?? '') === '1') {
 $staffName = $currentUser['name'];
 $staffInitial = strtoupper(substr($staffName, 0, 1));
 $email = (string) ($currentUser['email'] ?? '');
-$staffID = 'STF-' . str_pad((string) $userId, 5, '0', STR_PAD_LEFT);
+$staffID = gjc_account_id('MER', $userId, $rawUser['created_at'] ?? null); // same ID admin shows
 $position = trim((string) ($rawUser['position'] ?? '')) ?: 'Merchant Staff';
 $createdAt = (string) ($rawUser['created_at'] ?? '');
 $memberSince = $createdAt !== '' ? date('F Y', strtotime($createdAt)) : 'N/A';
@@ -105,7 +105,7 @@ $currentPage = 'profile';
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_dashboard.css?v=34">
     <link rel="stylesheet" href="<?= CSS_URL ?>/student_profile.css?v=15">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=7">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/profile_hub.css?v=8">
 </head>
 
 <body class="sd-body">

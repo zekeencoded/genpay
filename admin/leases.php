@@ -245,7 +245,7 @@ $stateBadge = [
     <title>Leases &amp; Rent | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=41">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -514,13 +514,13 @@ $stateBadge = [
 </div>
 
 <!-- ── New Lease Modal ──────────────────────────────────────────────────── -->
-<div class="modal fade" id="leaseModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="leaseModal" tabindex="-1" aria-labelledby="leaseTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content custom-modal">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">New lease contract</h5>
-                    <small class="text-muted">For a tenant who did not come through Stall Applications.</small>
+                    <h5 class="modal-title" id="leaseTitle"><i class="fa-solid fa-file-signature"></i>New lease contract</h5>
+                    <p class="gp-modal-sub">For a tenant who did not come through Stall Applications.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -529,14 +529,14 @@ $stateBadge = [
                     <input type="hidden" name="action" value="create_lease">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Tenant <span class="text-danger">*</span></label>
+                            <label class="form-label">Tenant <span class="text-danger">*</span></label>
                             <select class="form-select" name="merchant_user_id" id="merchantUserId" required>
                                 <option value="">Loading merchants&hellip;</option>
                             </select>
                             <small class="form-text" id="merchantPickerHint">The merchant account that will be billed.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Stall <span class="text-danger">*</span></label>
+                            <label class="form-label">Stall <span class="text-danger">*</span></label>
                             <select class="form-select" name="stall_id" id="stallId" required>
                                 <option value="">Select a stall&hellip;</option>
                                 <?= gjc_stall_registry_options_html($db) ?>
@@ -544,34 +544,34 @@ $stateBadge = [
                             <small class="form-text">From the stall registry (the stall map).</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Stall name <span class="text-danger">*</span></label>
+                            <label class="form-label">Stall name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="stall_name" id="stallName"
                                    required placeholder="e.g. Green Hill Canteen">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Monthly rent (&#8369;) <span class="text-danger">*</span></label>
+                            <label class="form-label">Monthly rent (&#8369;) <span class="text-danger">*</span></label>
                             <input type="number" class="form-control" name="monthly_rent" id="monthlyRent"
                                    step="0.01" min="0.01" required placeholder="0.00">
                             <small class="form-text">Charged once per month for the whole term.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Lease start <span class="text-danger">*</span></label>
+                            <label class="form-label">Lease start <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" name="lease_start" id="leaseStart" required>
                             <small class="form-text">Rent is charged on this day of every month.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Lease end <span class="text-danger">*</span></label>
+                            <label class="form-label">Lease end <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" name="lease_end" id="leaseEnd" required>
                             <small class="form-text">Auto-set to one year after the start — change it if the term differs.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Security deposit (&#8369;)</label>
+                            <label class="form-label">Security deposit (&#8369;)</label>
                             <input type="number" class="form-control" name="deposit_amount" id="depositAmount"
                                    step="0.01" min="0" value="0">
                             <small class="form-text">Recorded for reference only — it is not billed as rent.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Start billing</label>
+                            <label class="form-label">Start billing</label>
                             <select class="form-select" name="status" id="leaseStatus">
                                 <option value="active">Yes — the stall is open (Active)</option>
                                 <option value="pending">Not yet — hold it (Pending)</option>
@@ -579,7 +579,7 @@ $stateBadge = [
                             <small class="form-text">A Pending lease is charged nothing until you activate it.</small>
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Contract notes</label>
+                            <label class="form-label">Contract notes</label>
                             <textarea class="form-control" name="contract_notes" id="contractNotes" rows="2"
                                       placeholder="Terms, deposit arrangement, special conditions…"></textarea>
                         </div>
@@ -588,9 +588,9 @@ $stateBadge = [
                         </div>
                     </div>
                     <div id="leaseFormMsg" class="mt-3"></div>
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="login-btn" style="flex:1" id="leaseSubmitBtn">Create lease</button>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn primary" id="leaseSubmitBtn">Create lease</button>
                     </div>
                 </form>
             </div>
@@ -599,13 +599,13 @@ $stateBadge = [
 </div>
 
 <!-- ── Quick Record payment ────────────────────────────────────────────── -->
-<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="payModal" tabindex="-1" aria-labelledby="payTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content custom-modal">
+        <div class="modal-content gp-modal">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">Record payment</h5>
-                    <small class="text-muted" id="payTenant"></small>
+                    <h5 class="modal-title" id="payTitle"><i class="fa-solid fa-money-bill-wave"></i>Record payment</h5>
+                    <p class="gp-modal-sub" id="payTenant"></p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -615,20 +615,20 @@ $stateBadge = [
                     <input type="hidden" name="lease_id" id="payLeaseId">
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Month this pays for</label>
+                            <label class="form-label">Month this pays for</label>
                             <input type="month" class="form-control" name="period_covered" id="payPeriod" required>
                             <small class="form-text" id="payHint"></small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Amount (&#8369;)</label>
+                            <label class="form-label">Amount (&#8369;)</label>
                             <input type="number" step="0.01" min="0.01" class="form-control" name="amount_paid" id="payAmount" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Date received</label>
+                            <label class="form-label">Date received</label>
                             <input type="date" class="form-control" name="payment_date" value="<?= date('Y-m-d') ?>" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Method</label>
+                            <label class="form-label">Method</label>
                             <select class="form-select" name="payment_method">
                                 <option value="cash">Cash</option>
                                 <option value="bank_transfer">Bank transfer</option>
@@ -637,14 +637,14 @@ $stateBadge = [
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Notes (optional)</label>
+                            <label class="form-label">Notes (optional)</label>
                             <input type="text" class="form-control" name="notes" placeholder="Receipt no., remarks…">
                         </div>
                     </div>
                     <div id="payMsg" class="mt-3"></div>
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="login-btn" style="flex:1" id="paySubmitBtn">Record payment</button>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <div class="maintenance-btn-row mt-3">
+                        <button type="button" class="maintenance-btn muted" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="maintenance-btn primary" id="paySubmitBtn">Record payment</button>
                     </div>
                 </form>
             </div>

@@ -90,7 +90,7 @@ $blankLine = '_________________________';
         <div class="waiver-body">
             <p class="waiver-intro">
                 This Agreement is made and entered into by <strong>General de Jesus College</strong>, through its
-                Finance &amp; Accounting Office, and the parent/guardian of the student named below, governing the
+                Finance &amp; Accounting Office, and the guardian of the student named below, governing the
                 Fee Waiver Credit described herein.
             </p>
 
@@ -120,10 +120,10 @@ $blankLine = '_________________________';
                 <h3>II. Terms and Conditions</h3>
                 <ol class="waiver-terms">
                     <li><strong>Nature of the Credit.</strong> The Fee Waiver Credit described herein is a school-approved credit recorded by the Finance &amp; Accounting Office to be applied toward the student's tuition. It is not a cash payment, is not convertible to cash, and does not form part of the student's GenPay/GenCoin digital wallet balance.</li>
-                    <li><strong>Effectivity.</strong> This credit shall take effect only upon (a) execution of this Agreement by the parent/guardian, and (b) verification and confirmation of the signed Agreement by the Finance &amp; Accounting Office. Prior to such confirmation, the credit remains pending and is not reflected in the student's account.</li>
+                    <li><strong>Effectivity.</strong> This credit shall take effect only upon (a) execution of this Agreement by the guardian, and (b) verification and confirmation of the signed Agreement by the Finance &amp; Accounting Office. Prior to such confirmation, the credit remains pending and is not reflected in the student's account.</li>
                     <li><strong>Application.</strong> The confirmed amount shall be applied solely toward the tuition obligations of the student named above and may not be reassigned, transferred, or applied to the account of any other student.</li>
                     <li><strong>Modification and Revocation.</strong> The School reserves the right to revoke, adjust, or cancel this credit at any time prior to confirmation, or thereafter in the event of error, misrepresentation, or a determination that the student is ineligible.</li>
-                    <li><strong>Acknowledgment.</strong> By signing below, the parent/guardian acknowledges having read and understood the foregoing terms and agrees to them on behalf of the student.</li>
+                    <li><strong>Acknowledgment.</strong> By signing below, the guardian acknowledges having read and understood the foregoing terms and agrees to them on behalf of the student.</li>
                     <li><strong>Inquiries.</strong> Questions concerning this Agreement may be directed to the Finance &amp; Accounting Office.</li>
                 </ol>
             </section>
@@ -133,7 +133,7 @@ $blankLine = '_________________________';
                 <div class="signatures">
                     <div class="sig-block">
                         <span class="sig-rule"></span>
-                        <span class="sig-label">Parent / Guardian Signature over Printed Name</span>
+                        <span class="sig-label">Guardian Signature over Printed Name</span>
                         <div class="sig-meta">
                             <span>Relationship to Student: <i class="sig-blank"></i></span>
                             <span>Date Signed: <i class="sig-blank"></i></span>

@@ -11,13 +11,13 @@ $wallet      = gjc_student_wallet($db, $currentUser['id']);
 $studentName = $currentUser['name'];
 $balance     = (float) $wallet['balance'];
 $dailySent   = gjc_p2p_daily_sent($db, $currentUser['id']);
-$dailyLimit  = 5000.00;
+$dailyLimit  = (float) gjc_setting($db, 'transfer_daily_limit');
 $dailyRemaining = max(0, $dailyLimit - $dailySent);
 $sendMax     = min($balance, $dailyRemaining);
 
-// Real school-issued ID (GJC2026-0001); the padded userID is only a fallback
-// for accounts that never got a student_info row.
-$studentID = 'GJC-' . str_pad((string) $currentUser['id'], 5, '0', STR_PAD_LEFT);
+// Real school-issued ID (GJC2026-0001); placeholder (same as admin) for accounts
+// that never got a student_info row.
+$studentID = 'GJC' . date('Y') . '-????';
 if (gjc_table_exists($db, 'student_info')) {
     $sidStmt = $db->prepare("SELECT studentID FROM student_info WHERE userID = ? LIMIT 1");
     $sidStmt->execute([(int) $currentUser['id']]);
@@ -62,7 +62,7 @@ $csrfToken = gjc_csrf_token();
 
             <?php
             $topbarTitle = 'Send GenCoin';
-            $topbarSubtitle = 'Send GenCoins instantly to another student.';
+            $topbarSubtitle = 'Send GenCoins instantly to another student or employee.';
             require __DIR__ . '/../includes/partials/topbar_student.php';
             ?>
 
@@ -83,7 +83,7 @@ $csrfToken = gjc_csrf_token();
                     <div class="sd-balance-holder">
                         <strong><?= $e($studentName) ?></strong>
                         <span class="sd-holder-id"><?= $e($studentID) ?></span>
-                        <span class="sd-role-badge">STUDENT</span>
+                        <span class="sd-role-badge"><?= gjc_is_faculty() ? 'FACULTY' : 'STUDENT' ?></span>
                     </div>
                 </section>
 
@@ -93,7 +93,7 @@ $csrfToken = gjc_csrf_token();
                     <div class="sd-panel">
                         <div class="sd-panel-head">
                             <div>
-                                <h3>Send to a Student</h3>
+                                <h3>Send to a Student or Employee</h3>
                                 <p>Look up the recipient, enter an amount, and confirm.</p>
                             </div>
                         </div>
@@ -101,7 +101,7 @@ $csrfToken = gjc_csrf_token();
                         <!-- Form view -->
                         <div class="pf-form" id="sgForm">
                             <div class="pf-field">
-                                <label for="sgRecipient">Send to (Student ID)</label>
+                                <label for="sgRecipient">Send to (Student or Employee ID)</label>
                                 <input type="text" id="sgRecipient" placeholder="e.g. GJC2026-0001" autocomplete="off">
                                 <div class="sg-recip" id="sgRecipMsg"></div>
                             </div>
@@ -118,7 +118,7 @@ $csrfToken = gjc_csrf_token();
 
                             <div class="pf-field">
                                 <label for="sgMessage">Message <span style="font-weight:400;color:var(--sd-muted)">(optional)</span></label>
-                                <input type="text" id="sgMessage" maxlength="255" placeholder="e.g. For lunch &#127836;">
+                                <input type="text" id="sgMessage" maxlength="255" placeholder="e.g. For lunch">
                             </div>
 
                             <div class="sg-error" id="sgError"></div>
@@ -145,14 +145,14 @@ $csrfToken = gjc_csrf_token();
                         <div class="sd-panel-head">
                             <div>
                                 <h3>How It Works</h3>
-                                <p>Peer-to-peer transfers between student wallets.</p>
+                                <p>Peer-to-peer transfers between student and faculty wallets.</p>
                             </div>
                         </div>
 
                         <div class="tu-steps">
                             <div class="tu-step">
                                 <strong>1</strong>
-                                <span>Type the recipient&rsquo;s Student ID — their name appears once found.</span>
+                                <span>Type the recipient&rsquo;s Student or Employee ID — their name appears once found.</span>
                             </div>
                             <div class="tu-step">
                                 <strong>2</strong>
@@ -205,7 +205,7 @@ $csrfToken = gjc_csrf_token();
                             <strong id="sgConfirmName">--</strong>
                         </div>
                         <div class="sp-pay-row">
-                            <label>Student ID</label>
+                            <label>ID</label>
                             <strong id="sgConfirmSid">--</strong>
                         </div>
                         <div class="sp-pay-row">
@@ -286,7 +286,7 @@ $csrfToken = gjc_csrf_token();
                 sgRecipMsg.style.color = 'var(--sd-green)';
             } else {
                 sgValidRecipient = false;
-                sgRecipMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>' + (d.message || 'Student not found');
+                sgRecipMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation me-1"></i>' + (d.message || 'Recipient not found');
                 sgRecipMsg.style.color = 'var(--sd-red)';
             }
         } catch (e) {
@@ -302,7 +302,7 @@ $csrfToken = gjc_csrf_token();
     sgSend.addEventListener('click', () => {
         const pesos = parseFloat(sgAmount.value) || 0;
         sgError.textContent = '';
-        if (!sgValidRecipient) { sgError.textContent = 'Enter a valid recipient Student ID first.'; return; }
+        if (!sgValidRecipient) { sgError.textContent = 'Enter a valid recipient ID first.'; return; }
         if (pesos < 1)      { sgError.textContent = 'Enter an amount of at least ₱1.00.'; return; }
         if (pesos > SG_MAX) { sgError.textContent = 'Amount exceeds your available balance / daily limit (' + sgFmt(SG_MAX) + ').'; return; }
 

@@ -97,69 +97,36 @@
 }
 .maintenance-form-grid .full { grid-column: 1 / -1; }
 
-/* Grouped field sections for the merchant form */
-.mbf-section { margin-bottom: 18px; }
+/* Grouped field sections for the account forms (Add Merchant, Add User) */
+.mbf-section { margin-bottom: 22px; }
+.mbf-section + .mbf-section { padding-top: 18px; border-top: 1px solid var(--gp-line); }
 .mbf-section-eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.6px !important;
-    color: var(--gp-green-700);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gp-ink);
     margin-bottom: 12px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid var(--gp-line);
 }
-.mbf-section-eyebrow i { font-size: 12px; color: #27764b; }
 .mbf-credentials-note {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 12px 14px;
-    border: 1px solid #a8dcbe;
-    background: var(--gp-success-bg);
-    border-radius: var(--gjc-radius);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--gp-ink);
-}
-.mbf-credentials-note i { color: var(--gp-success); font-size: 14px; margin-top: 1px; }
-
-/* ── Buttons ─────────────────────────────────────────────────────────── */
-.maintenance-btn-row {
-    display: flex;
-    flex-wrap: wrap;
     gap: 8px;
-    margin-top: 12px;
-}
-
-.maintenance-btn {
-    border: 0;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity .15s;
-}
-.maintenance-btn:hover { opacity: .88; }
-.maintenance-btn.primary { background: var(--gp-success); color: #fff; }
-.maintenance-btn.warning { background: var(--gp-warning); color: #fff; }
-.maintenance-btn.muted   { background: var(--gjc-soft-2); color: var(--gjc-slate); border: 1px solid var(--gp-line); }
-
-/* ── Alerts ──────────────────────────────────────────────────────────── */
-.maintenance-alert {
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin: 12px 0;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12.5px;
     line-height: 1.5;
+    color: var(--gp-muted);
 }
-.maintenance-alert.success { background: var(--gjc-soft-2); border: 1px solid #bbf7d4; color: var(--gp-success); }
-.maintenance-alert.error   { background: var(--gp-danger-bg); border: 1px solid #f0b8b2; color: var(--gp-danger); }
+.mbf-credentials-note i { font-size: 13px; margin-top: 2px; }
+
+/* Input with trailing buttons (password show/generate) */
+.mbf-input-group { display: flex; gap: 8px; }
+.mbf-input-group input { flex: 1; min-width: 0; }
+.mbf-input-group .maintenance-btn { flex: none; }
+
+/* Inline field errors */
+.merchant-bypass-form .is-invalid { border-color: var(--gp-danger); }
+.mbf-field-error:empty { display: none; }
+.mbf-field-error { margin-top: 5px; font-size: 12px; color: var(--gp-danger); }
+.mbf-field-hint:empty { display: none; }
+.mbf-field-hint { margin-top: 5px; font-size: 12px; line-height: 1.45; color: var(--gp-muted); }
 
 /* ── Import summary ──────────────────────────────────────────────────── */
 .import-summary-grid {

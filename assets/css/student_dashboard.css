@@ -434,6 +434,7 @@ body.sd-body {
 .gc-price-main {
   font-family: var(--sd-mono);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .gc-price-sub {

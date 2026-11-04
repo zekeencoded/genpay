@@ -233,7 +233,7 @@
 .ph-id-brand { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
 .ph-id-brand img { width: 28px; height: 28px; object-fit: contain; }
 
-.ph-id-holder { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.ph-id-holder { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .ph-id-photo {
     position: relative;
     flex: none;

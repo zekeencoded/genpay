@@ -1,5 +1,6 @@
 @import url("gjc-clear.css?v=24");
 @import url("theme.css?v=14");
+@import url("gp-modal.css?v=1");
 
 :root {
   /* Aliases of the gp-* palette in theme.css. */

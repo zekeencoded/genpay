@@ -420,6 +420,28 @@ function gjc_store_order_items(PDO $db, string $source, int $orderId, array $lin
     }
 }
 
+/**
+ * Put a returned sale's items back in stock, found through the paid order that
+ * carries its reference. Lines are summed per product (a multi-table UPDATE
+ * touches each row once); deleted products and other stalls' items are skipped.
+ */
+function gjc_restock_returned_sale(PDO $db, string $referenceNo, int $merchantWalletId, int $merchantUserId): void
+{
+    foreach (['cart_orders' => ['cart_order_items', 'cart_order_id'],
+              'merchant_qr_orders' => ['qr_order_items', 'merchant_qr_order_id']] as $orders => [$items, $fk]) {
+        $db->prepare(
+            "UPDATE merchant_inventory mi
+               JOIN (SELECT i.merchant_inventory_id, SUM(i.qty) AS qty
+                       FROM `{$items}` i JOIN `{$orders}` o ON o.id = i.`{$fk}`
+                      WHERE o.paid_ref = ? AND o.merchant_wallet_id = ? AND o.status = 'paid'
+                        AND i.merchant_inventory_id IS NOT NULL
+                      GROUP BY i.merchant_inventory_id) s ON s.merchant_inventory_id = mi.id
+                SET mi.stock_qty = mi.stock_qty + s.qty
+              WHERE mi.merchant_user_id = ?"
+        )->execute([$referenceNo, $merchantWalletId, $merchantUserId]);
+    }
+}
+
 function gjc_store_transaction_items(PDO $db, int $transactionId, array $lines): void
 {
     if (!$db->inTransaction()) {

@@ -115,3 +115,6 @@
 @media (max-width: 767.98px) {
     .ph-card .bp-edit { padding: 4px 16px 16px; }
 }
+
+/* The stall logo sits in the ID card's photo slot as a background (the listing JS repaints it). */
+.ph-id-photo.is-logo { background-size: cover; background-position: center; }

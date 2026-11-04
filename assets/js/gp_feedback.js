@@ -101,7 +101,7 @@
             el.setAttribute('role', 'dialog');
             el.innerHTML =
                 '<div class="modal-dialog modal-dialog-centered gp-confirm-dialog">' +
-                  '<div class="modal-content">' +
+                  '<div class="modal-content gp-modal">' +  /* restyled where gp-modal.css loads (admin and merchant pages) */
                     '<div class="modal-header border-0 pb-0">' +
                       '<h5 class="modal-title gp-confirm-title"></h5>' +
                       '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +

@@ -8,9 +8,18 @@ require_once __DIR__ . '/../../connection/audit_logger.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['merchant']);
+if (gjc_is_merchant_staff()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Only the stall owner can issue returns.']);
+    exit;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') gjc_csrf_require_json();
 gjc_ensure_transaction_refund_type($db);
 gjc_ensure_maintenance_fees_schema($db);
+// DDL must run before the transaction opens (it would implicitly commit it).
+gjc_ensure_cart_orders_schema($db);
+gjc_ensure_merchant_qr_orders_schema($db);
+gjc_ensure_order_items_schema($db);
 
 $action = trim((string) ($_POST['action'] ?? ''));
 $merchantUserId = gjc_user_id();
@@ -115,6 +124,8 @@ try {
         $db->prepare(
             "UPDATE transactions SET status = 'reversed' WHERE id = ?"
         )->execute([$transactionId]);
+
+        gjc_restock_returned_sale($db, (string) $original['reference_no'], $merchantWallet['id'], $ownerMerchId);
 
         // The sale is undone, so its still-accrued maintenance fee is too.
         gjc_void_maintenance_fee($db, (string) $original['reference_no']);

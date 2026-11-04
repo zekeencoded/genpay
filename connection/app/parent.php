@@ -258,3 +258,68 @@ function gjc_parent_wallet(PDO $db, int $parentId): array
 
     return ["id" => 0, "balance" => 0.0, "source" => "none"];
 }
+
+/**
+ * Guardian ID: GRD{year the account was created}-{parents.id}, e.g. GRD2026-0001.
+ * Derived, so every guardian has one with nothing to store or backfill.
+ */
+function gjc_guardian_id(int $parentId, ?string $createdAt): string
+{
+    return gjc_account_id('GRD', $parentId, $createdAt);
+}
+
+/** Typed Student/Employee IDs can't start with GRD: the send box would read them as guardians. */
+function gjc_id_reserved_for_guardian(string $id): bool
+{
+    return (bool) preg_match('/^GRD\d/i', trim($id));
+}
+
+/**
+ * One ID box for every top-up recipient. GRD2026-0001 is a guardian; anything else is a
+ * Student or Employee ID. Returns kind 'student' (wallet_id) or 'parent' (parent_id).
+ */
+function gjc_find_topup_recipient(PDO $db, string $id): array
+{
+    $id = trim($id);
+    if ($id === '') {
+        throw new InvalidArgumentException('Enter a Student, Employee or Guardian ID.');
+    }
+    if (preg_match('/^GRD(\d{4})-?(\d+)$/i', $id, $m)) {
+        $stmt = $db->prepare(
+            "SELECT p.id, u.first_name, u.last_name, COALESCE(u.created_at, p.created_at) AS created_at
+               FROM parents p JOIN users u ON u.userID = p.user_id
+              WHERE p.id = ? LIMIT 1"
+        );
+        $stmt->execute([(int) $m[2]]);
+        $p = $stmt->fetch(PDO::FETCH_ASSOC);
+        // The year must match too, so a mistyped year can't land on another guardian.
+        if (!$p || strcasecmp(gjc_guardian_id((int) $p['id'], $p['created_at']), 'GRD' . $m[1] . '-' . sprintf('%04d', (int) $m[2])) !== 0) {
+            throw new RuntimeException('No guardian has that ID. Check it and try again.');
+        }
+        return [
+            'kind' => 'parent', 'label' => 'Guardian', 'parent_id' => (int) $p['id'],
+            'name' => trim($p['first_name'] . ' ' . $p['last_name']), 'id' => gjc_guardian_id((int) $p['id'], $p['created_at']),
+        ];
+    }
+    $stmt = $db->prepare(
+        "SELECT u.userID, u.roleID, u.first_name, u.last_name, si.studentID, sw.id AS wallet_id
+           FROM users u
+           JOIN student_info si ON si.userID = u.userID
+           LEFT JOIN student_wallets sw ON sw.user_id = u.userID
+          WHERE si.studentID = ? AND u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
+          LIMIT 1"
+    );
+    $stmt->execute([$id]);
+    $s = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$s) {
+        throw new RuntimeException('No student, faculty or guardian has that ID. Check it and try again.');
+    }
+    if (!$s['wallet_id']) {
+        throw new RuntimeException('This account does not have a wallet yet.');
+    }
+    return [
+        'kind' => 'student', 'label' => (int) $s['roleID'] === GJC_FACULTY_ROLE_ID ? 'Faculty' : 'Student',
+        'wallet_id' => (int) $s['wallet_id'], 'user_id' => (int) $s['userID'],
+        'name' => trim($s['first_name'] . ' ' . $s['last_name']), 'id' => $s['studentID'],
+    ];
+}

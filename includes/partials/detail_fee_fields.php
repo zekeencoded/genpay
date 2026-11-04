@@ -29,9 +29,14 @@ $ftFeeCharged = $ftFeeVoided ? 0.0 : (float) $ftFee['fee_amount'];
 <div class="uv-field">
     <div class="uv-field-ic"><i class="fa-solid fa-wallet"></i></div>
     <div>
-        <div class="uv-field-label"><?= !empty($ftMerchant) ? 'Student Maintenance Fee' : 'Maintenance Fee' ?></div>
+        <div class="uv-field-label">Maintenance Fee</div>
         <div class="uv-field-value">
-            <?= gjc_money($ftFee['fee_amount']) ?> &middot; <?= $ftEsc(gjc_maintenance_fee_state_label($ftFee['status'])) ?><?= !empty($ftMerchant) ? ' &middot; not deducted from your sale' : '' ?>
+            <?php if (!empty($ftMerchant)): ?>
+            <?= gjc_money($ftFee['fee_amount']) ?><?= $ftFeeVoided ? ' &middot; Voided' : '' ?>
+            <?php else: ?>
+            <?php $ftState = gjc_maintenance_fee_state_label($ftFee['status']); ?>
+            <?= gjc_money($ftFee['fee_amount']) ?><?= $ftState !== '' ? ' &middot; ' . $ftEsc($ftState) : '' ?>
+            <?php endif; ?>
         </div>
     </div>
 </div>

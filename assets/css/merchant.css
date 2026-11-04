@@ -1,5 +1,6 @@
 @import url("gjc-clear.css?v=24");
 @import url("theme.css?v=14");
+@import url("gp-modal.css?v=1");
 
 :root {
   /* Aliases of the gp-* palette in theme.css. */
@@ -346,41 +347,79 @@ html {
 /* ============================= */
 
 
-/* Don't stretch to the hero's height. */
-.encash-hero-badge {
+/* Office status sits in the hero: it decides whether the form works. */
+.encash-office {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--gp-radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
+.encash-office i {
+  font-size: 8px;
+  border-radius: 50%;
+}
+
+.encash-office.is-open i {
+  color: #5fd38d;
+  box-shadow: 0 0 0 4px rgba(95, 211, 141, 0.22);
+}
+
+.encash-office.is-closed i {
+  color: var(--gold);
+}
+
 @media (max-width: 767.98px) {
-  .encash-hero-badge {
+  .encash-office {
     align-self: center;
   }
 }
 
 .encash-layout-grid {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1.25fr 0.75fr;
   gap: 24px;
-}
-
-.encash-form-panel,
-.encash-info-panel {
-  min-height: 370px;
+  align-items: start;
 }
 
 .encash-form {
+  margin: 0;
+}
+
+.encash-form fieldset {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
+  min-width: 0;
+}
+
+.encash-form fieldset:disabled {
+  opacity: 0.55;
+}
+
+.encash-closed-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: var(--gp-gold-deep);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .encash-field label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   color: var(--text-main);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .encash-field small {
@@ -388,110 +427,142 @@ html {
   margin-top: 8px;
   color: var(--text-muted);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .encash-money-input {
-  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 72px;
+  padding: 0 10px 0 20px;
   border: 1px solid var(--gp-line);
   border-radius: var(--gp-radius);
-  display: flex;
-  overflow: hidden;
-  background: white;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.encash-money-input:focus-within {
+  border-color: var(--emerald-700);
+  box-shadow: 0 0 0 3px rgba(30, 92, 58, 0.15);
 }
 
 .encash-money-input span {
-  width: 52px;
-  min-width: 52px;
-  display: grid;
-  place-items: center;
-  background: var(--emerald-800);
-  color: white;
-  font-weight: 800;
+  color: var(--text-muted);
+  font-size: 26px;
+  font-weight: 700;
 }
 
 .encash-money-input input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
-  padding: 0 16px;
+  background: transparent;
   color: var(--gp-ink);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-.encash-withdraw-all-btn,
-.encash-submit-btn {
-  height: 52px;
-  border-radius: var(--gp-radius-pill);
-  font-size: 14px;
-  font-weight: 800;
-  transition: 0.25s ease;
+.encash-money-input input::placeholder {
+  color: #c3cdc6;
 }
 
 .encash-withdraw-all-btn {
-  border: 2px solid var(--emerald-700);
-  background: #ffffff;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--gp-line);
+  border-radius: var(--gp-radius);
+  background: var(--emerald-soft);
   color: var(--emerald-800);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.encash-withdraw-all-btn:hover {
+  border-color: var(--emerald-700);
 }
 
 .encash-submit-btn {
+  height: 54px;
   border: none;
+  border-radius: var(--gp-radius);
   background: var(--emerald-800);
   color: #ffffff;
-  box-shadow: var(--gjc-shadow-lg);
+  font-size: 15px;
+  font-weight: 700;
+  transition: background 0.15s ease;
 }
 
-.encash-withdraw-all-btn:hover,
 .encash-submit-btn:hover {
-  transform: translateY(-2px);
+  background: var(--emerald-950);
 }
 
+.encash-withdraw-all-btn:focus-visible,
+.encash-submit-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* A real sequence, so a numbered rail. */
 .encash-guidelines {
-  display: grid;
-  gap: 14px;
+  list-style: none;
+  counter-reset: step;
+  margin: 0;
+  padding: 0;
 }
 
-.encash-guidelines div {
-  min-height: 74px;
-  padding: 15px;
-  border-radius: var(--gp-radius);
-  background: var(--emerald-soft);
-  border: 1px solid rgba(13, 36, 24, 0.08);
-  display: flex;
-  align-items: center;
-  gap: 13px;
+.encash-guidelines li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 22px 44px;
+}
+
+.encash-guidelines li:last-child {
+  padding-bottom: 0;
+}
+
+.encash-guidelines li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--emerald-950);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.encash-guidelines li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 32px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--gp-line);
 }
 
 .encash-guidelines strong {
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  border-radius: var(--gp-radius);
-  background: var(--gold);
-  color: var(--emerald-950);
-  display: grid;
-  place-items: center;
+  display: block;
+  color: var(--text-main);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 28px;
 }
 
 .encash-guidelines span {
-  color: var(--text-main);
+  display: block;
+  color: var(--text-muted);
   font-size: 13px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.encash-note {
-  margin-top: 16px;
-  padding: 15px;
-  border-radius: var(--gp-radius);
-  background: var(--gp-warning-bg);
-  color: var(--gp-warning);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .encash-empty-state {
@@ -921,17 +992,13 @@ html {
 
   .merchant-metric-card,
   .merchant-premium-panel,
-  .history-mini-card,
-  .encash-form-panel,
-  .encash-info-panel {
+  .history-mini-card {
     border-radius: var(--gp-radius);
     box-shadow: 0 10px 26px rgba(5, 41, 22, 0.07);
   }
 
   .merchant-quick-actions a,
-  .merchant-view-btn,
-  .encash-submit-btn,
-  .encash-withdraw-all-btn {
+  .merchant-view-btn {
     min-height: 52px;
     border-radius: var(--gp-radius-pill);
     touch-action: manipulation;
@@ -1105,6 +1172,7 @@ html {
 
 .gc-price-main {
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .gc-price-sub {
