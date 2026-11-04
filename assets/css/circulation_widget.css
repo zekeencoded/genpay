@@ -17,6 +17,12 @@
 .ce-wu-pct--parent{color:var(--gp-info)}
 .ce-wu-badge--parent-active{background:var(--gp-info-bg);color:var(--gp-info)}
 .ce-wu-dot--parent{background:var(--gp-info)}
+.ce-wu-bar-fill--faculty,.ce-wu-dot--faculty{background:#7c3aed}
+.ce-wu-pct--faculty{color:#7c3aed}
+.ce-wu-badge--faculty-active,.ce-type-faculty{background:rgba(124,58,237,.12);color:#7c3aed}
+.ce-pool-card.ce-pool-faculty{background:var(--gjc-panel)}
+.ce-pool-card.ce-pool-faculty .ce-pool-icon-wrap{background:rgba(124,58,237,.12)}
+.ce-pool-card.ce-pool-faculty .ce-pool-icon{color:#7c3aed}
 /* Total Wallet Users card (replaces Active Vouchers) */
 .ce-pool-card.ce-pool-users{background:var(--gjc-panel)}
 .ce-pool-card.ce-pool-users .ce-pool-icon-wrap{background:rgba(14, 99, 50,.1)}

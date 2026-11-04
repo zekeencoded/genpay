@@ -17,15 +17,16 @@ $circulation = (float) ($snap["total_in_circulation"] ?? 0);
 $drift = abs((float) ($snap["circulation_drift"] ?? 0));
 $isBalanced = $drift < 0.01;
 
-$walletStats = gjc_wallet_user_stats($db);
+$walletStats = gjc_wallet_user_stats($db, 1);
+$facultyWalletStats = gjc_wallet_user_stats($db, GJC_FACULTY_ROLE_ID);
 $merchantWalletStats = gjc_merchant_wallet_user_stats($db);
 $parentWalletStats = gjc_parent_wallet_user_stats($db);
 
 // Combined wallet-user figures for the "Total Wallet Users" card + drill-in table.
-$totalWalletUsers = $walletStats["total"] + $merchantWalletStats["total"] + $parentWalletStats["total"];
-$activeWalletUsers = $walletStats["active"] + $merchantWalletStats["active"] + $parentWalletStats["active"];
+$totalWalletUsers = $walletStats["total"] + $facultyWalletStats["total"] + $merchantWalletStats["total"] + $parentWalletStats["total"];
+$activeWalletUsers = $walletStats["active"] + $facultyWalletStats["active"] + $merchantWalletStats["active"] + $parentWalletStats["active"];
 $inactiveWalletUsers =
-    $walletStats["inactive"] + $merchantWalletStats["inactive"] + $parentWalletStats["inactive"];
+    $walletStats["inactive"] + $facultyWalletStats["inactive"] + $merchantWalletStats["inactive"] + $parentWalletStats["inactive"];
 $walletUsersList = gjc_wallet_users_list($db);
 
 $vaultPct = round(($vault / $cap) * 100, 1);
@@ -181,7 +182,7 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
         <div class="ce-pool-card ce-pool-students ce-pool-card--wallet ce-pool-card--clickable"
              role="button" tabindex="0"
              data-bs-toggle="modal" data-bs-target="#walletUsersModal"
-             data-wallet-filter="Student|Faculty" data-wallet-title="Student Wallet Users (<?= number_format(
+             data-wallet-filter="Student" data-wallet-title="Student Wallet Users (<?= number_format(
                  $walletStats["total"],
              ) ?>)"
              aria-label="View student wallet users in a table">
@@ -223,6 +224,50 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
                     <span class="ce-wu-badge ce-wu-badge--inactive">
                         <span class="ce-wu-dot ce-wu-dot--inactive"></span>
                         <?= number_format($walletStats["inactive"]) ?> Inactive
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="ce-pool-card ce-pool-faculty ce-pool-card--wallet ce-pool-card--clickable"
+             role="button" tabindex="0"
+             data-bs-toggle="modal" data-bs-target="#walletUsersModal"
+             data-wallet-filter="Faculty" data-wallet-title="Faculty Wallet Users (<?= number_format(
+                 $facultyWalletStats["total"],
+             ) ?>)"
+             aria-label="View faculty wallet users in a table">
+            <div class="ce-pool-icon-wrap">
+                <i class="fa-solid fa-chalkboard-user ce-pool-icon"></i>
+            </div>
+            <div class="ce-pool-info" style="flex:1;min-width:0;">
+                <span class="ce-pool-label">
+                    Faculty Wallet Users
+                    <span class="ce-info" tabindex="0" data-bs-toggle="tooltip"
+                          title="Faculty with no wallet activity in the last 30 days are counted as inactive."
+                          aria-label="How is inactive counted?">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    </span>
+                </span>
+                <div class="ce-pool-amt"><?= number_format($facultyWalletStats["total"]) ?></div>
+
+                <?php $fActivePct = $facultyWalletStats["total"] > 0
+                    ? round(($facultyWalletStats["active"] / $facultyWalletStats["total"]) * 100)
+                    : 0; ?>
+                <div class="ce-wu-bar-wrap">
+                    <div class="ce-wu-bar">
+                        <div class="ce-wu-bar-fill ce-wu-bar-fill--faculty" style="width:<?= $fActivePct ?>%"></div>
+                    </div>
+                    <span class="ce-wu-pct ce-wu-pct--faculty"><?= $fActivePct ?>%</span>
+                </div>
+
+                <div class="ce-wu-badges">
+                    <span class="ce-wu-badge ce-wu-badge--faculty-active">
+                        <span class="ce-wu-dot ce-wu-dot--faculty"></span>
+                        <?= number_format($facultyWalletStats["active"]) ?> Active
+                    </span>
+                    <span class="ce-wu-badge ce-wu-badge--inactive">
+                        <span class="ce-wu-dot ce-wu-dot--inactive"></span>
+                        <?= number_format($facultyWalletStats["inactive"]) ?> Inactive
                     </span>
                 </div>
             </div>

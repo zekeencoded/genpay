@@ -93,9 +93,11 @@ function gjc_merchant_wallet(PDO $db, int $userId): array
     return ["id" => 0, "balance" => 0.0, "source" => "none"];
 }
 
-function gjc_wallet_user_stats(PDO $db): array
+/** Student-wallet pool users; pass a roleID to count only students (1) or faculty. */
+function gjc_wallet_user_stats(PDO $db, ?int $roleId = null): array
 {
     $days = 30;
+    $roles = $roleId === null ? "1, " . GJC_FACULTY_ROLE_ID : (string) $roleId;
     $row  = $db->prepare(
         "SELECT
             COUNT(*) AS total,
@@ -105,7 +107,7 @@ function gjc_wallet_user_stats(PDO $db): array
              FROM users u
              LEFT JOIN student_wallets sw ON sw.user_id = u.userID
              LEFT JOIN transactions t ON t.student_wallet_id = sw.id
-             WHERE u.roleID IN (1, " . GJC_FACULTY_ROLE_ID . ")
+             WHERE u.roleID IN ($roles)
              GROUP BY u.userID
          ) sub"
     );

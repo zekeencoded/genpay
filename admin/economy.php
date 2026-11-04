@@ -22,9 +22,9 @@ $currentPage = 'economy';
     <title>System Economy | GenPay</title>
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=46">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/circulation_widget.css?v=9">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/circulation_widget.css?v=10">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -78,7 +78,7 @@ $currentPage = 'economy';
                 ? jQuery('#walletUsersTable').DataTable() : null;
 
             // Filter the table by the pool card that opened the modal:
-            // "" = all, "Student|Faculty", "Merchant", or "Guardian" (Type is column index 1; regex search).
+            // "" = all, "Student", "Faculty", "Merchant", or "Guardian" (Type is column index 1; regex search).
             modal.addEventListener('show.bs.modal', function (ev) {
                 const card = ev.relatedTarget;
                 const filter = (card && card.dataset.walletFilter) || '';
