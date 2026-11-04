@@ -286,7 +286,7 @@ try {
                 ),
             ]);
         } catch (\Throwable $e) {
-            $db->rollBack();
+            if ($db->inTransaction()) $db->rollBack();
             echo json_encode(['success' => false, 'message' => gjc_safe_error($e, 'student/api/transfer', 'Transfer failed. Please try again.')]);
         }
         exit;

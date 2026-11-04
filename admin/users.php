@@ -162,7 +162,7 @@ $currentPage = 'users';
     <link rel="stylesheet" href="<?= CSS_URL ?>/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="<?= CSS_URL ?>/admin.css?v=45">
-    <link rel="stylesheet" href="<?= CSS_URL ?>/users.css?v=12">
+    <link rel="stylesheet" href="<?= CSS_URL ?>/users.css?v=13">
     <link rel="stylesheet" href="<?= CSS_URL ?>/maintenance.css?v=24">
     <link rel="stylesheet" href="<?= CSS_URL ?>/responsive.css?v=3">
     <link rel="stylesheet" href="<?= CSS_URL ?>/gjc-table-cards.css?v=3">
@@ -281,11 +281,15 @@ $currentPage = 'users';
                                 </td>
 
                                 <td>
+                                    <?php if ($u['department'] !== ''): ?>
+                                    <span class="role-pill has-dept" title="<?= $esc($u['role'] . ', ' . $u['department']) ?>">
+                                        <?= $esc($u['role']) ?>
+                                        <span class="role-pill-dept"><?= $esc($u['department']) ?></span>
+                                    </span>
+                                    <?php else: ?>
                                     <span class="role-pill">
                                         <?php echo htmlspecialchars((string) $u['role'], ENT_QUOTES, 'UTF-8'); ?>
                                     </span>
-                                    <?php if ($u['department'] !== ''): ?>
-                                    <small class="status-note"><?= $esc($u['department']) ?></small>
                                     <?php endif; ?>
                                     <?php if ($u['left_at'] !== ''): ?>
                                     <small class="status-note">Left school &middot; <?= $esc(date('M Y', strtotime($u['left_at']))) ?></small>
@@ -692,6 +696,7 @@ $currentPage = 'users';
                     <form id="suspendForm" class="merchant-bypass-form" autocomplete="off" novalidate>
                         <input type="hidden" name="action" value="suspend">
                         <input type="hidden" name="user_id" id="suspendUserId">
+                        <input type="hidden" name="csrf_token" value="<?= $esc(gjc_csrf_token()) ?>">
 
                         <p style="font-size:13px;margin-bottom:6px">While suspended, they are:</p>
                         <ul style="font-size:13px;color:var(--gp-muted);padding-left:18px;margin-bottom:18px">
@@ -745,6 +750,7 @@ $currentPage = 'users';
                     <form id="banForm" class="merchant-bypass-form" autocomplete="off" novalidate>
                         <input type="hidden" name="action" value="ban">
                         <input type="hidden" name="user_id" id="banUserId">
+                        <input type="hidden" name="csrf_token" value="<?= $esc(gjc_csrf_token()) ?>">
 
                         <p style="font-size:13px;margin-bottom:6px">A ban is <strong>permanent</strong>. It never expires; only a finance admin can lift it. Once banned, they are:</p>
                         <ul style="font-size:13px;color:var(--gp-muted);padding-left:18px;margin-bottom:18px">

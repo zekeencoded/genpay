@@ -12,6 +12,12 @@ require_once __DIR__ . '/../../connection/student_password_reset.php';
 
 header('Content-Type: application/json');
 gjc_require_role(['finance']);
+// Every action here changes an account; refuse any request without the session token.
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !gjc_csrf_verify()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Your session expired. Refresh the page and try again.']);
+    exit;
+}
 gjc_ensure_account_suspension_schema($db);
 
 /** Hard ceiling on a timed suspension — anything longer should be indefinite. */

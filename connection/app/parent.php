@@ -111,7 +111,17 @@ function gjc_parent_alerts_mark_read_from_bell(PDO $db, int $parentUserId, ?int 
     )->execute([$parentId, $studentUserId, $notification['created_at']]);
 }
 
+/** Low-balance alert for linked guardians. Best-effort; never throws (runs after payments commit). */
 function gjc_check_parent_balance_alert(PDO $db, int $walletId): void
+{
+    try {
+        gjc_raise_parent_balance_alert($db, $walletId);
+    } catch (\Throwable $e) {
+        error_log('[parent low balance alert] wallet ' . $walletId . ': ' . $e->getMessage());
+    }
+}
+
+function gjc_raise_parent_balance_alert(PDO $db, int $walletId): void
 {
     if (!gjc_table_exists($db, 'parents') || !gjc_table_exists($db, 'parent_student_links') || !gjc_table_exists($db, 'parent_alerts')) {
         return;

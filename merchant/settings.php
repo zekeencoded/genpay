@@ -488,14 +488,16 @@ $ordinal = static function (int $n): string {
                            href="<?= MERCHANT_URL ?>/doc.php?t=<?= urlencode($key) ?>"
                            aria-label="View <?= $labelHtml ?>">View</a>
                     <?php endif; ?>
-                    <label class="<?= $file ? 'ph-link' : 'ph-mini-btn d-inline-flex align-items-center gap-1 mb-0' ?>"
+                    <?php if (!$file): // Documents on file can't be replaced by the merchant. ?>
+                    <label class="ph-mini-btn d-inline-flex align-items-center gap-1 mb-0"
                            for="docInput-<?= $key ?>" role="button" tabindex="0"
-                           aria-label="<?= ($file ? 'Replace ' : 'Upload ') . $labelHtml ?>">
-                        <i class="fa-solid fa-upload"></i><?= $file ? 'Replace' : 'Upload' ?>
+                           aria-label="Upload <?= $labelHtml ?>">
+                        <i class="fa-solid fa-upload"></i>Upload
                     </label>
                     <input type="file" id="docInput-<?= $key ?>" class="d-none js-doc-input"
                            data-doc="<?= $key ?>" data-label="<?= $labelHtml ?>"
                            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
 

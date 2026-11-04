@@ -136,36 +136,37 @@ function gjc_claim_fee_waiver_credit(PDO $db, int $studentUserId, int $actingUse
 
         $engine = new CirculationEngine($db);
         $result = $engine->feeWaiverClaim((int) $wallet['id'], $amount, $actingUserId, $creditId);
-
-        $db->prepare("UPDATE fee_waiver_credits SET claim_reference = ? WHERE id = ?")
-            ->execute([$result['reference'], $creditId]);
-
-        logAudit(
-            $db, $actingUserId, gjc_current_role(), 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
-            ['student_user_id' => $studentUserId, 'status' => 'posted'],
-            ['student_user_id' => $studentUserId, 'status' => 'claimed', 'amount' => $amount, 'reference' => $result['reference']],
-            null,
-            ['target_id' => $studentUserId]
-        );
-
-        gjc_notify(
-            $db,
-            $studentUserId,
-            'fee_waiver',
-            'Fee Waiver Credit Added to Wallet',
-            gjc_money_plain($amount) . ' from your Fee Waiver Credit is now in your GenPay wallet.',
-            'hand-holding-dollar',
-            STUDENT_URL . '/profile.php'
-        );
-
-        return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
     } catch (\Throwable $e) {
-        // Mint failed: return the credit to 'posted'.
+        // Mint failed: return the credit to 'posted'. Only here — once the mint
+        // has committed, undoing the claim would let the credit be claimed twice.
         $db->prepare(
             "UPDATE fee_waiver_credits SET status = 'posted' WHERE id = ? AND status = 'claimed'"
         )->execute([$creditId]);
         throw $e;
     }
+
+    $db->prepare("UPDATE fee_waiver_credits SET claim_reference = ? WHERE id = ?")
+        ->execute([$result['reference'], $creditId]);
+
+    logAudit(
+        $db, $actingUserId, gjc_current_role(), 'FEE_WAIVER_STATUS_CHANGE', 'fee_waiver_credits',
+        ['student_user_id' => $studentUserId, 'status' => 'posted'],
+        ['student_user_id' => $studentUserId, 'status' => 'claimed', 'amount' => $amount, 'reference' => $result['reference']],
+        null,
+        ['target_id' => $studentUserId]
+    );
+
+    gjc_notify(
+        $db,
+        $studentUserId,
+        'fee_waiver',
+        'Fee Waiver Credit Added to Wallet',
+        gjc_money_plain($amount) . ' from your Fee Waiver Credit is now in your GenPay wallet.',
+        'hand-holding-dollar',
+        STUDENT_URL . '/profile.php'
+    );
+
+    return ['reference' => $result['reference'], 'amount' => $amount, 'status' => 'claimed'];
 }
 
 /**

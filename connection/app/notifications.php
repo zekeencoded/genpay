@@ -36,30 +36,43 @@ function gjc_ensure_notifications_schema(PDO $db): void
     );
 }
 
-/** $referenceNo: transactions.reference_no this notification is about (opens its details from the bell). */
+/**
+ * $referenceNo: transactions.reference_no this notification is about (opens its details from the bell).
+ * Best-effort; never throws. Callers run it after money has committed, so a failure here
+ * must not turn a completed payment into an error the user would retry.
+ */
 function gjc_notify(PDO $db, int $userId, string $type, string $title, string $message, string $icon = 'bell', ?string $link = null, ?string $referenceNo = null): void
 {
     if ($userId <= 0) {
         return;
     }
-    gjc_ensure_notifications_schema($db);
-    if (in_array('reference_no', gjc_table_columns($db, 'notifications'), true)) {
+    try {
+        gjc_ensure_notifications_schema($db);
+        if (in_array('reference_no', gjc_table_columns($db, 'notifications'), true)) {
+            $db->prepare(
+                "INSERT INTO notifications (user_id, type, icon, title, message, link, reference_no) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            )->execute([$userId, $type, $icon, $title, $message, $link, $referenceNo]);
+            return;
+        }
         $db->prepare(
-            "INSERT INTO notifications (user_id, type, icon, title, message, link, reference_no) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )->execute([$userId, $type, $icon, $title, $message, $link, $referenceNo]);
-        return;
+            "INSERT INTO notifications (user_id, type, icon, title, message, link) VALUES (?, ?, ?, ?, ?, ?)"
+        )->execute([$userId, $type, $icon, $title, $message, $link]);
+    } catch (Throwable $e) {
+        error_log("[notify] {$type} for user {$userId} not saved: " . $e->getMessage());
     }
-    $db->prepare(
-        "INSERT INTO notifications (user_id, type, icon, title, message, link) VALUES (?, ?, ?, ?, ?, ?)"
-    )->execute([$userId, $type, $icon, $title, $message, $link]);
 }
 
-/** Same as gjc_notify(), but resolves a student_wallets.id into its owning user first. */
+/** Same as gjc_notify(), but resolves a student_wallets.id into its owning user first. Never throws. */
 function gjc_notify_wallet(PDO $db, int $studentWalletId, string $type, string $title, string $message, string $icon = 'bell', ?string $link = null, ?string $referenceNo = null): void
 {
-    $stmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ? LIMIT 1");
-    $stmt->execute([$studentWalletId]);
-    $userId = (int) $stmt->fetchColumn();
+    try {
+        $stmt = $db->prepare("SELECT user_id FROM student_wallets WHERE id = ? LIMIT 1");
+        $stmt->execute([$studentWalletId]);
+        $userId = (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        error_log("[notify] {$type} for wallet {$studentWalletId} not saved: " . $e->getMessage());
+        return;
+    }
     if ($userId > 0) {
         gjc_notify($db, $userId, $type, $title, $message, $icon, $link, $referenceNo);
     }
