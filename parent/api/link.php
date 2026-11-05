@@ -41,7 +41,6 @@ try {
                 throw new \InvalidArgumentException('Student school ID is required.');
             }
 
-            // Look up student by school ID
             $stmt = $db->prepare(
                 "SELECT u.userID, u.first_name, u.last_name
                    FROM users u
@@ -59,7 +58,6 @@ try {
             $studentUserId = (int) $student['userID'];
             $studentName   = trim($student['first_name'] . ' ' . $student['last_name']);
 
-            // Check already linked
             $chk = $db->prepare("SELECT id FROM parent_student_links WHERE parent_id = ? AND student_user_id = ?");
             $chk->execute([$parentId, $studentUserId]);
             if ($chk->fetch()) {

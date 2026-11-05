@@ -349,18 +349,15 @@ $currentPage = 'cash';
 
     </div>
 
-    <!-- Send GenCoin Modal -->
     <div class="modal fade" id="sendGenCoinModal" tabindex="-1" aria-labelledby="sendGenCoinModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
             <div class="modal-content gp-modal">
 
-                <!-- Header -->
                 <div class="modal-header">
                     <div style="flex:1">
                         <h5 class="modal-title" id="sendGenCoinModalLabel">
                             <i class="fa-solid fa-coins"></i>Send GenCoin
                         </h5>
-                        <!-- Step indicator -->
                         <div style="display:flex;gap:6px;margin-top:10px;align-items:center" id="sgc-steps">
                             <div class="sgc-step-dot sgc-step-dot--active" data-step="1"></div>
                             <div class="sgc-step-line"></div>
@@ -395,7 +392,6 @@ $currentPage = 'cash';
 
                     <!-- STEP 2: Amount + Message -->
                     <div id="sgc-step-2" style="display:none">
-                        <!-- Recipient pill -->
                         <div style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:10px 14px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
                             <div style="width:36px;height:36px;border-radius:50%;background:#bbf7d4;display:flex;align-items:center;justify-content:center;font-weight:700;color:#27764b;font-size:15px" id="sgc-recipient-avatar"></div>
                             <div>
@@ -412,7 +408,6 @@ $currentPage = 'cash';
                             <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--gp-subtle)">₱</span>
                         </div>
                         <div id="sgc-peso-equiv" style="font-size:12px;color:#27764b;font-weight:600;margin-bottom:12px;padding-left:4px;min-height:18px"></div>
-                        <!-- Fee breakdown preview (step 2) -->
                         <div id="sgc-fee-preview" style="display:none;background:#fff;border-radius:10px;padding:10px 14px;font-size:12px;border:1px solid var(--gp-success-bg);margin-bottom:14px">
                             <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                                 <span style="color:#27764b;font-weight:700">Credited to wallet</span>
@@ -449,7 +444,6 @@ $currentPage = 'cash';
                     <div id="sgc-step-3" style="display:none">
                         <p style="font-size:13px;color:var(--gjc-slate);margin-bottom:14px;font-weight:600">Review the details before sending.</p>
 
-                        <!-- Preview card -->
                         <div style="background:#fff;border-radius:16px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px">
                             <div style="text-align:center;margin-bottom:16px">
                                 <div style="font-size:32px;font-weight:800;color:#27764b" id="sgc-prev-coins"></div>
@@ -470,7 +464,6 @@ $currentPage = 'cash';
                                     <span id="sgc-prev-msg" style="max-width:180px;text-align:right;color:var(--gjc-slate)"></span>
                                 </div>
                             </div>
-                            <!-- Fee breakdown in preview -->
                             <div style="border-top:1px dashed var(--gp-success-bg);margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:6px;font-size:12px">
                                 <div style="display:flex;justify-content:space-between;font-size:13px">
                                     <span style="color:#27764b;font-weight:700">Credited to wallet</span>
@@ -487,7 +480,6 @@ $currentPage = 'cash';
                             </div>
                         </div>
 
-                        <!-- Confirmation checkbox -->
                         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;background:#fff;border-radius:12px;padding:12px 14px;border:1.5px solid var(--gp-success-bg)">
                             <input type="checkbox" id="sgc-confirm-check" style="width:18px;height:18px;margin-top:1px;accent-color:var(--gp-success);cursor:pointer">
                             <span style="font-size:13px;color:var(--gjc-slate);line-height:1.5">
@@ -509,7 +501,6 @@ $currentPage = 'cash';
                         </div>
                     </div>
 
-                    <!-- SUCCESS STATE -->
                     <div id="sgc-success" style="display:none;text-align:center;padding:16px 0">
                         <div style="width:64px;height:64px;background:var(--gp-success-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
                             <i class="fa-solid fa-circle-check" style="font-size:32px;color:var(--gp-success)"></i>
@@ -837,7 +828,6 @@ $currentPage = 'cash';
             sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane me-1"></i> Send';
         }
     }
-    // ────────────────────────────────────────────────────────────────────────
     </script>
 
 </body>

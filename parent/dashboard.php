@@ -11,7 +11,6 @@ $currentUser     = gjc_current_user($db);
 $profileImg      = (string) ($currentUser['raw']['profile_img'] ?? '');
 $profilePhotoUrl = ($profileImg !== '') ? (BASE_URL . '/' . ltrim($profileImg, '/')) : '';
 
-// Fetch or create parents record
 $pStmt = $db->prepare("SELECT * FROM parents WHERE user_id = ?");
 $pStmt->execute([$parentUserId]);
 $parentRow = $pStmt->fetch(PDO::FETCH_ASSOC);
@@ -48,7 +47,6 @@ if ($myWalletId > 0 && gjc_table_exists($db, 'transactions')) {
     $myTxns = $myTxnStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Fetch linked students
 $linkedStmt = $db->prepare(
     "SELECT u.userID, u.first_name, u.last_name,
             si.studentID,
@@ -76,7 +74,6 @@ $pendingLinks = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Alerts are fetched client-side via AJAX (parent/api/alerts.php)
 
-// Handle link errors/success from redirect
 $linkError   = $_GET['link_error'] ?? '';
 $linkSuccess = $_GET['link_success'] ?? '';
 
@@ -260,7 +257,6 @@ $currentPage = 'dashboard';
                             </div>
                         </div>
 
-                        <!-- Threshold setting -->
                         <div class="alert-settings-box">
                             <p>Alert Settings</p>
                             <form class="threshold-form" id="thresholdForm">

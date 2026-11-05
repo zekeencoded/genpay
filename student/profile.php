@@ -341,10 +341,9 @@ $currentPage = 'profile';
                         </div>
                     </dl>
                 </section>
-                </div><!-- /.tab-pane -->
+                </div>
                 <div class="tab-pane<?= $phTab === 'guardian' ? ' active' : '' ?>" id="ph-pane-guardian" role="tabpanel" aria-labelledby="ph-tab-guardian" tabindex="0">
 
-                <!-- Linked guardian(s) -->
                 <section class="ph-card">
                     <div class="ph-card-head">
                         <div>
@@ -389,7 +388,7 @@ $currentPage = 'profile';
                     <?php endif; ?>
                 </section>
 
-                </div><!-- /.tab-pane -->
+                </div>
                 <div class="tab-pane<?= $phTab === 'status' ? ' active' : '' ?>" id="ph-pane-status" role="tabpanel" aria-labelledby="ph-tab-status" tabindex="0">
 
                 <!-- Account status (read-only — managed by admin/parent, not the student) -->
@@ -453,10 +452,9 @@ $currentPage = 'profile';
                         <?php endif; ?>
                     </div>
                 </section>
-                </div><!-- /.tab-pane -->
+                </div>
                 <div class="tab-pane<?= $phTab === 'settings' ? ' active' : '' ?>" id="ph-pane-settings" role="tabpanel" aria-labelledby="ph-tab-settings" tabindex="0">
 
-                <!-- Settings -->
                 <section class="ph-card">
                     <div class="ph-card-head">
                         <div><h3>Settings</h3></div>

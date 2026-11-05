@@ -228,7 +228,6 @@ $currentPage = "staff";
     </main>
 </div>
 
-<!-- Add Staff Modal -->
 <div class="modal fade" id="staffModal" tabindex="-1" aria-labelledby="staffModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered staff-modal-dialog">
         <div class="modal-content gp-modal staff-modal">

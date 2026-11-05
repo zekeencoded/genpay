@@ -16,7 +16,6 @@ $filters = [
 // export - a short CSV that looks complete is the worst outcome.
 $transactions = gjc_fetch_admin_transactions($db, $filters, 0, 0);
 
-// Log the full ledger export.
 logAudit(
     $db,
     gjc_user_id(),

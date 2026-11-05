@@ -145,7 +145,6 @@ $currentPage = 'history';
 
             <div class="sd-content">
 
-                <!-- Wallet totals -->
                 <section class="sd-stats">
                     <div class="sd-stat">
                         <div class="sd-stat-top">
@@ -173,7 +172,6 @@ $currentPage = 'history';
                     </div>
                 </section>
 
-                <!-- Full ledger -->
                 <section class="sd-panel">
                     <div class="sd-panel-head">
                         <div>

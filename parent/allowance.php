@@ -85,7 +85,6 @@ $currentPage = 'allowance';
 
         <div class="parent-content" style="max-width:none;">
 
-            <!-- Balance card -->
             <section class="sd-balance">
                 <div>
                     <span class="sd-balance-label">Wallet Balance</span>
@@ -116,7 +115,6 @@ $currentPage = 'allowance';
             </section>
             <?php else: ?>
 
-            <!-- Send form + guide -->
             <section class="tu-grid">
 
                 <div class="sd-panel">
@@ -127,7 +125,6 @@ $currentPage = 'allowance';
                         </div>
                     </div>
 
-                    <!-- Form view -->
                     <div class="pf-form" id="sgForm">
                         <div class="pf-field">
                             <label for="sgRecipient">Send to</label>
@@ -163,7 +160,6 @@ $currentPage = 'allowance';
                         </button>
                     </div>
 
-                    <!-- Success view -->
                     <div class="sg-success" id="sgSuccess" style="display:none">
                         <div class="sg-success-icon"><i class="fa-solid fa-check"></i></div>
                         <h4>Sent!</h4>
@@ -229,7 +225,6 @@ $currentPage = 'allowance';
     </main>
 </div>
 
-<!-- Send confirmation -->
 <div class="modal fade sp-modal" id="sgConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false"
      aria-labelledby="sgConfirmModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width:400px">

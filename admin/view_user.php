@@ -177,7 +177,6 @@ if ($user) {
     }
 }
 
-// Field row renderer for the detail cards.
 $field = static function (string $icon, string $label, string $value, bool $mono = false) use ($esc): void {
     echo '<div class="uv-field"><div class="uv-field-ic"><i class="' . $esc($icon) . '"></i></div><div>'
         . '<div class="uv-field-label">' . $esc($label) . '</div>'

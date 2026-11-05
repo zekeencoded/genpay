@@ -4,7 +4,6 @@ require_once __DIR__ . '/connection/config.php';
 require_once __DIR__ . '/connection/pdo.php';
 require_once __DIR__ . '/connection/app.php';
 
-// Must be logged in
 $userId = gjc_user_id();
 if (!$userId) {
     header('Location: ' . BASE_URL . '/login.php');

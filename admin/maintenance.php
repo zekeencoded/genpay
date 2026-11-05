@@ -1333,7 +1333,6 @@ $vacantStalls = $db->query(
             </div>
         </section>
 
-        <!-- Import Preview Modal -->
         <?php if ($previewRows && $previewReport): $rc = $previewReport['counts']; ?>
         <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -1456,7 +1455,6 @@ $vacantStalls = $db->query(
         </div>
         <?php endif; ?>
 
-        <!-- Fee Waiver Import Preview Modal -->
         <?php if ($feeWaiverPreviewRows && $feeWaiverPreviewReport): $fwrc = $feeWaiverPreviewReport['counts']; ?>
         <div class="modal fade" id="feeWaiverPreviewModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -1559,7 +1557,6 @@ $vacantStalls = $db->query(
         </div>
         <?php endif; ?>
 
-        <!-- Add Merchant Modal -->
         <div class="modal fade" id="addMerchantModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
                 <div class="modal-content gp-modal">
@@ -1755,7 +1752,6 @@ $vacantStalls = $db->query(
             </div>
         </section>
 
-        <!-- Flag Product Modal -->
         <div class="modal fade" id="flagProductModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
                 <div class="modal-content gp-modal">
@@ -1941,7 +1937,6 @@ $vacantStalls = $db->query(
             </div>
         </section>
 
-        <!-- Fee Waiver: Set Amount Modal -->
         <div class="modal fade" id="fwcAmountModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
                 <div class="modal-content gp-modal">
@@ -1974,7 +1969,6 @@ $vacantStalls = $db->query(
             </div>
         </div>
 
-        <!-- Fee Waiver: Upload Signed Waiver Modal -->
         <div class="modal fade" id="fwcUploadModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
                 <div class="modal-content gp-modal">
@@ -2011,7 +2005,6 @@ $vacantStalls = $db->query(
             </div>
         </div>
 
-        <!-- Fee Waiver: Detail / Log History Modal -->
         <div class="modal fade" id="fwcDetailModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
                 <div class="modal-content gp-modal">

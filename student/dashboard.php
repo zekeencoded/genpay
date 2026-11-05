@@ -171,7 +171,6 @@ $currentPage = 'dashboard';
                 </div>
                 <?php endif; ?>
 
-                <!-- Balance card -->
                 <section class="sd-balance">
                     <div>
                         <span class="sd-balance-label">Available Balance</span>
@@ -190,7 +189,6 @@ $currentPage = 'dashboard';
                     </div>
                 </section>
 
-                <!-- Stat cards -->
                 <section class="sd-stats">
                     <div class="sd-stat">
                         <div class="sd-stat-top">
@@ -220,7 +218,6 @@ $currentPage = 'dashboard';
                     </div>
                 </section>
 
-                <!-- Recent transactions -->
                 <section class="sd-panel">
                     <div class="sd-panel-head">
                         <div>

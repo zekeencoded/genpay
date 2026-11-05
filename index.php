@@ -42,8 +42,6 @@
                 <p>Experience seamless, secure, and instant transactions within General de Jesus College. Pay for meals, services, and manage your school finances with just a scan.</p>
                 <a href="<?= BASE_URL ?>/login.php" class="cta">Get Started Now</a>
             </div>
-            <!-- Animated scene, drawn in code: a phone scans a stall's QR bill,
-                 the payment is confirmed, and GenCoin flies to the stall. -->
             <svg class="pay-scene" viewBox="0 0 560 480" role="img" aria-label="A phone scans a campus stall's QR code and GenCoin moves to the stall">
                 <defs>
                     <symbol id="gp-qr" viewBox="0 0 21 21" shape-rendering="crispEdges">
@@ -69,7 +67,6 @@
                 <circle class="ps-glow" cx="290" cy="245" r="200"/>
                 <circle class="ps-ring" cx="290" cy="245" r="226"/>
 
-                <!-- The stall's bill with its QR code -->
                 <g class="ps-bill">
                     <rect x="36" y="110" width="210" height="270" rx="20" fill="#fff"/>
                     <path d="M36 130a20 20 0 0 1 20-20h170a20 20 0 0 1 20 20v30H36z" fill="#f0a000"/>
@@ -87,7 +84,6 @@
                     </g>
                 </g>
 
-                <!-- The phone, gently floating -->
                 <g class="ps-float">
                     <g transform="translate(320 60) rotate(7 90 170)">
                         <rect width="180" height="340" rx="30" fill="#fff"/>
@@ -105,7 +101,6 @@
                     </g>
                 </g>
 
-                <!-- GenCoin on its way to the stall -->
                 <?php foreach (['c1', 'c2', 'c3'] as $coin): ?>
                     <g class="ps-coin <?= $coin ?>">
                         <circle cx="408" cy="330" r="18" fill="#f0a000" stroke="#c98500" stroke-width="3"/>

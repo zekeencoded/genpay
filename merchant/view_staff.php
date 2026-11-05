@@ -226,7 +226,6 @@ if ($staff) {
         @media (max-width: 820px) { .sv-grid { grid-template-columns: 1fr; } }
         .sv-card-fields { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
-        /* 7-day activity bars */
         .sv-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; align-items: end; height: 150px; }
         .sv-day { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; min-width: 0; }
         .sv-bar { width: 100%; max-width: 34px; border-radius: 3px 3px 0 0; background: var(--gp-green-700); min-height: 3px; }
@@ -235,14 +234,12 @@ if ($staff) {
         .sv-day-label { font-size: 11px; font-weight: 700; color: var(--gp-muted); }
         .sv-day-amt { font-family: var(--gp-mono); font-size: 10px; color: var(--gp-muted); white-space: nowrap; }
 
-        /* Top items */
         .sv-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
         .sv-item-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; font-weight: 700; color: var(--gp-ink); }
         .sv-item-row span:last-child { font-family: var(--gp-mono); color: var(--gp-muted); white-space: nowrap; }
         .sv-item-track { height: 6px; border-radius: 3px; background: var(--gp-line); margin-top: 6px; overflow: hidden; }
         .sv-item-fill { height: 100%; background: var(--gp-green-700); }
 
-        /* Record tables */
         .sv-head-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .sv-search { position: relative; flex: 0 1 260px; }
         .sv-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--gp-muted); font-size: 13px; }

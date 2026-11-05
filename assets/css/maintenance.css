@@ -121,7 +121,6 @@
 .mbf-input-group input { flex: 1; min-width: 0; }
 .mbf-input-group .maintenance-btn { flex: none; }
 
-/* Inline field errors */
 .merchant-bypass-form .is-invalid { border-color: var(--gp-danger); }
 .mbf-field-error:empty { display: none; }
 .mbf-field-error { margin-top: 5px; font-size: 12px; color: var(--gp-danger); }
@@ -295,7 +294,6 @@
 .fwc-action-btn--muted { background: var(--gjc-soft-2); color: var(--gp-muted); }
 .fwc-action-btn--muted:hover { background: #e2e8f0; color: var(--gjc-slate); }
 
-/* Flag modal */
 .rp-modal-field { margin-bottom: 14px; }
 .rp-modal-label { display: block; font-size: 12px; font-weight: 700; color: var(--gjc-slate); margin-bottom: 5px; }
 .rp-modal-input {

@@ -248,10 +248,8 @@ if ($summary) {
 <body class="gp-theme">
 <div class="admin-layout">
 
-    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
     <?php require __DIR__ . '/../includes/partials/sidebar_admin.php'; ?>
 
-    <!-- ── Main ─────────────────────────────────────────────────────────── -->
     <main class="admin-main">
 
         <header class="topbar">

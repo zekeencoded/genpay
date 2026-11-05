@@ -127,7 +127,6 @@ try {
                 throw new \RuntimeException('Daily spending limit of ₱' . number_format((float) $wc['daily_spend_limit'], 2) . ' has been reached.');
             }
         }
-        // ───────────────────────────────────────────────────────────────────
 
         $debitStmt = $db->prepare(
             "UPDATE student_wallets SET balance = balance - ? WHERE id = ? AND balance >= ?"

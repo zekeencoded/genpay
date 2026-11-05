@@ -86,7 +86,6 @@ try {
                   WHERE email = ? AND roleID = 6 AND staff_removed_at IS NOT NULL"
             )->execute([$email]);
 
-            // Check email uniqueness
             $dup = $db->prepare("SELECT userID FROM users WHERE email = ? LIMIT 1");
             $dup->execute([$email]);
             if ($dup->fetch()) {

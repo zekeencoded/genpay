@@ -563,7 +563,7 @@ $ordinal = static function (int $n): string {
             </div>
         </section>
 
-        </div><!-- /.ph-col -->
+        </div>
         <div class="ph-col">
 
         <!-- ── Proprietor & contact ─────────────────────────────────────── -->
@@ -728,7 +728,7 @@ $ordinal = static function (int $n): string {
         </section>
         </div>
 
-        </div><!-- /.tab-content -->
+        </div>
 
         <!-- Log out stays visible whichever tab is open (on phones the sidebar is hidden). -->
         <section class="ph-card">
@@ -742,7 +742,7 @@ $ordinal = static function (int $n): string {
 
         <div class="ph-foot">GenPay v<?= htmlspecialchars(GJC_APP_VERSION) ?></div>
 
-        </div><!-- /.ph -->
+        </div>
 
         <!-- Help & FAQs (a bottom sheet on phones), same component as student/profile.php -->
         <div class="modal fade ph-sheet" id="phHelpModal" tabindex="-1" aria-labelledby="phHelpTitle" aria-hidden="true">
@@ -1050,7 +1050,6 @@ $ordinal = static function (int $n): string {
             });
         });
 
-        // Edit contact.
         const form = document.getElementById('contactForm');
         if (form) {
             form.addEventListener('submit', async function (e) {

@@ -92,7 +92,6 @@ logAudit(
     ['target_id' => basename($absPath)]
 );
 
-// Detect MIME
 $ext  = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
 $mime = match($ext) {
     'pdf'         => 'application/pdf',

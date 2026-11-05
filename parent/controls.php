@@ -88,7 +88,6 @@ $currentPage = '';
 
             <div id="globalMsg"></div>
 
-            <!-- Wallet stats -->
             <div class="status-bar">
                 <div class="stat-pill">
                     <strong>&#8369;<?= number_format((float)$student['balance'], 2) ?></strong>
@@ -107,7 +106,6 @@ $currentPage = '';
             <div class="parent-grid parent-grid--even">
 
                 <div class="parent-grid-col">
-                    <!-- Freeze toggle -->
                     <div class="control-card">
                         <h5><i class="fa-solid fa-lock me-2" style="color:var(--gp-danger)"></i>Freeze Wallet</h5>
                         <p>When frozen, the student cannot make any POS purchases or token transfers. Cash top-ups by Finance are still allowed.</p>
@@ -125,7 +123,6 @@ $currentPage = '';
                         </div>
                     </div>
 
-                    <!-- Daily spending limit -->
                     <div class="control-card">
                         <h5><i class="fa-solid fa-gauge me-2" style="color:var(--gp-green-700)"></i>Daily Spending Limit</h5>
                         <p>Limits how much the student can spend in a single day across POS purchases and token transfers. Set to ₱0.00 to disable the limit.</p>
@@ -144,7 +141,6 @@ $currentPage = '';
                 </div>
 
                 <div class="parent-grid-col">
-                    <!-- View ledger link -->
                     <div class="control-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
                         <div>
                             <h5 style="margin-bottom:4px;"><i class="fa-solid fa-receipt me-2" style="color:var(--gp-green-700)"></i>Transaction Ledger</h5>
@@ -155,7 +151,6 @@ $currentPage = '';
                         </a>
                     </div>
 
-                    <!-- Unlink student -->
                     <div class="control-card" style="border-color:#f0b8b2;">
                         <h5 style="color:var(--gp-danger);"><i class="fa-solid fa-user-minus me-2"></i>Unlink Student</h5>
                         <p>Remove your link to this student. You will no longer be able to view their wallet or apply controls. <strong>Existing controls (freeze, daily limit) will remain set</strong> on the wallet until a Finance administrator changes them.</p>

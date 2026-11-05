@@ -41,7 +41,6 @@
 }
 .pending-order-note { font-size: 13px; color: var(--sd-muted); text-align: center; margin: 10px 0 0; }
 
-/* Full-width action buttons in the cart panel */
 .cart-panel-btn { width: 100%; display: block; text-align: center; }
 
 /* ── Mobile scanner: the cart is a slide-up sheet over the camera ── */

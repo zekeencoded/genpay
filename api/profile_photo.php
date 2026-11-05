@@ -26,7 +26,6 @@ if (!is_dir($photoDir)) {
 if ($action === 'remove') {
     $idCol = gjc_column($db, 'users', ['id', 'userID']);
     if ($idCol) {
-        // Delete physical file(s) for this user
         foreach (array_merge(glob($photoDir . '/' . $userId . '.*') ?: [], glob($photoDir . '/' . $userId . '_*') ?: []) as $old) {
             @unlink($old);
         }

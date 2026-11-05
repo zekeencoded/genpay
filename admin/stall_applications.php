@@ -148,12 +148,10 @@ function sa_meeting_label(?string $dt): string
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= CSS_URL ?>/stall_applications.css?v=11">
     <style>
-    /* KPI cards — thin large numbers, left-aligned flex row */
     .sa-kpi { border:1px solid #dddfd8; border-radius:12px; padding:16px 20px; background:#fff; display:flex; flex-direction:column; gap:8px; min-width:200px; }
     .sa-kpi .l { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--gp-muted); }
     .sa-kpi .n { font-size:36px; font-weight:300; line-height:1; color:#1a1a1a; }
 
-    /* Card shell for schedule + table */
     .sa-card { border:1px solid #dddfd8; border-radius:12px; background:#fff; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03); }
     .today-card { border:1px solid #dddfd8; border-radius:12px; background:#fff; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03); }
     .today-head { padding:15px 20px; border-bottom:1px solid #f1f0ea; display:flex; justify-content:space-between; align-items:center; }
@@ -169,11 +167,9 @@ function sa_meeting_label(?string $dt): string
     /* "New" pill — newly submitted, not yet opened; cleared on first open */
     .sa-new-badge { display:inline-block; margin-left:8px; padding:2px 9px; border-radius:999px; background:#fff5cc; border:1px solid #f0a500; color:#7a5a00; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; vertical-align:middle; }
 
-    /* Inline "Open" affordance */
     .sa-open { font-size:13px; font-weight:600; color:#27764b; cursor:pointer; white-space:nowrap; }
     .sa-open:hover { text-decoration:underline; }
 
-    /* Toolbar: pill search + filter pills */
     .sa-search { display:flex; align-items:center; gap:8px; background:#f5f5f0; border:1px solid #e0e2db; border-radius:8px; padding:7px 12px; flex:1; max-width:300px; }
     .sa-search input { border:none; background:transparent; font-size:13px; color:var(--gjc-slate); outline:none; width:100%; font-family:inherit; }
     .sa-search input::placeholder { color:var(--gp-subtle); }
@@ -183,7 +179,6 @@ function sa_meeting_label(?string $dt): string
     .filter-btn:hover { border-color:#1e5c3a; color:#1e5c3a; }
     .filter-btn.active { background:#1e5c3a; color:#fff; border-color:#1e5c3a; }
 
-    /* Applications table */
     /* .sa-table base styling now comes from the canonical table system in theme.css. */
     .sa-table .biz { font-size:14px; font-weight:600; color:#1a1a1a; }
     .sa-table .prop { font-size:13px; color:var(--gjc-slate); }
@@ -191,7 +186,6 @@ function sa_meeting_label(?string $dt): string
     .sa-table .email { font-size:11px; color:var(--gp-subtle); margin-top:3px; }
     .sa-table .submitted { font-size:13px; color:var(--gp-muted); }
 
-    /* DataTables footer (info + pagination) */
     .sa-dt-foot { font-size:13px; }
     .sa-dt-foot .dataTables_info { color:var(--gp-muted); padding:0; }
     .sa-dt-foot .dataTables_paginate { margin:0; }
@@ -222,7 +216,6 @@ function sa_meeting_label(?string $dt): string
     .sa-section h6 { font-weight:800; margin-bottom:12px; }
     .sa-done-pill { font-size:11px; font-weight:800; color:#166534; background:var(--gp-success-bg); border-radius:999px; padding:3px 10px; }
 
-    /* Award checklist. */
     .sa-checklist { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
     .sa-checklist li { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--gp-muted); }
     .sa-checklist li i { font-size:11px; color:var(--gp-subtle); }
@@ -232,7 +225,6 @@ function sa_meeting_label(?string $dt): string
     .sa-checklist li.is-blocked i { color:var(--gp-danger); }
     .filter-btn.active { background:#1e5c3a; color:#fff; border-color:#1e5c3a; }
 
-    /* Inline accordion (replaces the old workspace modal) */
     .sa-open .sa-caret { transition:transform .18s ease; margin-left:5px; font-size:11px; }
     .sa-table tbody tr.app-expanded .sa-caret { transform:rotate(180deg); }
     .sa-table tbody tr.app-expanded > td { background:#eef4ea !important; }
@@ -260,7 +252,6 @@ function sa_meeting_label(?string $dt): string
             </div>
         </header>
 
-        <!-- Two visible KPIs -->
         <section class="d-flex flex-wrap gap-3 mb-4">
             <div class="sa-kpi">
                 <div class="l"><i class="fa-solid fa-hourglass-half text-warning"></i> Pending Verification</div>
@@ -274,7 +265,6 @@ function sa_meeting_label(?string $dt): string
             </div>
         </section>
 
-        <!-- Today's schedule -->
         <section class="today-card mb-4">
             <div class="today-head">
                 <div>
@@ -321,9 +311,7 @@ function sa_meeting_label(?string $dt): string
             <?php endif; ?>
         </section>
 
-        <!-- Applications card: toolbar + table -->
         <div class="sa-card">
-            <!-- Toolbar: search + status filter -->
             <div class="d-flex flex-wrap gap-2 align-items-center" style="padding:13px 20px; border-bottom:1px solid #f1f0ea;">
                 <div class="sa-search">
                     <i class="fa-solid fa-magnifying-glass"></i>
@@ -420,7 +408,6 @@ function sa_meeting_label(?string $dt): string
     </main>
 </div>
 
-<!-- Reject reason modal -->
 <div class="modal fade" id="reasonModal" tabindex="-1" aria-labelledby="reasonTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">
@@ -443,7 +430,6 @@ function sa_meeting_label(?string $dt): string
     </div>
 </div>
 
-<!-- Award confirmation modal -->
 <div class="modal fade" id="awardModal" tabindex="-1" aria-labelledby="awardTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">
@@ -463,7 +449,6 @@ function sa_meeting_label(?string $dt): string
     </div>
 </div>
 
-<!-- Reschedule meeting modal -->
 <div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">
@@ -498,7 +483,6 @@ function sa_meeting_label(?string $dt): string
     </div>
 </div>
 
-<!-- Full-size embedded document viewer -->
 <div id="docViewer" class="doc-viewer" hidden>
     <div class="doc-viewer-cap" id="docViewerCap"></div>
     <button type="button" class="doc-viewer-close" aria-label="Close">&times;</button>
@@ -1076,7 +1060,6 @@ jQuery(function ($) {
     // The redesigned pill search drives DataTables' search instead of its default box.
     $('#appSearch').on('input', function () { collapseAllDetails(); dt.search(this.value).draw(); });
 
-    // Status filter pills.
     $('.filter-btn').on('click', function () {
         statusFilter = this.dataset.status;
         $('.filter-btn').removeClass('active');

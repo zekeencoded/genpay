@@ -58,7 +58,6 @@ if (gjc_table_exists($db, 'restricted_products')) {
             </div>
         </header>
 
-        <!-- Info Banner -->
         <div style="background:linear-gradient(135deg,var(--gp-green-850) 0%,#0d7a3e 100%);color:#fff;padding:20px 28px;border-radius:16px;margin-bottom:24px;">
             <h4 style="margin:0 0 6px;font-weight:800;"><i class="fa-solid fa-utensils"></i> Nutritional Compliance Registry</h4>
             <p style="margin:0;opacity:.85;">Items listed here are cross-checked when merchants add products to their inventory. Matching items are automatically blocked and flagged with the reason on file &mdash; including disguised spellings (e.g. <code style="color:#fff">C0br4</code>), spacing/punctuation tricks, look-alike characters, and close misspellings.</p>
@@ -71,7 +70,6 @@ if (gjc_table_exists($db, 'restricted_products')) {
         </div>
         <?php endif; ?>
 
-        <!-- Summary Row -->
         <section class="row g-4 mb-4">
             <?php
             $activeCount   = count(array_filter($products, function ($p) {
@@ -105,7 +103,6 @@ if (gjc_table_exists($db, 'restricted_products')) {
             </div>
         </section>
 
-        <!-- Merchants at Risk -->
         <?php if (!empty($violators)): ?>
         <section class="premium-panel mb-4">
             <div class="panel-header d-flex justify-content-between align-items-center">
@@ -161,7 +158,6 @@ if (gjc_table_exists($db, 'restricted_products')) {
         </section>
         <?php endif; ?>
 
-        <!-- Products Table -->
         <section class="premium-panel">
             <div class="panel-header d-flex justify-content-between align-items-center">
                 <div>
@@ -220,7 +216,6 @@ if (gjc_table_exists($db, 'restricted_products')) {
     </main>
 </div>
 
-<!-- Flag Product Modal -->
 <div class="modal fade" id="restrictModal" tabindex="-1" aria-labelledby="restrictTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">

@@ -12,7 +12,6 @@ $isStaff        = gjc_is_merchant_staff();
 $isMerchAdmin   = gjc_is_merchant_admin() || (gjc_current_role() === 'merchant' && !$isStaff); // legacy merchant = admin
 $currentPage    = 'inventory';
 
-// Fetch inventory for this merchant
 $inventory = [];
 if (gjc_table_exists($db, 'merchant_inventory')) {
     $stmt = $db->prepare(
@@ -188,7 +187,6 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     </main>
 </div>
 
-<!-- Add Product Modal (Merchant Admin only) -->
 <?php if ($isMerchAdmin): ?>
 <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="productModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -265,7 +263,6 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
 </div>
 <?php endif; ?>
 
-<!-- Edit Stock Modal -->
 <div class="modal fade" id="stockModal" tabindex="-1" aria-labelledby="stockTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">
@@ -295,7 +292,6 @@ $units       = ['piece', 'pack', 'bottle', 'can', 'cup', 'kg', 'gram', 'litre', 
     </div>
 </div>
 
-<!-- Item QR Modal -->
 <div class="modal fade" id="itemQrModal" tabindex="-1" aria-labelledby="itemQrTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">

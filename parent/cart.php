@@ -66,7 +66,6 @@ $csrfToken = gjc_csrf_token();
 
             <div class="parent-content" style="max-width:none;">
 
-                <!-- Balance card -->
                 <section class="sd-balance">
                     <div>
                         <span class="sd-balance-label">Wallet Balance</span>
@@ -87,7 +86,6 @@ $csrfToken = gjc_csrf_token();
                         <span class="sd-role-badge">PARENT</span>
                     </div>
                 </section>
-                <!-- Scanner + cart -->
                 <section class="sp-grid">
 
                     <div class="sd-panel sp-scanner">
@@ -219,7 +217,6 @@ $csrfToken = gjc_csrf_token();
         </main>
 
     </div>
-    <!-- Payment confirmation -->
     <div class="modal fade sp-modal" id="cartPayConfirmModal" tabindex="-1" aria-labelledby="cartPayConfirmModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
             <div class="modal-content">

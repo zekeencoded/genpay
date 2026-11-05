@@ -14,7 +14,6 @@ foreach ($stalls as $s) {
 }
 ksort($grid);
 
-// Status helpers
 function statusClass(string $status): string
 {
     return match ($status) {
@@ -52,7 +51,6 @@ function statusLabel(string $status): string
 
 <?php $publicNavCurrent = 'stalls'; include __DIR__ . '/includes/partials/public_navbar.php'; ?>
 
-<!-- HERO -->
 <header class="hero-simple">
     <div class="wrap stalls-hero">
         <div class="hero-text">
@@ -91,13 +89,11 @@ function statusLabel(string $status): string
     </div>
 </header>
 
-<!-- LEGEND -->
 <div class="legend wrap" aria-label="Legend">
     <div class="legend-item"><span class="legend-dot legend-dot--vacant"></span> Vacant</div>
     <div class="legend-item"><span class="legend-dot legend-dot--occupied"></span> Occupied</div>
 </div>
 
-<!-- STALL GRID -->
 <main class="content wrap">
     <?php foreach ($grid as $rowLabel => $cols): ?>
         <h2 class="section-title">Row <?= htmlspecialchars($rowLabel) ?></h2>
@@ -191,7 +187,6 @@ function statusLabel(string $status): string
     <?php endforeach; ?>
 </main>
 
-<!-- PEEK MODAL -->
 <div class="modal-overlay" id="stallModal" role="dialog" aria-modal="true" aria-labelledby="modal-stall-id">
     <div class="modal-card">
         <div class="modal-header">
@@ -232,7 +227,6 @@ function statusLabel(string $status): string
                 </div>
             </div>
 
-            <!-- Pending block -->
             <div class="modal-pending-block" id="modal-pending-block" style="display:none">
                 <div class="modal-pending-text">⏳ An application is being processed</div>
                 <div class="modal-pending-timer" id="modal-pending-timer">--:--</div>
@@ -253,7 +247,6 @@ function openModal(el) {
     const data = JSON.parse(el.dataset.stall);
     const modal = document.getElementById('stallModal');
 
-    // Header
     document.getElementById('modal-stall-id').textContent   = data.stall_id;
     document.getElementById('modal-stall-label').textContent = data.label;
     document.getElementById('modal-id-detail').textContent   = data.stall_id;
@@ -318,7 +311,6 @@ function startTimer(expiresAt, targetId) {
     modalTimer = setInterval(tick, 1000);
 }
 
-// Countdown timers on stall cards
 document.querySelectorAll('.stall-timer[data-expires]').forEach(el => {
     const end = new Date(el.dataset.expires.replace(' ', 'T')).getTime();
     function tick() {
@@ -332,7 +324,6 @@ document.querySelectorAll('.stall-timer[data-expires]').forEach(el => {
     const t = setInterval(tick, 1000);
 });
 
-// Close modal on overlay click
 document.getElementById('stallModal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
 });

@@ -134,7 +134,6 @@ $currentPage = 'rent';
                 <section class="gp-rent-hero <?= rent_e($stateTone[$account['state']] ?? '') ?> mb-4">
                     <div>
                         <?php
-                            // Label the headline figure clearly.
                             if ($account['outstanding'] > 0.005) {
                                 $heroLabel  = 'Unpaid rent';
                                 $heroAmount = gjc_money($account['outstanding']);

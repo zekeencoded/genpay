@@ -68,7 +68,6 @@ $currentPage = 'dashboard';
                     </div>
                 </div>
 
-                <!-- Threshold setting -->
                 <div class="alert-settings-box">
                     <p>Alert Settings</p>
                     <form class="threshold-form" id="thresholdForm">

@@ -11,7 +11,6 @@ $currentUser     = gjc_current_user($db);
 $profileImg      = (string) ($currentUser['raw']['profile_img'] ?? '');
 $profilePhotoUrl = ($profileImg !== '') ? (BASE_URL . '/' . ltrim($profileImg, '/')) : '';
 
-// Get parent record
 $pStmt = $db->prepare("SELECT id FROM parents WHERE user_id = ?");
 $pStmt->execute([$parentUserId]);
 $parentRow = $pStmt->fetch(PDO::FETCH_ASSOC);
@@ -37,7 +36,6 @@ if (!$linkChk->fetch()) {
     exit;
 }
 
-// Student details
 $sStmt = $db->prepare(
     "SELECT u.first_name, u.last_name, si.studentID, si.graduated_at,
             sw.id AS wallet_id, sw.balance, sw.is_frozen, sw.daily_spend_limit
@@ -58,12 +56,10 @@ $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
 $firstName   = explode(' ', $studentName)[0];
 $credit      = gjc_student_waiver_credit($db, $targetUid);
 
-// Transaction type filter
 $filterType = trim($_GET['type'] ?? 'all');
 $allowedTypes = ['all', 'cash_in', 'payment', 'p2p_transfer', 'allowance'];
 if (!in_array($filterType, $allowedTypes, true)) $filterType = 'all';
 
-// Fetch transactions
 $txns = [];
 if ($walletId && gjc_table_exists($db, 'transactions')) {
     $typeWhere = ($filterType !== 'all') ? "AND transaction_type = '{$filterType}'" : '';
@@ -223,7 +219,6 @@ $currentPage = '';
 
             </section>
 
-            <!-- Transactions -->
             <nav class="ledger-filters" aria-label="Filter transactions">
                 <?php foreach ($tabs as $key => $label): ?>
                 <a href="?uid=<?= $targetUid ?>&type=<?= $key ?>" class="filter-tab <?= $filterType === $key ? 'active' : '' ?>"<?= $filterType === $key ? ' aria-current="page"' : '' ?>>

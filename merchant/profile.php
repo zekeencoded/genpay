@@ -284,7 +284,7 @@ $currentPage = 'profile';
                     <?php endif; ?>
                 </section>
 
-                </div><!-- /.ph-col -->
+                </div>
                 <div class="ph-col">
 
                 <!-- Account status (read-only — managed by the merchant admin) -->
@@ -313,7 +313,6 @@ $currentPage = 'profile';
                     </div>
                 </section>
 
-                <!-- Settings -->
                 <section class="ph-card">
                     <div class="ph-card-head">
                         <div><h3>Settings</h3></div>

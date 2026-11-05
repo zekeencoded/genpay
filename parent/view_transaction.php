@@ -109,7 +109,6 @@ if (!$record) {
     http_response_code(404);
 }
 
-// Maintenance fee for this transaction.
 $maintFee = $record ? gjc_maintenance_fee_for_reference($db, (string) $record['ref']) : null;
 
 $e = gjc_e(...);

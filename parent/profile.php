@@ -233,7 +233,6 @@ $currentPage = 'profile';
             <div class="tab-content">
 
                 <div class="tab-pane<?= $phTab === 'details' ? ' active' : '' ?>" id="ph-pane-details" role="tabpanel" aria-labelledby="ph-tab-details" tabindex="0">
-                    <!-- Edit profile -->
                     <button type="button" class="back-link d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
                     <div class="pcard">
                         <h5><i class="fa-solid fa-pen me-2" style="color:var(--gp-green-700)"></i>Personal Information</h5>
@@ -273,7 +272,6 @@ $currentPage = 'profile';
                 </div>
 
                 <div class="tab-pane<?= $phTab === 'password' ? ' active' : '' ?>" id="ph-pane-password" role="tabpanel" aria-labelledby="ph-tab-password" tabindex="0">
-                    <!-- Change password -->
                     <button type="button" class="back-link d-md-none" data-ph-open-tab="settings"><i class="fa-solid fa-arrow-left"></i> Back to Settings</button>
                     <div class="pcard">
                         <h5><i class="fa-solid fa-lock me-2" style="color:var(--gp-green-700)"></i>Password &amp; Security</h5>

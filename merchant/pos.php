@@ -25,7 +25,6 @@ if (gjc_table_exists($db, "merchant_inventory")) {
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Get merchant wallet for this POS context
 $wallet = gjc_merchant_wallet($db, $ownerMerchId);
 
 // Latest transactions for the POS Transactions tab.
@@ -102,7 +101,6 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                     </div>
                 </div>
 
-                <!-- Products -->
                 <div class="pos-pane" id="posPaneProducts" hidden>
                 <div class="pos-product-toolbar">
                     <input type="search" class="pos-search-input" id="posProductSearch"
@@ -114,7 +112,6 @@ if ($wallet["id"] > 0 && gjc_table_exists($db, "transactions")) {
                     <?php endif; ?>
                 </div>
 
-                <!-- Category filter -->
                 <div class="cat-filter" id="catFilter">
                     <button class="cat-btn active" onclick="filterCat('all', this)">All</button>
                     <?php
@@ -869,7 +866,6 @@ refreshLiveQueue();
 setInterval(refreshLiveQueue, 3000);
 </script>
 
-<!-- ── Load Wallet Modal ──────────────────────────────────────────────── -->
 <div class="modal fade" id="lwModal" tabindex="-1" aria-labelledby="lwTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
         <div class="modal-content gp-modal">
@@ -930,7 +926,6 @@ setInterval(refreshLiveQueue, 3000);
                     </div>
                     <div id="lw-gc-equiv" style="font-size:12px;color:var(--gp-green-700);font-weight:600;margin-bottom:12px;padding-left:4px;min-height:18px"></div>
 
-                    <!-- Fee breakdown -->
                     <div id="lw-fee-preview" style="display:none;background:#fff;border-radius:10px;padding:12px 14px;font-size:12px;border:1px solid #a8dcbe;margin-bottom:14px">
                         <div style="display:flex;justify-content:space-between;margin-bottom:5px">
                             <span style="color:var(--gp-green-700);font-weight:700">Credited to <span id="lw-fp-recipient-label">student</span></span>
@@ -1007,7 +1002,6 @@ setInterval(refreshLiveQueue, 3000);
                     </div>
                 </div>
 
-                <!-- SUCCESS -->
                 <div id="lw-success" style="display:none;text-align:center;padding:16px 0">
                     <div style="width:64px;height:64px;background:var(--gp-success-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
                         <i class="fa-solid fa-circle-check" style="font-size:32px;color:var(--gp-success)"></i>

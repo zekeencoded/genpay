@@ -68,7 +68,6 @@ $csrfToken = gjc_csrf_token();
 
             <div class="sd-content">
 
-                <!-- Balance card -->
                 <section class="sd-balance">
                     <div>
                         <span class="sd-balance-label">Current Balance</span>
@@ -87,7 +86,6 @@ $csrfToken = gjc_csrf_token();
                     </div>
                 </section>
 
-                <!-- Send form + guide -->
                 <section class="tu-grid">
 
                     <div class="sd-panel">
@@ -98,7 +96,6 @@ $csrfToken = gjc_csrf_token();
                             </div>
                         </div>
 
-                        <!-- Form view -->
                         <div class="pf-form" id="sgForm">
                             <div class="pf-field">
                                 <label for="sgRecipient">Send to (Student or Employee ID)</label>
@@ -128,7 +125,6 @@ $csrfToken = gjc_csrf_token();
                             </button>
                         </div>
 
-                        <!-- Success view -->
                         <div class="sg-success" id="sgSuccess" style="display:none">
                             <div class="sg-success-icon"><i class="fa-solid fa-check"></i></div>
                             <h4>Sent!</h4>
@@ -185,7 +181,6 @@ $csrfToken = gjc_csrf_token();
 
     <?php require __DIR__ . '/../includes/partials/bottom_nav_student.php'; ?>
 
-    <!-- Send confirmation -->
     <div class="modal fade sp-modal" id="sgConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false"
          aria-labelledby="sgConfirmModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" style="max-width:400px">

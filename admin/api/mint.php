@@ -11,7 +11,6 @@ require_once __DIR__ . '/../../connection/app.php';
 require_once __DIR__ . '/../../connection/MintingGuard.php';
 
 if (!isset($_SESSION['userID']) || ($_SESSION['sub_role'] ?? '') !== 'super_admin') {
-    // Log denied mint attempts.
     logAudit(
         $db,
         (int) ($_SESSION['userID'] ?? 0),

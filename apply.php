@@ -796,7 +796,6 @@ function apply_photo_preview_data_uri(array $attached): ?string
 
     </form>
 
-    <!-- Terms modal -->
     <div class="modal fade" id="termsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content terms-modal">
@@ -836,7 +835,7 @@ function apply_photo_preview_data_uri(array $attached): ?string
     </div>
 
 <?php endif; ?>
-</div><!-- /.app-body -->
+</div>
 
 <?php include __DIR__ . '/includes/partials/public_footer.php'; ?>
 

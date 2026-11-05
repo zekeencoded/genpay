@@ -253,10 +253,8 @@ $stateBadge = [
 <body class="gp-theme">
 <div class="admin-layout">
 
-    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
     <?php require __DIR__ . '/../includes/partials/sidebar_admin.php'; ?>
 
-    <!-- ── Main ─────────────────────────────────────────────────────────── -->
     <main class="admin-main">
 
         <header class="topbar">
@@ -450,7 +448,6 @@ $stateBadge = [
                 </table>
             </div>
 
-            <!-- Pagination -->
             <?php if ($totalPages > 1): ?>
             <nav class="d-flex justify-content-center mt-3">
                 <ul class="pagination">
@@ -513,7 +510,6 @@ $stateBadge = [
     </main>
 </div>
 
-<!-- ── New Lease Modal ──────────────────────────────────────────────────── -->
 <div class="modal fade" id="leaseModal" tabindex="-1" aria-labelledby="leaseTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content gp-modal">
@@ -598,7 +594,6 @@ $stateBadge = [
     </div>
 </div>
 
-<!-- ── Quick Record payment ────────────────────────────────────────────── -->
 <div class="modal fade" id="payModal" tabindex="-1" aria-labelledby="payTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content gp-modal">

@@ -64,7 +64,6 @@ try {
         $amount             = round((float) ($_POST['amount'] ?? 0), 2);
         $message            = trim((string) ($_POST['message'] ?? ''));
 
-        // --- Input validation ---
         if (!$recipientStudentId || $amount <= 0) {
             echo json_encode(['success' => false, 'message' => 'Recipient ID and valid amount are required.']);
             exit;
@@ -75,7 +74,6 @@ try {
             exit;
         }
 
-        // --- Find recipient ---
         $recipStmt = $db->prepare(
             "SELECT u.userID, u.first_name, u.last_name
                FROM users u
@@ -124,7 +122,6 @@ try {
             exit;
         }
 
-        // --- Get recipient wallet ---
         $recipientWallet = gjc_student_wallet($db, $recipientUserId);
         if ($recipientWallet['id'] === 0) {
             echo json_encode(['success' => false, 'message' => 'Recipient wallet not found.']);
@@ -137,7 +134,6 @@ try {
         // DDL must run before the transaction opens (it would implicitly commit it).
         gjc_ensure_maintenance_fees_schema($db);
 
-        // --- BEGIN TRANSACTION ---
         $db->beginTransaction();
         try {
             // Limits are checked under the wallet lock, so two transfers sent at
@@ -229,7 +225,6 @@ try {
             // 6. Maintenance fee — sender only, billed to tuition, never taken from the wallet.
             gjc_record_maintenance_fee($db, $currentUserId, $refNo, 'p2p_transfer', $amount);
 
-            // --- COMMIT ---
             $db->commit();
             gjc_check_parent_balance_alert($db, $senderWallet['id']);
             logAudit(

@@ -679,7 +679,6 @@ $currentPage = 'users';
     </div>
     <?php endif; ?>
 
-    <!-- Suspend Account Modal -->
     <div class="modal fade" id="suspendModal" tabindex="-1" aria-labelledby="suspendTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content gp-modal">
@@ -733,7 +732,6 @@ $currentPage = 'users';
         </div>
     </div>
 
-    <!-- Ban Account Modal -->
     <div class="modal fade" id="banModal" tabindex="-1" aria-labelledby="banTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content gp-modal">

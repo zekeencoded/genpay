@@ -276,7 +276,6 @@ $currentPage = 'school_years';
         </main>
     </div>
 
-    <!-- 6. Rollover confirm modal -->
     <div class="modal fade" id="syRolloverModal" tabindex="-1" aria-labelledby="syRolloverTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content gp-modal">

@@ -526,7 +526,6 @@ $limitHit = (bool) $monthly["soft_limit_exceeded"];
 
 </section>
 
-<!-- Total Wallet Users drill-in table -->
 <div class="modal fade" id="walletUsersModal" tabindex="-1" aria-labelledby="walletUsersModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content gp-modal">
